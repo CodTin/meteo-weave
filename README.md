@@ -71,7 +71,8 @@ src/
     ui/                    共享按钮、卡片、表单、Tabs、Dialog（shadcn 语义 tokens）
     maps/ charts/ tables/ forms/  预留跨业务复用的组件
   features/
-    auth/                  UI-only 登录校验与角色说明（无认证服务）
+    auth/                  认证功能预留（仅目录）
+    login/                 UI-only 登录校验与角色说明（无认证服务）
     dashboard/             工作区流程与未接入状态预览
     data-catalog/          数据源与数据浏览（仅目录）
     downscaling-tasks/     配置流程说明与任务字段表格（无提交／管理服务）

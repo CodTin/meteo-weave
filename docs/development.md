@@ -119,7 +119,7 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 - 品牌分类图表色 `--chart-*` 不可替代气象地图连续色阶；入口网格仅为中性流程示意。
 - 根文档固定深色，支持清晰的键盘焦点、跳过导航及 reduced-motion；不增加亮色主题。
 - 后续通过 `bun run ui:add <组件名>` 按需添加组件，复用这里的 tokens。
-- 登录预览使用 React Hook Form / Zod 做本地表单校验，Sonner 提供界面反馈；不发送认证请求或保存凭证。
+- 登录预览使用 React Hook Form / Zod 做本地表单校验，通过持久内联 output（live region）提供反馈，未挂载 Toaster；不发送认证请求或保存凭证。
   Recharts 与 Zustand 已安装但未为本 Spec 新建样例图表或业务 store。
 
 ## 6. 测试和提交检查
