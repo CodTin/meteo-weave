@@ -123,7 +123,7 @@ test('reaches settings with the signed-in account without saving preferences', a
     .getByRole('link', { name: '设置', exact: true })
     .click()
   await expectPageIdentity(page, '/settings', '设置')
-  await expect(page.getByRole('main')).toContainText('角色切换与偏好设置尚未接入')
+  await expect(page.getByRole('main')).toContainText('演示角色与分析偏好')
   await expect(page.getByRole('main')).toContainText('不收集真实个人信息')
   await expect(page.getByRole('button', { name: '保存设置' })).toBeDisabled()
   await expectAccessible(page)
@@ -258,7 +258,7 @@ for (const width of [390, 768, 1440]) {
           {
             path: '/settings',
             title: '设置',
-            state: '角色切换与偏好设置尚未接入',
+            state: '演示角色与分析偏好',
             action: '返回 Dashboard',
             destination: '/dashboard',
             destinationTitle: 'Dashboard',
@@ -286,6 +286,12 @@ for (const width of [390, 768, 1440]) {
           await page.keyboard.press('Enter')
           await expect(page.getByRole('main')).toBeFocused()
           await page.keyboard.press('Tab')
+          if (entry.path === '/settings') {
+            await expect(
+              page.getByRole('button', { name: '切换演示角色', exact: true }),
+            ).toBeFocused()
+            await page.keyboard.press('Tab')
+          }
           const action = page
             .getByRole('main')
             .getByRole('link', { name: entry.action, exact: true })

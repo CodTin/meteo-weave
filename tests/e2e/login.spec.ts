@@ -167,7 +167,7 @@ test('explains the three roles in a modal and returns focus after Escape and Clo
   await trigger.click()
   const dialog = page.getByRole('dialog', { name: '角色与演示说明' })
   await expect(dialog).toBeVisible()
-  await expect(dialog).toHaveAccessibleDescription(/公开演示账号.*角色切换.*尚未/)
+  await expect(dialog).toHaveAccessibleDescription(/公开演示账号.*角色切换.*重新登录/)
   await expect(dialog).toContainText('研究人员')
   await expect(dialog).toContainText('模型细节')
   await expect(dialog).toContainText('决策者')

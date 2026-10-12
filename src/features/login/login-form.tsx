@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, Info } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
+import { resolveDemoAccount, type DemoAccount } from '@/features/auth/demo-accounts'
 import { useSearch, useLocation } from '@tanstack/react-router'
 import { useDemoSessionTransition } from '@/features/auth/session-transition'
 import { safeReturnTo } from '@/features/auth/return-to'
@@ -19,7 +20,8 @@ const formSchema = z.object({
 
 const subscribeToHydration = () => () => undefined
 
-export function LoginForm() {
+export function LoginForm({ preselectedAccount }: { preselectedAccount?: DemoAccount['id'] }) {
+  const selected = resolveDemoAccount(preselectedAccount)
   // The server snapshot keeps controls disabled until the client submit handler is installed.
   const interactive = useSyncExternalStore(
     subscribeToHydration,
@@ -39,7 +41,7 @@ export function LoginForm() {
     formState: { errors, isSubmitting },
   } = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { account: '', password: '' },
+    defaultValues: { account: selected?.id ?? '', password: '' },
   })
 
   useEffect(() => {
@@ -88,6 +90,12 @@ export function LoginForm() {
         },
       )}
     >
+      {selected && (
+        <p className="mb-5 text-sm leading-7 text-muted-foreground">
+          已为下次登录预选 {selected.name}（{selected.roleLabel}
+          ）。仅预选账号，尚未登录；可修改账号，仍需填写公开演示密码验证。
+        </p>
+      )}
       <fieldset disabled={!interactive || isSubmitting} className="space-y-5">
         <legend className="sr-only">使用公开演示账号登录</legend>
         <FormField
