@@ -1,8 +1,12 @@
 # MeteoWeave
 
-气象降尺度演示平台。目前仅完成**工程初始化**：依赖、目录、SSR 外壳和开发工具链。
-没有首页、登录页、地图、表单、业务接口、Mock 账号或降尺度逻辑；启动后空白是预期行为。
-因为没有任何页面路由，`/` 返回带完整文档外壳的 404；添加首个真实路由后再调整对应冒烟断言。
+气象降尺度演示平台。已提供**中文深色产品入口**、登录占位页、可恢复的 404，以及 SSR 和开发工具链。
+
+- `/`：产品入口，说明演示范围并引导到登录页，返回 HTTP 200。
+- `/login`：登录入口占位页，明确认证尚未接入，返回 HTTP 200；不会创建会话。
+- 未知地址：返回真实 HTTP 404，显示原因并提供返回平台入口和登录入口的链接。
+
+当前没有真实认证、Mock 账号、地图、业务接口或降尺度计算。页面的分辨率图是流程示意，不是计算结果。
 
 需求依据：[平台设计](docs/design/platform-design.md)、[技术栈选型](docs/design/tech-stack.md)。
 术语沿用 [GLOSSARY.md](GLOSSARY.md)。原始设计文件未修改。
@@ -46,17 +50,21 @@ bun run dev
 
 请使用 **`bun run test`**，不是 `bun test`：项目选用 Vitest，而非 Bun 内置测试运行器。
 Playwright 首次在其他机器运行前需安装浏览器；Linux CI 可使用 `bunx playwright install --with-deps`。
+默认生产测试端口为 4173；并行工作树请使用独立端口，例如 `E2E_PORT=4181 bun run test:e2e`。
+冒烟覆盖首页 → 登录入口、未知地址 → 返回入口，保留 SSR、水合／资源错误和 axe 检查；
+另在 390、768、1440px 与 reduced-motion 下检查键盘导航、溢出和字体不可下载时的可用性。
 
 ## 目录
 
 ```text
 src/
-  routes/                  文件路由；目前只有 __root.tsx 文档外壳
+  routes/                  文档外壳、产品入口 /、登录占位 /login
   router.tsx               每次 SSR 请求独立的 Router 和 QueryClient
   start.ts                 SSR 默认设置、全局监控中间件
   client.tsx / server.ts   客户端水合、服务器入口
   components/
-    ui/                    预留 shadcn 基础组件
+    entry/                 入口外壳、分辨率示意、可恢复的 404
+    ui/                    共享 Button、Card（shadcn 语义 tokens）
     maps/ charts/ tables/ forms/  预留跨业务复用的组件
   features/
     auth/                  Mock 认证与角色入口（仅目录）
@@ -77,7 +85,7 @@ src/
     services/              预留服务器内部数据访问
     mocks/                 预留 Mock 数据服务
   hooks/ stores/ types/    预留共享 hooks、Zustand 状态和类型
-  styles/                  Tailwind v4、shadcn 中性默认变量
+  styles/                  Tailwind v4、深色语义 tokens、字体回退与 reduced-motion
 public/                    公开静态资源
 data/                     原始资料及 mock/、precomputed/ 数据预留目录
 tests/                    unit/、components/、e2e/、fixtures/
