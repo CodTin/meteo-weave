@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useRouteContext } from '@tanstack/react-router'
 import { LockKeyhole } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -11,17 +11,18 @@ import {
 } from '@/components/ui/card'
 
 export function SettingsPage() {
+  const { account } = useRouteContext({ from: '/_workspace' })
   return (
     <div className="space-y-6">
       <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
-        后续在这里管理用户角色与分析偏好。当前界面预览没有登录身份，也不读取或保存个人信息。
+        这里显示当前演示账号与角色，不收集真实个人信息。角色切换与分析偏好将在后续开放。
       </p>
       <Card>
         <CardHeader>
           <LockKeyhole className="mb-2 size-7 text-muted-foreground" aria-hidden="true" />
-          <CardTitle>账号与偏好设置尚未接入</CardTitle>
+          <CardTitle>角色切换与偏好设置尚未接入</CardTitle>
           <CardDescription id="settings-status">
-            身份认证接入后才能提供账号与偏好设置。当前无法切换角色或保存设置。
+            演示身份由统一账号目录解析。当前无法切换角色或保存设置。
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -29,7 +30,18 @@ export function SettingsPage() {
             <div className="rounded-lg border bg-background p-4">
               <dt className="text-sm font-medium">用户角色</dt>
               <dd className="mt-2 text-sm leading-7 text-muted-foreground">
-                尚未接入，不为当前访问者指定研究人员、决策者或农业用户身份。
+                {account ? (
+                  <>
+                    <span className="block">
+                      {account.name} · {account.id}
+                    </span>
+                    <span>
+                      {account.roleLabel} · {account.roleTitle}
+                    </span>
+                  </>
+                ) : (
+                  '未登录，请使用公开演示账号登录后查看身份。'
+                )}
               </dd>
             </div>
             <div className="rounded-lg border bg-background p-4">

@@ -12,9 +12,9 @@ export function DashboardPage() {
       <Card>
         <CardHeader>
           <Unplug className="mb-2 size-7 text-muted-foreground" aria-hidden="true" />
-          <CardTitle>身份认证与任务服务尚未接入</CardTitle>
+          <CardTitle>任务服务尚未接入</CardTitle>
           <CardDescription>
-            当前为公开的工作区界面预览，不代表已登录。这里不会建立会话、读取任务或执行降尺度计算。
+            当前演示账号显示在页面顶部。任务功能仍为预览，不会读取任务或执行降尺度计算。
           </CardDescription>
         </CardHeader>
         <CardContent>

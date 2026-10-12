@@ -63,12 +63,12 @@ test('opens an honest dashboard preview from the product entry with persistent p
   await page.goto('/')
   await page.getByRole('link', { name: '预览工作区', exact: true }).click()
   await expectPageIdentity(page, '/dashboard', 'Dashboard')
-  await expect(page.getByRole('main')).toContainText('身份认证与任务服务尚未接入')
-  await expect(page.getByRole('main')).toContainText('不代表已登录')
+  await expect(page.getByRole('main')).toContainText('任务服务尚未接入')
+  await expect(page.getByRole('main')).toContainText('不会读取任务或执行降尺度计算')
   const response = await page.reload()
   expect(response?.status()).toBe(200)
   expect(await response?.text()).toContain('Dashboard')
-  expect(await response?.text()).toContain('身份认证与任务服务尚未接入')
+  expect(await response?.text()).toContain('任务服务尚未接入')
   await expectPageIdentity(page, '/dashboard', 'Dashboard')
   await expectAccessible(page)
 })
@@ -118,8 +118,8 @@ test('reaches settings without claiming a session or saving preferences', async 
     .getByRole('link', { name: '设置', exact: true })
     .click()
   await expectPageIdentity(page, '/settings', '设置')
-  await expect(page.getByRole('main')).toContainText('账号与偏好设置尚未接入')
-  await expect(page.getByRole('main')).toContainText('不读取或保存个人信息')
+  await expect(page.getByRole('main')).toContainText('角色切换与偏好设置尚未接入')
+  await expect(page.getByRole('main')).toContainText('不收集真实个人信息')
   await expect(page.getByRole('button', { name: '保存设置' })).toBeDisabled()
   await expectAccessible(page)
   await page.getByRole('main').getByRole('link', { name: '返回 Dashboard' }).click()
@@ -229,7 +229,7 @@ for (const width of [390, 768, 1440]) {
           {
             path: '/dashboard',
             title: 'Dashboard',
-            state: '身份认证与任务服务尚未接入',
+            state: '任务服务尚未接入',
             action: '了解任务创建',
             destination: '/tasks/new',
             destinationTitle: '创建任务',
@@ -253,7 +253,7 @@ for (const width of [390, 768, 1440]) {
           {
             path: '/settings',
             title: '设置',
-            state: '账号与偏好设置尚未接入',
+            state: '角色切换与偏好设置尚未接入',
             action: '返回 Dashboard',
             destination: '/dashboard',
             destinationTitle: 'Dashboard',

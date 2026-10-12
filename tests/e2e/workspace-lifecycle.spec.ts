@@ -185,7 +185,7 @@ test('entry and remaining workspace destinations load inside the same usable she
       title: 'Dashboard',
       link: '预览工作区',
       path: '/dashboard',
-      content: '身份认证与任务服务尚未接入',
+      content: '任务服务尚未接入',
     },
     {
       module: /\/assets\/_workspace\.settings(?:\.lazy)?-[^/]+\.js$/,
@@ -361,7 +361,7 @@ for (const width of [390, 768, 1440]) {
           await expect(page.getByRole('link', { name: '预览工作区', exact: true })).toBeVisible()
           await expect(page.getByRole('alert')).toHaveCount(0)
           await page.getByRole('link', { name: '预览工作区', exact: true }).click()
-          await expect(page.getByRole('main')).toContainText('身份认证与任务服务尚未接入')
+          await expect(page.getByRole('main')).toContainText('任务服务尚未接入')
           await expect(page.getByRole('alert')).toHaveCount(0)
           await expect(page.getByRole('status', { name: '页面加载状态' })).toHaveCount(0)
         } finally {
@@ -421,7 +421,7 @@ test('leaving a delayed page keeps navigation usable and ignores its late arriva
       '正在加载任务管理',
     )
     await navigateByKeyboard(page, '设置')
-    await expect(page.getByRole('main')).toContainText('账号与偏好设置尚未接入')
+    await expect(page.getByRole('main')).toContainText('角色切换与偏好设置尚未接入')
     await expect(page.getByRole('status', { name: '页面加载状态' })).toHaveCount(0)
     release()
     await arrived
@@ -492,7 +492,7 @@ for (const destination of [
     title: 'Dashboard',
     path: '/dashboard',
     module: /\/assets\/_workspace\.dashboard\.lazy-[^/]+\.js$/,
-    content: '身份认证与任务服务尚未接入',
+    content: '任务服务尚未接入',
   },
   {
     title: '创建任务',
@@ -504,7 +504,7 @@ for (const destination of [
     title: '设置',
     path: '/settings',
     module: /\/assets\/_workspace\.settings\.lazy-[^/]+\.js$/,
-    content: '账号与偏好设置尚未接入',
+    content: '角色切换与偏好设置尚未接入',
   },
 ]) {
   for (const width of [390, 768, 1440]) {

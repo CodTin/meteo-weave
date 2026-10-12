@@ -19,7 +19,7 @@ export function LoginPreview() {
       <TabsContent value="explanation" className="space-y-5">
         <p className="flex gap-2 text-sm leading-7 text-muted-foreground">
           <Info className="mt-1 size-5 shrink-0 text-ring" aria-hidden="true" />
-          真实 Demo 登录属于 Spec 02。以下仅介绍计划中的角色定位，当前不能登录、切换角色或更改权限。
+          使用公开演示账号登录并恢复会话。以下介绍角色定位；角色切换与参数权限尚未开放。
         </p>
         <RoleDescriptions />
       </TabsContent>
