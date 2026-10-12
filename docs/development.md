@@ -1,11 +1,15 @@
-# 工程初始化与开发约定
+# 工程基础与开发约定
 
 ## 1. 范围
 
-本次仅搭建单包 TanStack Start 工程，不实现设计中的产品功能。
-`src/routes/__root.tsx` 只提供 HTML 文档、head、样式和脚本插槽；没有 `index.tsx`，
-没有示例计数器、导航、应用布局或业务页面。没有页面路由时 `/` 返回带 SSR 文档的 404，
-不渲染自定义 404 页面；这是没有实现首页的明确结果，而不是伪造一个占位首页。
+沿用单包 TanStack Start 工程。`src/routes/__root.tsx` 提供中文 HTML 文档、head、
+深色主题、样式和脚本插槽，并通过 Router 的 `notFoundComponent` 显示可恢复的 404。
+
+- `/` 是中文产品入口（HTTP 200），显示平台身份、演示范围与登录导航。
+- `/login` 是登录占位页（HTTP 200），说明「认证尚未接入」，不接收凭证或建立会话。
+- 未知地址保留 Router 的真实 HTTP 404，同时提供原因与有效返回路径，不做 HTTP 200 的伪 404。
+
+当前不实现认证、数据库、业务 API 或降尺度计算；分辨率示意不代表真实数据或计算结果。
 
 功能目录按平台设计和已有领域术语划分；目前不增加领域实体、状态机、权限规则或接口协议。
 等具体功能开始时，再在对应 feature 下添加组件、校验、查询及测试，避免预先制造空抽象。
@@ -99,19 +103,34 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 
 - Tailwind v4 使用 Vite 插件和 CSS-first 配置，不生成旧版 `tailwind.config.js` / PostCSS 样板。
 - `components.json` 指向 `src/styles/globals.css`，使用 `@/` 别名、TSX、非 RSC、Lucide。
-- 只有 shadcn 中性默认 tokens、`cn` 和生成器配置，不复制任何业务或基础可视组件。
-- 后续通过 `bun run ui:add button` 等命令按需添加组件，由 CLI 补齐组件特有依赖。
+- `src/styles/globals.css` 统一 midnight / slate 背景、storm 主操作、aurora 成功、ember 错误，
+  并提供 shadcn 的 card / input / sidebar 等语义映射。原始 storm 配白色小字未通过 axe，
+  主按钮使用更深的 storm 变体；错误填充搭配深色前景，状态同时有文字／图标。
+- `src/components/ui/` 提供本流程实际使用的 Button、Card；后续按需添加，不建立组件展示页。
+  Button 是原生按钮，默认 `type="button"`；路由导航用 `Link` + `buttonVariants`，不嵌套按钮和链接，
+  不假设有 `asChild`。CardTitle 默认是 `h2`，页面自己提供唯一的 `h1`。
+- 标题使用 `font-display`，正文使用 `font-sans`，数据使用 `font-mono` 与 tabular numerals。
+  可选本地 Crimson Pro / Inter / JetBrains Mono 通过 `font-display: swap` 使用，
+  没有外部字体请求；中文与系统衬线／正文／等宽回退保持可用。
+- 品牌分类图表色 `--chart-*` 不可替代气象地图连续色阶；入口网格仅为中性流程示意。
+- 根文档固定深色，支持清晰的键盘焦点、跳过导航及 reduced-motion；不增加亮色主题。
+- 后续通过 `bun run ui:add <组件名>` 按需添加组件，复用这里的 tokens。
 - Recharts、Sonner、Zustand、React Hook Form 等已安装，但不创建样例图表、Toast 挂载器、store 或表单。
 
 ## 6. 测试和提交检查
 
 - `vitest.config.ts` 与应用构建配置独立，避免 Start / Nitro 插件污染测试运行。
 - `unit` 项目使用 Node 环境；`components` 使用 jsdom 和 jest-dom，自带清理。
-- 当前测试只验证 `cn`、QueryClient 隔离、环境验证、React 测试运行环境。
-- Playwright 会自行构建、在 4173 端口启动 Bun 生产服务并在结束时关闭；不复用未知的已有服务。
+- 原有 9 项基础测试验证 `cn`、QueryClient 隔离、环境验证、React 测试运行环境，继续保留。
+- Playwright 会自行构建、默认在 4173 端口启动 Bun 生产服务并在结束时关闭；不复用未知的已有服务。
+  并行工作树用 `E2E_PORT=4181 bun run test:e2e` 指定各自端口（1–65535），不共享构建输出。
 - 三浏览器项目均已配置；默认 `test:e2e` 运行 Chromium，`test:e2e:all` 运行全部。
-  检查文档响应、水合期间无浏览器异常以及空壳的 axe WCAG 2.1 A/AA 规则检查。
-  这些不是产品功能覆盖，也不证明未来页面已经符合 WCAG。
+  覆盖产品入口 → 登录入口与未知地址 → 返回入口，检查 SSR 实际内容、正确 HTTP 状态、
+  水合、资源失败以及 axe WCAG 2.1 A/AA。只排除刻意请求的那个未知文档自身的 404 控制台信息，
+  不忽略其脚本／样式失败或其他浏览器错误。
+- 入口、登录、404 均在 390、768、1440px 的普通／reduced-motion 模式下检查无整体横向溢出、
+  键盘跳转、可见焦点及主要操作；拦截字体下载以验证回退，并保存固定视口全页截图。
+  这些检查不证明尚未实现的后续页面已经符合 WCAG。
 - 本机 Chromium / WebKit 已通过；Firefox 在独立启动最小复现中即报 `Could not find profile folder`，
   临时目录 / 持久化 profile / 重新下载均无效。该环境限制未通过跳过或捕获失败来伪装成功，完整套件会如实失败。
 - 覆盖率输出到 `coverage/`，浏览器报告到 `playwright-report/`，失败产物到 `test-results/`。
@@ -154,7 +173,7 @@ bun run build:vercel
 - [Vitest 配置](https://vitest.dev/config/)
 - [Oxfmt 配置](https://oxc.rs/docs/guide/usage/formatter/config.html)
 
-## 9. 初始化验收记录
+## 9. 初始化验收记录（历史基线）
 
 - `bun install --frozen-lockfile` 成功，前后锁文件校验值一致。
 - `bun run check:all` 成功：格式、Lint、类型检查、9 项基础测试、生产构建、Chromium 冒烟。
@@ -165,3 +184,10 @@ bun run build:vercel
 - `bun run analyze` 成功生成只针对客户端环境的 `reports/bundle.html`。
 - `shadcn info` 成功识别 TanStack Start、Tailwind v4、路径别名；未安装任何源码 UI 组件。
 - Husky hook 路径已启用；没有暂存、提交、推送或部署。
+
+## 10. 产品入口验收（2026-10-12）
+
+- Ticket 01 先更新浏览器用户路径并观察真实红灯：首页缺少中文 SSR 内容；实现后转绿。
+- axe 实测发现原始 storm 按钮对比度 4.2:1，不通过降低检查标准解决，而是调整主操作变体后转绿。
+- 404 先验证状态正确但恢复页面缺失的红灯，再接入 Router 的 not-found 组件并验证恢复路径。
+- 未更换运行时或框架、未变更依赖锁文件、未增加真实认证或业务服务；提交钩子保持启用。
