@@ -8,6 +8,10 @@ export const workspacePages = [
   { path: '/settings', title: '设置', icon: Settings },
 ] as const
 
+export function getWorkspaceTitle(pathname: string) {
+  return workspacePages.find((page) => page.path === pathname.replace(/\/$/, ''))?.title
+}
+
 export function WorkspaceNavigation({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav aria-label="工作区导航">

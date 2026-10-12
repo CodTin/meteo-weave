@@ -1,61 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test as base, type Page, type Locator } from '@playwright/test'
+import { expect, type Page, type Locator } from '@playwright/test'
 
-type BrowserFailure = {
-  kind: 'page' | 'console' | 'request' | 'response'
-  text: string
-  url?: string
-}
-
-const test = base.extend<{ browserGuard: void; expectedModuleFailures: Set<string> }>({
-  // oxlint-disable-next-line no-empty-pattern -- Playwright requires destructuring for dependency-free fixtures.
-  expectedModuleFailures: async ({}, use) => {
-    await use(new Set<string>())
-  },
-  browserGuard: [
-    async ({ page, expectedModuleFailures }, use) => {
-      const errors: BrowserFailure[] = []
-      page.on('pageerror', (error) => errors.push({ kind: 'page', text: error.message }))
-      page.on('console', (message) => {
-        if (message.type() === 'error')
-          errors.push({ kind: 'console', text: message.text(), url: message.location().url })
-      })
-      page.on('requestfailed', (request) => {
-        errors.push({
-          kind: 'request',
-          text: request.failure()?.errorText ?? '',
-          url: request.url(),
-        })
-      })
-      page.on('response', (response) => {
-        if (new URL(response.url()).pathname.startsWith('/assets/') && !response.ok()) {
-          errors.push({ kind: 'response', text: String(response.status()), url: response.url() })
-        }
-      })
-      await use()
-      // Only the exact failed module and known browser diagnostics are expected.
-      // Hydration, unrelated resources and any other console/page errors still fail.
-      const unexpected = errors.filter(
-        (error) =>
-          ![...expectedModuleFailures].some((url) => {
-            if (error.kind === 'response') return error.url === url && error.text === '503'
-            if (error.kind === 'request')
-              return error.url === url && error.text === 'net::ERR_ABORTED'
-            if (error.kind === 'console')
-              return (
-                (error.url === url &&
-                  error.text ===
-                    'Failed to load resource: the server responded with a status of 503 (Service Unavailable)') ||
-                error.text === `TypeError: Failed to fetch dynamically imported module: ${url}`
-              )
-            return false
-          }),
-      )
-      expect(unexpected).toEqual([])
-    },
-    { auto: true },
-  ],
-})
+import { test } from './browser-guard'
 
 // Intercept the real production route module, before focus/intent can preload it.
 const taskModule = /\/assets\/_workspace\.tasks\.index(?:\.lazy)?-[^/]+\.js$/
@@ -163,6 +109,70 @@ test('failed task resource keeps navigation and safely explains a real full-page
   await expect(page.getByRole('status')).toHaveText('已进入任务管理页面')
   expect(documentRequests).toBe(2)
   await expectAccessible(page)
+})
+
+test('direct task entry survives a failed module without hydration errors and reloads real SSR content', async ({
+  page,
+  expectedModuleFailures,
+}) => {
+  let documentRequests = 0
+  page.on('request', (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests++
+  })
+  await page.route(taskModule, async (route) => {
+    expectedModuleFailures.add(route.request().url())
+    await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Unavailable' })
+  })
+  const response = await page.goto('/tasks')
+  expect(response?.status()).toBe(200)
+  expect(await response?.text()).toContain('降尺度任务字段预览')
+  await expect(page.getByRole('alert')).toContainText('任务管理暂时无法打开')
+  await expect(page.getByRole('alert')).toContainText('页面资源未能加载')
+  await expect(page.getByRole('navigation', { name: '工作区导航', exact: true })).toBeVisible()
+  expect(expectedModuleFailures.size).toBe(1)
+  expect(documentRequests).toBe(1)
+  await expectAccessible(page)
+  await page.unroute(taskModule)
+  await page.getByRole('button', { name: '重新加载当前页', exact: true }).focus()
+  const reloaded = page.waitForResponse((next) => next.request().isNavigationRequest())
+  await page.keyboard.press('Enter')
+  expect(await (await reloaded).text()).toContain('降尺度任务字段预览')
+  await expect(page.getByRole('table', { name: '降尺度任务字段预览' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByRole('status', { name: '页面加载状态' })).toHaveCount(0)
+  await expect(page.getByRole('main')).toHaveAttribute('aria-busy', 'false')
+  await page.waitForLoadState('networkidle')
+  expect(documentRequests).toBe(2)
+  await expectAccessible(page)
+})
+
+test('delayed direct task entry preserves the real server table through hydration', async ({
+  page,
+}) => {
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route(taskModule, async (route) => {
+    await held
+    await route.continue()
+  })
+  try {
+    const response = await page.goto('/tasks', { waitUntil: 'domcontentloaded' })
+    expect(await response?.text()).toContain('降尺度任务字段预览')
+    const table = await page.getByRole('table', { name: '降尺度任务字段预览' }).elementHandle()
+    expect(table).not.toBeNull()
+    release()
+    await page.waitForLoadState('networkidle')
+    // This is the same public DOM node, not a client-rendered replacement.
+    expect(await table?.evaluate((element) => element.isConnected)).toBe(true)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    await page.getByRole('link', { name: '前往创建任务', exact: true }).click()
+    await expect(page).toHaveURL('/tasks/new')
+    await expect(page.getByRole('main')).toHaveAccessibleName('创建任务')
+  } finally {
+    release()
+  }
 })
 
 test('entry and remaining workspace destinations load inside the same usable shell', async ({
@@ -475,4 +485,70 @@ for (const width of [390, 768, 1440]) {
       release()
     }
   })
+}
+
+for (const destination of [
+  {
+    title: 'Dashboard',
+    path: '/dashboard',
+    module: /\/assets\/_workspace\.dashboard\.lazy-[^/]+\.js$/,
+    content: '身份认证与任务服务尚未接入',
+  },
+  {
+    title: '创建任务',
+    path: '/tasks/new',
+    module: /\/assets\/_workspace\.tasks\.new\.lazy-[^/]+\.js$/,
+    content: '任务配置与计算尚未接入',
+  },
+  {
+    title: '设置',
+    path: '/settings',
+    module: /\/assets\/_workspace\.settings\.lazy-[^/]+\.js$/,
+    content: '账号与偏好设置尚未接入',
+  },
+]) {
+  for (const width of [390, 768, 1440]) {
+    test(`${destination.title} content reserves its footprint through download completion at ${width}px`, async ({
+      page,
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 })
+      let release = () => {}
+      const held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      await page.route(destination.module, async (route) => {
+        await held
+        await route.continue()
+      })
+      try {
+        await page.goto(destination.path === '/dashboard' ? '/tasks' : '/dashboard')
+        await navigateByKeyboard(page, destination.title)
+        await expect(page.getByRole('status', { name: '页面加载状态' })).toContainText(
+          `正在加载${destination.title}`,
+        )
+        const pendingMain = await page.getByRole('main').boundingBox()
+        const pendingFooter = await page.getByRole('contentinfo').boundingBox()
+        await page.screenshot({ path: testInfo.outputPath('pending.png'), fullPage: true })
+        release()
+        await expect(
+          page.getByRole('heading', { name: destination.content, exact: true }),
+        ).toBeVisible()
+        await expect(page.getByRole('status', { name: '页面加载状态' })).toHaveCount(0)
+        const loadedMain = await page.getByRole('main').boundingBox()
+        const loadedFooter = await page.getByRole('contentinfo').boundingBox()
+        await testInfo.attach('footprint', {
+          body: JSON.stringify({ pendingMain, pendingFooter, loadedMain, loadedFooter }),
+          contentType: 'application/json',
+        })
+        await page.screenshot({ path: testInfo.outputPath('loaded.png'), fullPage: true })
+        expect(loadedMain).toEqual(pendingMain)
+        expect(loadedFooter).toEqual(pendingFooter)
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+          width,
+        )
+      } finally {
+        release()
+      }
+    })
+  }
 }

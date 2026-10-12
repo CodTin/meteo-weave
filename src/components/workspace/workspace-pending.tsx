@@ -1,12 +1,11 @@
 import { useLocation } from '@tanstack/react-router'
 import { Clock3 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
-import { workspacePages } from '@/components/workspace/workspace-navigation'
+import { getWorkspaceTitle } from '@/components/workspace/workspace-navigation'
 
 export function WorkspacePending() {
   const pathname = useLocation({ select: (location) => location.pathname })
-  const title =
-    workspacePages.find((page) => page.path === pathname.replace(/\/$/, ''))?.title ?? '页面'
+  const title = getWorkspaceTitle(pathname) ?? '页面'
 
   return (
     <Card>

@@ -2,14 +2,21 @@ import { useRef } from 'react'
 import { WorkspaceMenu } from '@/components/workspace/workspace-menu'
 import { Link, Outlet, useLocation, useRouterState } from '@tanstack/react-router'
 import { Layers } from 'lucide-react'
-import { WorkspaceNavigation, workspacePages } from '@/components/workspace/workspace-navigation'
+import { WorkspaceNavigation, getWorkspaceTitle } from '@/components/workspace/workspace-navigation'
+
+// Reserve each page's content at the same breakpoints as its cards/table.
+const contentFootprints: Record<string, string> = {
+  '/dashboard': 'min-h-[29rem] sm:min-h-[28rem]',
+  '/tasks/new': 'min-h-[49rem] md:min-h-[28rem]',
+  '/tasks': 'min-h-[44rem] sm:min-h-[33rem] xl:min-h-[29rem]',
+  '/settings': 'min-h-[38rem] sm:min-h-[31rem] md:min-h-[28rem]',
+}
 
 export function WorkspaceShell() {
   const contentRef = useRef<HTMLElement>(null)
   const pathname = useLocation({ select: (location) => location.pathname })
   const status = useRouterState({ select: (state) => state.matches.at(-1)?.status })
-  const title =
-    workspacePages.find((page) => page.path === pathname.replace(/\/$/, ''))?.title ?? '工作区'
+  const title = getWorkspaceTitle(pathname) ?? '工作区'
 
   return (
     <div className="min-h-svh">
@@ -92,14 +99,8 @@ export function WorkspaceShell() {
           >
             {title}
           </h1>
-          {/* Reserve the responsive table footprint across pending, error and success. */}
-          <div
-            className={
-              pathname.replace(/\/$/, '') === '/tasks'
-                ? 'min-h-[44rem] sm:min-h-[33rem] xl:min-h-[29rem]'
-                : 'min-h-[28rem]'
-            }
-          >
+          {/* Keep the footer stable across pending, error and successful page content. */}
+          <div className={contentFootprints[pathname.replace(/\/$/, '')] ?? 'min-h-[28rem]'}>
             <Outlet />
           </div>
         </main>
