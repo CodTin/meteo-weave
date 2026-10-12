@@ -6,15 +6,15 @@
 深色主题、样式和脚本插槽，并通过 Router 的 `notFoundComponent` 显示可恢复的 404。
 
 - `/` 是中文产品入口（HTTP 200），显示平台身份、演示范围与登录导航。
-- `/login` 是 UI-only 登录表单（HTTP 200），提供本地校验、密码可见性切换、Tab、角色说明 Dialog 和通知；不发送凭证或建立会话。
-- `/dashboard`、`/tasks/new`、`/tasks`、`/settings` 提供公开工作区预览：共享导航／面包屑、配置流程说明、任务字段表格和设置说明，不读取或保存业务数据。
+- `/login` 提供三类公开固定演示账号、本地必填校验、密码可见性切换、Tab、角色说明 Dialog 和可访问反馈；通过服务器登录入口建立 Demo 会话，默认进入 Dashboard。
+- `/dashboard`、`/tasks/new`、`/tasks`、`/settings` 仍提供公开工作区预览：共享导航／面包屑、当前演示账号、配置流程说明、任务字段表格和设置说明，不读取或保存业务数据。登录身份在导航、刷新与直接访问时恢复。
 - 工作区实际路由模块按需加载，提供等待状态、资源失败说明、明确的整页重新加载与安全返回；恢复后显示真实目标内容。
 - 未知地址保留 Router 的真实 HTTP 404，同时提供原因与有效返回路径，不做 HTTP 200 的伪 404。
 
-当前不实现认证、数据库、业务 API 或降尺度计算；分辨率示意不代表真实数据或计算结果。
+当前不实现生产认证、数据库、任务服务或降尺度计算；分辨率示意不代表真实数据或计算结果。#22 仅交付演示登录与身份恢复；工作区保护、安全回跳、退出和角色切换仍由后续票实现。
 
-功能目录按平台设计和已有领域术语划分；目前不增加领域实体、状态机、权限规则或接口协议。
-登录 UI 校验和工作区预览位于对应 feature；后续业务查询、持久化与计算仍按实际需求添加，避免预先制造空抽象。
+功能目录按平台设计和已有领域术语划分；固定账号目录位于 auth feature，登录 UI 和工作区位于对应 feature。
+后续权限规则、业务查询、持久化与计算仍按实际需求添加，避免预先制造空抽象。
 
 ## 2. 依赖基线
 
@@ -77,6 +77,16 @@
 - Mapbox / WebGL / 浏览器存储等以后通过客户端边界和按需加载使用，不在 SSR 模块顶层访问浏览器 API。
 - `data/` 不放在 `public/` 下，不会自动暴露给浏览器。需下载的数据以后通过受控接口交付。
 
+### Demo 会话（Spec 02 · #22）
+
+- `src/features/auth/demo-accounts.ts` 是统一目录：`researcher` / `policy` / `agriculture`，一一对应研究人员 / 决策者 / 农业用户。`DemoAccount`、`demoAccounts`、`resolveDemoAccount` 供角色显示与后续业务复用；公开密码 `DEMO_PASSWORD` 为 `meteo-demo`，不是秘密。
+- 客户端可导入 `src/server/functions/demo-session.ts` 的 `loginDemo({ data: { account, password } })`（POST）及 `getDemoSession()`（GET）。实现位于 `src/server/services/demo-session.server.ts`，使用 server-only 标记；`loginDemoAccount` 和 `readDemoSession` 供服务器后续入口复用。
+- 服务器校验固定账号和公开密码，不采信额外的 `role`。错误输入返回可纠正错误，不写新会话；缺失或未知 cookie 返回 `null`。失败登录不替换已有有效会话。
+- `meteo-demo-account` 是仅含目录账号标识的会话 cookie：HttpOnly、SameSite=Lax、Path=/，HTTPS 时 Secure；无过期时间（浏览器会话范围）。HTTPS 代理须正确覆盖 `X-Forwarded-Proto`；采用 Start 请求协议解析。身份响应设为 `Cache-Control: no-store`。
+- 该 cookie **未签名**，不是生产认证、防篡改或真实多租户授权。仅能用于合成 Demo 数据，不能用来保护真实用户或远程数据。页面明确说明此边界，不提供注册或真实凭证管理。
+- `/_workspace` 的 `beforeLoad` 调用 `getDemoSession`，通过 route context 的 `account` 将同一身份传给 SSR、页头与设置页；不另建客户端身份 store。登录成功重新验证 Router 后导航，避免沿用匿名预加载上下文。此处尚不拦截未登录访问。
+- 后续退出应复用服务器 cookie 名与清理边界，并重新验证路由身份；后续角色切换、任务权限和缓存隔离不得信任客户端提交的 role 或自行复制账号目录。本票不添加退出、角色切换、任务记录或测试专用业务接口。
+
 ## 4. 环境与监控
 
 `.env.example` 是公开模板，不含凭证；`.env`、`.env.*`（模板除外）被 Git 忽略。
@@ -119,7 +129,7 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 - 品牌分类图表色 `--chart-*` 不可替代气象地图连续色阶；入口网格仅为中性流程示意。
 - 根文档固定深色，支持清晰的键盘焦点、跳过导航及 reduced-motion；不增加亮色主题。
 - 后续通过 `bun run ui:add <组件名>` 按需添加组件，复用这里的 tokens。
-- 登录预览使用 React Hook Form / Zod 做本地表单校验，通过持久内联 output（live region）提供反馈，未挂载 Toaster；不发送认证请求或保存凭证。
+- 登录使用 React Hook Form / Zod 做本地必填校验，通过持久内联 output（live region）提供等待和错误反馈，未挂载 Toaster。字段错误关联到实际消息文本，服务器拒绝后恢复账号焦点；等待时禁用控件。仅通过同源 POST 发送演示输入，不放入 URL、浏览器凭证存储或日志，继续保留 Sentry 遮罩。
   Recharts 与 Zustand 已安装但未为本 Spec 新建样例图表或业务 store。
 
 ## 6. 测试和提交检查
@@ -130,7 +140,7 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 - Playwright 会自行构建、默认在 4173 端口启动 Bun 生产服务并在结束时关闭；不复用未知的已有服务。
   并行工作树用 `E2E_PORT=4181 bun run test:e2e` 指定各自端口（1–65535），不共享构建输出。
 - 三浏览器项目均已配置；默认 `test:e2e` 运行 Chromium，`test:e2e:all` 运行全部。
-  覆盖产品入口、UI-only 登录交互、工作区导航／表格、未知地址返回与实际路由模块的等待／失败／恢复。
+  覆盖产品入口、Demo 登录交互、工作区导航／表格、未知地址返回与实际路由模块的等待／失败／恢复。三类账号通过真实表单、导航、刷新和直接访问验证 SSR 身份；Vitest 通过真实请求上下文调用公共会话服务，检查 cookie、白名单、错误输入及请求间隔离，不读取私有 store 或缓存。
   检查 SSR 实际内容、正确 HTTP 状态、水合、资源失败以及 axe WCAG 2.1 A/AA；包括直接访问失败后重新加载，
   以及正常访问保留服务器 DOM。只定向豁免刻意拦截的确切字体／模块及确切未知文档 404 的预期诊断，
   不忽略其他脚本／样式失败、控制台异常或任何页面／水合错误。
