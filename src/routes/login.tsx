@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, LockKeyhole } from 'lucide-react'
 import { EntryShell } from '@/components/entry/entry-shell'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { RoleDialog } from '@/features/login/role-dialog'
+import { LoginPreview } from '@/features/login/login-preview'
 
 export const Route = createFileRoute('/login')({
   head: () => ({ meta: [{ title: '登录 · MeteoWeave' }] }),
@@ -20,16 +22,15 @@ function LoginPage() {
         </p>
         <Card>
           <CardHeader>
-            <LockKeyhole className="mb-2 size-8 text-primary" aria-hidden="true" />
+            <LockKeyhole className="mb-2 size-8 text-ring" aria-hidden="true" />
             <CardTitle>认证尚未接入</CardTitle>
-            <CardDescription>
-              当前仅提供界面预览，暂不支持登录，也不会建立演示会话。请勿在此提交真实账号或密码。
+            <CardDescription id="authentication-boundary">
+              当前仅提供界面预览，暂不支持登录，也不会建立演示会话。请勿输入真实账号或密码。
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <Button disabled className="w-full">
-              登录暂不可用
-            </Button>
+          <CardContent className="space-y-6">
+            <LoginPreview />
+            <RoleDialog />
             <Link to="/" className={buttonVariants({ variant: 'outline', className: 'w-full' })}>
               <ArrowLeft aria-hidden="true" />
               返回平台入口

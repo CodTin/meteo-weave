@@ -47,6 +47,7 @@
     "date-fns": "^4.4.0",
     "lucide-react": "^1.55.0",
     "mapbox-gl": "^3.32.0",
+    "radix-ui": "^1.8.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-dropzone": "^20.1.3",
