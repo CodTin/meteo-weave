@@ -1,7 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { DashboardPage } from '@/features/dashboard/dashboard-page'
+import { WorkspacePending } from '@/components/workspace/workspace-pending'
+import { WorkspaceError } from '@/components/workspace/workspace-error'
 
 export const Route = createFileRoute('/_workspace/dashboard')({
   head: () => ({ meta: [{ title: 'Dashboard · MeteoWeave' }] }),
-  component: DashboardPage,
+  // Keep recovery UI available even when the separately loaded page is unavailable.
+  codeSplitGroupings: [],
+  pendingMs: 200,
+  pendingMinMs: 200,
+  pendingComponent: WorkspacePending,
+  errorComponent: WorkspaceError,
 })
