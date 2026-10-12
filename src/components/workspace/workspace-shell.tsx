@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+import { useDemoSessionTransition } from '@/features/auth/session-transition'
 import { useRef } from 'react'
 import { WorkspaceMenu } from '@/components/workspace/workspace-menu'
 import { Link, Outlet, useLocation, useRouterState, useRouteContext } from '@tanstack/react-router'
@@ -13,6 +15,7 @@ const contentFootprints: Record<string, string> = {
 }
 
 export function WorkspaceShell() {
+  const { endSession } = useDemoSessionTransition()
   const { account } = useRouteContext({ from: '/_workspace' })
   const contentRef = useRef<HTMLElement>(null)
   const pathname = useLocation({ select: (location) => location.pathname })
@@ -93,6 +96,9 @@ export function WorkspaceShell() {
                 <p className="text-muted-foreground">未登录 · 工作区预览</p>
               )}
             </section>
+            <Button variant="outline" onClick={() => void endSession()}>
+              退出登录
+            </Button>
           </div>
         </header>
         <main

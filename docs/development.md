@@ -11,7 +11,7 @@
 - 工作区实际路由模块按需加载，提供等待状态、资源失败说明、明确的整页重新加载与安全返回；恢复后显示真实目标内容。
 - 未知地址保留 Router 的真实 HTTP 404，同时提供原因与有效返回路径，不做 HTTP 200 的伪 404。
 
-当前不实现生产认证、数据库、任务服务或降尺度计算；分辨率示意不代表真实数据或计算结果。#22 提供演示登录与身份恢复，#23 提供工作区／身份服务保护和安全回跳；退出与角色切换仍由后续票实现。
+当前不实现生产认证、数据库、任务服务或降尺度计算；分辨率示意不代表真实数据或计算结果。#22 提供演示登录与身份恢复，#23 提供工作区／身份服务保护和安全回跳；#24 提供真实退出、账号查询／临时 UI 清理与成功登录的工作区替换；角色切换对话框仍由 #25 实现。
 
 功能目录按平台设计和已有领域术语划分；固定账号目录位于 auth feature，登录 UI 和工作区位于对应 feature。
 后续权限规则、业务查询、持久化与计算仍按实际需求添加，避免预先制造空抽象。
@@ -77,18 +77,24 @@
 - Mapbox / WebGL / 浏览器存储等以后通过客户端边界和按需加载使用，不在 SSR 模块顶层访问浏览器 API。
 - `data/` 不放在 `public/` 下，不会自动暴露给浏览器。需下载的数据以后通过受控接口交付。
 
-### Demo 会话与工作区保护（Spec 02 · #22 / #23）
+### Demo 会话与工作区保护（Spec 02 · #22 / #23 / #24）
 
 - `src/features/auth/demo-accounts.ts` 是统一目录：`researcher` / `policy` / `agriculture`，一一对应研究人员 / 决策者 / 农业用户。`DemoAccount`、`demoAccounts`、`resolveDemoAccount` 供角色显示与后续业务复用；公开密码 `DEMO_PASSWORD` 为 `meteo-demo`，不是秘密。
 - 客户端可导入 `src/server/functions/demo-session.ts` 的 `loginDemo({ data: { account, password } })`（POST）及 `getDemoSession()`（GET）。实现位于 `src/server/services/demo-session.server.ts`，使用 server-only 标记；`loginDemoAccount` 和 `readDemoSession` 供服务器后续入口复用。
 - 服务器校验固定账号和公开密码，不采信额外的 `role`。错误输入返回可纠正错误，不写新会话；缺失或未知 cookie 返回 `null`。失败登录不替换已有有效会话。
 - `meteo-demo-account` 是仅含目录账号标识的会话 cookie：HttpOnly、SameSite=Lax、Path=/，HTTPS 时 Secure；无过期时间（浏览器会话范围）。HTTPS 代理须正确覆盖 `X-Forwarded-Proto`；采用 Start 请求协议解析。身份响应设为 `Cache-Control: no-store`。
 - 该 cookie **未签名**，不是生产认证、防篡改或真实多租户授权。仅能用于合成 Demo 数据，不能用来保护真实用户或远程数据。页面明确说明此边界，不提供注册或真实凭证管理。
-- `/_workspace` 的 `beforeLoad` 在 SSR、导航和 intent preload 中调用 `requireDemoSession({ data: location.href, signal })`，通过 route context 的 `account` 将同一必需身份传给页头与设置页。不跳过预加载检查，不另建身份 store；登录成功重新验证 Router 后替换导航。
+- `/_workspace` 的 `beforeLoad` 在 SSR、导航和 intent preload 中调用 `requireDemoSession({ data: location.href, signal })`，通过 route context 的 `account` 将同一必需身份传给页头与设置页。不跳过预加载检查，不另建身份 store；登录成功经过统一会话切换边界清理旧工作区，以新 SSR 文档重新验证身份；普通工作区导航仍为 SPA。
 - `src/server/functions/demo-session.ts` 的 `requireDemoSession` 是工作区实际使用的必需账号读取入口；实现复用 `src/server/services/demo-session.server.ts` 的 `requireDemoAccount(returnTo?)` 与 #22 的 `readDemoSession`。缺失／未知／无效 cookie 抛出带 `no-store` 的 307 登录重定向；正常返回目录中的 `DemoAccount`。公开登录和可选的会话读取保持原契约。后续配置准入／任务服务必须在服务器实际操作前调用 `requireDemoAccount`，不能只靠页面 guard。
 - `src/features/auth/return-to.ts` 的 `safeReturnTo` 仅接受当前四个工作区的字面路径：`/dashboard`、`/tasks`、`/tasks/new`、`/settings`。保留正常 query/hash，拒绝绝对／协议相对、反斜线、控制字符、编码路径、登录循环和未知路径；无效目标回退 Dashboard。后续新增真实任务路由时显式扩展，不再次解码已验证目标。
 - 登录页用 Zod 解析可选 `returnTo`；服务器重定向与登录后最终导航均校验目标。SSR 请求不携带 fragment，因此登录页也保留浏览器随重定向继承的合法目标 fragment。正常 Query 参数可由 Router 等价重序列化（例如空格 `%20` → `+`）。未知页面继续是真实公开 404。
-- 后续退出应复用服务器 cookie 名与清理边界，并重新验证路由身份；后续角色切换、任务权限和缓存隔离不得信任客户端提交的 role 或自行复制账号目录。本票不添加退出、角色切换、任务记录或测试专用业务接口。
+- `logoutDemo()` 是客户端可调用的 POST；服务器 `endDemoSession()` 仅以同一个 cookie 名、Path=/、Max-Age=0 结束 Demo 会话，保留 HttpOnly、SameSite=Lax 与 HTTPS Secure，并返回 no-store。无会话时也可安全重复调用。底层函数不提供另一套 UI 退出路径。
+- `src/features/auth/session-transition.tsx` 的 `DemoSessionBoundary` 位于根路由。工作区页头和移动菜单调用 `useDemoSessionTransition().endSession()`：同步卸载旧页面／菜单，取消查询并清空 Router 预加载；POST 成功后再次清理内存并 `location.replace('/login')`。网络失败保持工作区隐藏，明确说明尚未确认退出，并将键盘焦点交给重试；不假装清 cookie 已成功。
+- 公共登录页即使已有会话也可提交另一账号。只有登录成功才调用同一 hook 的 `completeLogin(destination)`；它再校验 `safeReturnTo`，同步卸载旧内容、清理缓存并替换为目标 SSR 文档。错误凭证保留已有会话。只有身份切换使用整文档导航；不把每次普通路由导航变成刷新，也不改动 #23 的初始失败模块／会话过期恢复路径。
+- `src/lib/query/client.ts` 的 `discardWorkspaceQueries(queryClient)` 先取消 Query 请求再清除该客户端的 query/mutation 内存缓存。根边界在清理之前卸载内容，因此取消时恢复的数据不会重新显示；文档替换为下个账号创建新的 Router、QueryClient、React 状态及 JS 执行环境，旧响应／回调不能进入新工作区。`router.clearCache()` 用于预加载／缓存，不被误当成当前页面卸载；不通过 `invalidateQueries` 代替清理。
+- #25 的确认切换必须调用现有 `endSession()`，不能直接调用 `logoutDemo` 后自行导航或复制清理逻辑。需要预选下次账号时，在此同一入口扩展经目录校验的登录 search 参数；对话框取消不应调用它。`completeLogin` 只在真实登录成功后调用，不是建立身份的 API；任何参数都不能覆盖服务器目录角色。
+- 清理范围仅为会话与可丢弃的内存状态，不读取／删除 localStorage、sessionStorage、IndexedDB 或任务仓库。当前真实临时状态是移动导航 Dialog，其卸载执行已有滚动锁清理。未来任务选择、地图实例等应归属这个工作区生命周期；不要在模块级单例里保留跨账号状态。
+- 当前没有真实任务持久化／历史、任务选择或地图功能，不创建空 store 或伪造任务来验收。Spec03 #4 和相关任务／地图 Spec 必须补齐真实保存任务在退出及切换后的保留联调；Query 取消不撤销已提交的服务器写操作，也不代替未来持久化服务的账号校验。
 
 ## 4. 环境与监控
 
@@ -143,7 +149,7 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 - Playwright 会自行构建、默认在 4173 端口启动 Bun 生产服务并在结束时关闭；不复用未知的已有服务。
   并行工作树用 `E2E_PORT=4181 bun run test:e2e` 指定各自端口（1–65535），不共享构建输出。
 - 三浏览器项目均已配置；默认 `test:e2e` 运行 Chromium，`test:e2e:all` 运行全部。
-  覆盖产品入口、Demo 登录交互、匿名保护／安全回跳、工作区导航／表格、未知地址返回与实际路由模块的等待／失败／恢复。三类账号通过真实表单、导航、刷新和直接访问验证 SSR 身份；Vitest 通过真实请求上下文调用公共会话服务，检查 cookie、白名单、错误输入及请求间隔离，不读取私有 store 或缓存。
+  覆盖产品入口、Demo 登录交互、匿名保护／安全回跳、工作区导航／表格、未知地址返回与实际路由模块的等待／失败／恢复。三类账号通过真实表单、导航、刷新和直接访问验证 SSR 身份；Vitest 通过真实请求上下文调用公共会话服务，检查 cookie、白名单、错误输入及请求间隔离。退出测试通过真实键盘操作、打开的移动菜单、失败重试和延迟的真实身份响应验证；Query 测试断言公共请求结果和取消，不读取私有 store 或缓存键布局。
   检查 SSR 实际内容、正确 HTTP 状态、水合、资源失败以及 axe WCAG 2.1 A/AA；包括直接访问失败后重新加载，
   以及正常访问保留服务器 DOM。只定向豁免刻意拦截的确切字体／模块及确切未知文档 404 的预期诊断，
   不忽略其他脚本／样式失败、控制台异常或任何页面／水合错误。

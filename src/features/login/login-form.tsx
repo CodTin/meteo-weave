@@ -3,7 +3,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Eye, EyeOff, Info } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { useRouter, useNavigate, useSearch, useLocation } from '@tanstack/react-router'
+import { useSearch, useLocation } from '@tanstack/react-router'
+import { useDemoSessionTransition } from '@/features/auth/session-transition'
 import { safeReturnTo } from '@/features/auth/return-to'
 import { loginDemo } from '@/server/functions/demo-session'
 import { Button } from '@/components/ui/button'
@@ -25,8 +26,7 @@ export function LoginForm() {
     () => true,
     () => false,
   )
-  const router = useRouter()
-  const navigate = useNavigate()
+  const { completeLogin } = useDemoSessionTransition()
   const { returnTo } = useSearch({ from: '/login' })
   const hash = useLocation({ select: (location) => location.hash })
   const [notice, setNotice] = useState('')
@@ -69,7 +69,6 @@ export function LoginForm() {
               setLoginFailed(true)
               return
             }
-            await router.invalidate({ sync: true })
             const destination = safeReturnTo(returnTo)
             // HTTP requests never include fragments. Browsers inherit the original fragment
             // on the SSR login redirect; preserve it only for a valid return destination.
@@ -77,7 +76,7 @@ export function LoginForm() {
               returnTo === destination && hash && !destination.includes('#')
                 ? safeReturnTo(`${destination}#${hash}`)
                 : destination
-            await navigate({ href: target, replace: true })
+            await completeLogin(target)
           } catch {
             setNotice('暂时无法登录，请稍后重试。')
             setLoginFailed(true)

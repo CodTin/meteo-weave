@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import {
+  endDemoSession,
   loginDemoAccount,
   readDemoSession,
   requireDemoAccount,
@@ -14,3 +15,5 @@ export const getDemoSession = createServerFn({ method: 'GET' }).handler(() => re
 export const requireDemoSession = createServerFn({ method: 'GET' })
   .inputValidator((returnTo: unknown) => returnTo)
   .handler(({ data }) => requireDemoAccount(data))
+
+export const logoutDemo = createServerFn({ method: 'POST' }).handler(() => endDemoSession())

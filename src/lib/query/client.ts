@@ -7,3 +7,9 @@ export function createQueryClient() {
     },
   })
 }
+
+// Only disposable in-memory query/mutation state; never browser/task persistence.
+export async function discardWorkspaceQueries(client: QueryClient) {
+  await client.cancelQueries()
+  client.clear()
+}

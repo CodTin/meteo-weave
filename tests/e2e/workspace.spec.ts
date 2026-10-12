@@ -160,7 +160,7 @@ for (const width of [390, 768]) {
       ).toHaveAttribute('aria-current', 'page')
       // Native modal focus containment: neither direction reaches the background page.
       await page.keyboard.press('Shift+Tab')
-      await expect(navigation.getByRole('link', { name: '设置', exact: true })).toBeFocused()
+      await expect(dialog.getByRole('button', { name: '退出登录', exact: true })).toBeFocused()
       await page.keyboard.press('Tab')
       await expect(close).toBeFocused()
       await expectAccessible(page)
