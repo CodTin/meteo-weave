@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect } from '@playwright/test'
 import { test } from './browser-guard'
+import { submitDemoLogin } from './demo-login'
 
 for (const [id, role, name] of [
   ['researcher', '研究人员', '研究演示账号'],
@@ -13,9 +14,7 @@ for (const [id, role, name] of [
     await page.goto('/login')
     await expect(page.getByRole('region', { name: '公开演示账号' })).toContainText(id)
     await expect(page.getByRole('region', { name: '公开演示账号' })).toContainText('meteo-demo')
-    await page.getByLabel('账号', { exact: true }).fill(id)
-    await page.getByLabel('密码', { exact: true }).fill('meteo-demo')
-    await page.getByRole('button', { name: '登录演示账号', exact: true }).click()
+    await submitDemoLogin(page, id)
     await expect(page).toHaveURL('/dashboard')
     await expect(page.getByRole('main')).not.toContainText('身份认证与任务服务尚未接入')
     await expect(page.getByRole('main')).not.toContainText('不代表已登录')

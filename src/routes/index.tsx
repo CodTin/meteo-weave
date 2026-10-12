@@ -55,7 +55,7 @@ function EntryPage() {
             </div>
             <CardTitle className="text-2xl">探索精细化气象分析</CardTitle>
             <CardDescription>
-              从登录入口了解演示方式。当前仅开放界面预览，不会创建会话或执行计算。
+              工作区需要登录。请使用公开的 Demo 账号进入界面预览；不会执行计算。
             </CardDescription>
           </CardHeader>
           <CardContent>

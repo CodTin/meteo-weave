@@ -1,7 +1,12 @@
+import { signInDemo, submitDemoLogin } from './demo-login'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, type Page, type Locator } from '@playwright/test'
 
 import { test } from './browser-guard'
+
+test.beforeEach(async ({ context }) => {
+  await signInDemo(context)
+})
 
 // Intercept the real production route module, before focus/intent can preload it.
 const taskModule = /\/assets\/_workspace\.tasks\.index(?:\.lazy)?-[^/]+\.js$/
@@ -552,3 +557,39 @@ for (const destination of [
     })
   }
 }
+
+test('session expiry during failed SSR chunk recovery reaches login without hydrating the old workspace', async ({
+  page,
+  context,
+  expectedModuleFailures,
+}) => {
+  let documentRequests = 0
+  page.on('request', (request) => {
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests++
+  })
+  await page.route(taskModule, async (route) => {
+    // The server document was legitimately authenticated; the session ends before recovery.
+    await context.clearCookies()
+    expectedModuleFailures.add(route.request().url())
+    await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Unavailable' })
+  })
+  const response = await page.goto('/tasks?status=completed#results')
+  expect(response?.status()).toBe(200)
+  expect(await response?.text()).toContain('降尺度任务字段预览')
+  await expect(page).toHaveURL((url) => url.pathname === '/login')
+  await expect(page.getByRole('heading', { level: 1, name: '登录 MeteoWeave' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '登录演示账号', exact: true })).toBeEnabled()
+  await expect(page.getByRole('region', { name: '当前演示账号' })).toHaveCount(0)
+  await expect(page.getByRole('table')).toHaveCount(0)
+  expect(documentRequests).toBe(1)
+  expect(expectedModuleFailures.size).toBe(1)
+  await expectAccessible(page)
+  await page.unroute(taskModule)
+  // Reset the browser's failed module import with an explicit refresh, then resume real login.
+  const refreshed = await page.reload()
+  expect(await refreshed?.text()).toContain('登录 MeteoWeave')
+  await submitDemoLogin(page, 'policy')
+  await expect(page).toHaveURL('/tasks?status=completed#results')
+  await expect(page.getByRole('table', { name: '降尺度任务字段预览' })).toBeVisible()
+  await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('policy')
+})

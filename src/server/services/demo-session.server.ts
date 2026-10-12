@@ -6,6 +6,8 @@ import {
   setResponseHeader,
 } from '@tanstack/react-start/server'
 import { z } from 'zod'
+import { redirect } from '@tanstack/react-router'
+import { safeReturnTo } from '@/features/auth/return-to'
 import { DEMO_PASSWORD, resolveDemoAccount } from '@/features/auth/demo-accounts'
 
 export const DEMO_SESSION_COOKIE = 'meteo-demo-account'
@@ -32,4 +34,18 @@ export function loginDemoAccount(input: unknown) {
 export function readDemoSession() {
   setResponseHeader('Cache-Control', 'no-store')
   return resolveDemoAccount(getCookie(DEMO_SESSION_COOKIE))
+}
+
+// This is also the service boundary for the workspace's current-account display.
+// Future identity-dependent services must require this account before doing work.
+export function requireDemoAccount(returnTo?: unknown) {
+  const account = readDemoSession()
+  if (!account) {
+    throw redirect({
+      href: `/login?${new URLSearchParams({ returnTo: safeReturnTo(returnTo) })}`,
+      replace: true,
+      headers: { 'Cache-Control': 'no-store' },
+    })
+  }
+  return account
 }
