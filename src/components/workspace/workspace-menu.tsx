@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useDemoSessionTransition } from '@/features/auth/session-transition'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { WorkspaceNavigation } from '@/components/workspace/workspace-navigation'
 
 export function WorkspaceMenu({ contentRef }: { contentRef: RefObject<HTMLElement | null> }) {
+  const { endSession } = useDemoSessionTransition()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [isOpen, setIsOpen] = useState(false)
@@ -113,9 +115,12 @@ export function WorkspaceMenu({ contentRef }: { contentRef: RefObject<HTMLElemen
           id="workspace-navigation-description"
           className="text-sm leading-7 text-muted-foreground"
         >
-          公开界面预览，不代表已登录。选择页面以继续浏览。
+          当前演示账号的工作区。选择页面，或退出登录以结束本次演示。
         </p>
         <WorkspaceNavigation onNavigate={closeMenu} />
+        <Button variant="outline" onClick={() => void endSession()}>
+          退出登录
+        </Button>
       </dialog>
     </>
   )

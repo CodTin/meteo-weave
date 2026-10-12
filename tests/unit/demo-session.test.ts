@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { isRedirect } from '@tanstack/react-router'
 import { requestHandler } from '@tanstack/react-start/server'
 import {
+  endDemoSession,
   loginDemoAccount,
   readDemoSession,
   requireDemoAccount,
@@ -208,3 +209,51 @@ describe('required account service login continuation', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
   })
 })
+
+describe('ending a Demo session', () => {
+  it('ends the established session for optional and required identity callers', async () => {
+    const signedIn = await login({ account: 'researcher', password: 'meteo-demo' })
+    const cookie = signedIn.headers.get('set-cookie')?.split(';')[0] ?? ''
+    const ended = await requestHandler(() => Response.json(endDemoSession()))(
+      new Request('http://demo.test/', { method: 'POST', headers: { cookie } }),
+      {},
+    )
+    expect(await ended.json()).toEqual({ ok: true })
+    expect(ended.headers.get('cache-control')).toBe('no-store')
+    expect(ended.headers.get('set-cookie')).toContain('Max-Age=0')
+    expect(ended.headers.get('set-cookie')).toContain('Path=/')
+    const expiredCookie = ended.headers.get('set-cookie')?.split(';')[0]
+    expect(await (await session(expiredCookie)).json()).toBeNull()
+    expect((await workspaceAccount(expiredCookie)).status).toBe(307)
+  })
+})
+
+it.each([
+  ['http://demo.test/', {}, false],
+  ['https://demo.test/', {}, true],
+  ['http://demo.test/', { 'x-forwarded-proto': 'https' }, true],
+] as const)(
+  'ending an already absent session is safe and respects the request protocol: %s',
+  async (url, headers, secure) => {
+    const response = await requestHandler(() => Response.json(endDemoSession()))(
+      new Request(url, { method: 'POST', headers }),
+      {},
+    )
+    expect(await response.json()).toEqual({ ok: true })
+    const cookie = response.headers
+      .get('set-cookie')
+      ?.split(';')
+      .map((part) => part.trim())
+    expect(cookie).toEqual(
+      expect.arrayContaining([
+        'meteo-demo-account=',
+        'Max-Age=0',
+        'Path=/',
+        'HttpOnly',
+        'SameSite=Lax',
+      ]),
+    )
+    expect(cookie?.includes('Secure')).toBe(secure)
+    expect(await (await session()).json()).toBeNull()
+  },
+)

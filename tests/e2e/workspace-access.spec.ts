@@ -81,10 +81,23 @@ for (const [target, expected] of [
     '/settings?note=%E6%BC%94%E7%A4%BA+%2F%2Fexample.com#account',
   ],
 ] as const) {
-  test(`accepts the serialized workspace return-to ${target}`, async ({ page }) => {
+  test(`accepts the serialized workspace return-to ${target}`, async ({ page, baseURL }) => {
     await page.goto(`/login?${new URLSearchParams({ returnTo: target })}`)
     await submitDemoLogin(page)
-    await expect(page).toHaveURL(expected)
+    if (target.startsWith('/settings?note=')) {
+      // Query values, same-origin destination and fragment are the contract,
+      // not whether the document or SPA serializer represents a space as %20 or +.
+      await expect(page).toHaveURL(
+        (url) =>
+          url.origin === baseURL &&
+          url.pathname === '/settings' &&
+          url.searchParams.size === 1 &&
+          url.searchParams.get('note') === '演示 //example.com' &&
+          url.hash === '#account',
+      )
+    } else {
+      await expect(page).toHaveURL(expected)
+    }
     await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('researcher')
   })
 }

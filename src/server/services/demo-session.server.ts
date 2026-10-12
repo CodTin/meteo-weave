@@ -49,3 +49,16 @@ export function requireDemoAccount(returnTo?: unknown) {
   }
   return account
 }
+
+// End only the Demo selector; saved tasks and unrelated browser data are not session state.
+export function endDemoSession() {
+  setResponseHeader('Cache-Control', 'no-store')
+  setCookie(DEMO_SESSION_COOKIE, '', {
+    maxAge: 0,
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    secure: getRequestProtocol() === 'https',
+  })
+  return { ok: true as const }
+}
