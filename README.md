@@ -1,0 +1,112 @@
+# MeteoWeave
+
+气象降尺度演示平台。目前仅完成**工程初始化**：依赖、目录、SSR 外壳和开发工具链。
+没有首页、登录页、地图、表单、业务接口、Mock 账号或降尺度逻辑；启动后空白是预期行为。
+因为没有任何页面路由，`/` 返回带完整文档外壳的 404；添加首个真实路由后再调整对应冒烟断言。
+
+需求依据：[平台设计](docs/design/platform-design.md)、[技术栈选型](docs/design/tech-stack.md)。
+术语沿用 [GLOSSARY.md](GLOSSARY.md)。原始设计文件未修改。
+
+## 启动
+
+需要 Bun 1.4.3+，以及 Node.js 24.15+ 的 24.x LTS（供 Vitest、Playwright、Husky 等工具使用）。
+项目已安装本地 Bun 1.4.3，`bun run` 中的应用命令会使用它，不修改系统 Bun。
+本机已安装依赖；其他环境首次运行：
+
+```sh
+bun install --frozen-lockfile
+bun run dev
+```
+
+开发服务监听 `http://127.0.0.1:3000`。无需 `.env` 或外部服务账号即可启动。
+需要配置集成时，再复制 `.env.example` 为 `.env` 并填写相应变量。
+
+## 常用命令
+
+| 命令                                      | 用途                                        |
+| ----------------------------------------- | ------------------------------------------- |
+| `bun run dev`                             | Bun 运行 Vite 开发服务                      |
+| `bun run build`                           | 生成本地 Bun 生产构建                       |
+| `bun run start` / `bun run preview`       | 启动已有生产构建，默认端口 3000             |
+| `bun run build:vercel`                    | 生成 Vercel 构建产物，不会部署              |
+| `bun run routes:generate`                 | 重新生成类型安全路由树                      |
+| `bun run typecheck`                       | 生成路由树并执行严格类型检查                |
+| `bun run lint` / `bun run lint:fix`       | Oxlint 检查 / 修复                          |
+| `bun run format` / `bun run format:check` | Oxfmt 格式化 / 检查                         |
+| `bun run test` / `bun run test:watch`     | Vitest 单次 / 监听测试                      |
+| `bun run test:coverage`                   | V8 覆盖率报告                               |
+| `bun run test:e2e:install`                | 安装 Playwright 三种浏览器                  |
+| `bun run test:e2e`                        | 构建、启动生产服务并运行 Chromium 冒烟测试  |
+| `bun run test:e2e:all`                    | Chromium、Firefox、WebKit 全部运行          |
+| `bun run test:e2e:ui`                     | Playwright 交互调试                         |
+| `bun run check`                           | 格式、Lint、类型、单元与组件环境检查        |
+| `bun run check:all`                       | 上述检查，再执行生产构建和 E2E              |
+| `bun run analyze`                         | 构建并输出 `reports/bundle.html` 包体积报告 |
+| `bun run ui:add <组件名>`                 | 后续按需添加 shadcn 源码组件                |
+
+请使用 **`bun run test`**，不是 `bun test`：项目选用 Vitest，而非 Bun 内置测试运行器。
+Playwright 首次在其他机器运行前需安装浏览器；Linux CI 可使用 `bunx playwright install --with-deps`。
+
+## 目录
+
+```text
+src/
+  routes/                  文件路由；目前只有 __root.tsx 文档外壳
+  router.tsx               每次 SSR 请求独立的 Router 和 QueryClient
+  start.ts                 SSR 默认设置、全局监控中间件
+  client.tsx / server.ts   客户端水合、服务器入口
+  components/
+    ui/                    预留 shadcn 基础组件
+    maps/ charts/ tables/ forms/  预留跨业务复用的组件
+  features/
+    auth/                  Mock 认证与角色入口（仅目录）
+    dashboard/             任务概览（仅目录）
+    data-catalog/          数据源与数据浏览（仅目录）
+    downscaling-tasks/     任务配置、提交与管理（仅目录）
+    result-analysis/      结果分析各维度及导出（仅目录）
+    task-comparison/       任务对比（仅目录）
+    user-settings/         用户设置（仅目录）
+  lib/
+    env/                   分离的公开 / 服务器环境变量验证
+    query/                 QueryClient 工厂
+    monitoring/            按配置启用的 Sentry 初始化
+    geo/                   预留地理计算工具
+    utils.ts               shadcn 的 cn 工具
+  server/
+    functions/             预留类型安全 Server Functions
+    services/              预留服务器内部数据访问
+    mocks/                 预留 Mock 数据服务
+  hooks/ stores/ types/    预留共享 hooks、Zustand 状态和类型
+  styles/                  Tailwind v4、shadcn 中性默认变量
+public/                    公开静态资源
+data/                     原始资料及 mock/、precomputed/ 数据预留目录
+tests/                    unit/、components/、e2e/、fixtures/
+docs/                     设计与开发说明
+```
+
+空目录使用 `.gitkeep` 保留，不包含示例业务实现。详细边界、依赖和配置见
+[开发说明](docs/development.md)。
+
+## 版本与范围
+
+依赖于 **2026-10-11** 通过不带版本号的 `bun add` 安装，再由 `bun.lock` 锁定。
+后续复现请保留锁文件；未安装技术栈文档中的替代选项和未来可选方案。
+
+- 核心：TanStack Start、Router、Query、React、TypeScript、Vite、Nitro。
+- 数据与交互：Zustand、React Hook Form、Zod、t3-env、TanStack Table / Virtual。
+- 可视化：Mapbox GL JS、react-map-gl、Turf、Recharts、GeoJSON 类型。
+- UI：Tailwind v4、shadcn 配置及基础工具、Lucide、Sonner、date-fns、react-dropzone。
+- 质量：Vitest、Testing Library、Playwright、axe、Oxlint、Oxfmt、Husky、lint-staged。
+- 运维：Sentry、Vercel Analytics / Speed Insights、包体积分析。
+
+数据库、Drizzle、better-auth、Storybook、PWA、国际化、真实气象 API 接入均未引入。
+监控默认关闭，只有主动配置后才启用；没有创建或连接任何云端项目。
+
+本地 Git 已初始化且 Husky 已启用，但**未暂存文件、未创建提交、未设置远程仓库**。
+
+## 已知验证限制
+
+Chromium 和 WebKit 的生产外壳 / 可访问性冒烟已通过。当前机器上的 Playwright Firefox
+在打开应用前报 `Could not find profile folder`；默认、独立临时目录、持久化临时 profile
+以及重新安装浏览器均能复现，未宣称 Firefox 通过。`test:e2e` 使用 Chromium 作为默认冒烟，
+`test:e2e:all` 保留完整三浏览器检查并如实报告失败。修复 Firefox 环境后可直接重跑，无需修改应用。

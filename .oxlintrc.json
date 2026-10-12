@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "unicorn", "oxc", "jsx-a11y"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off"
+  },
+  "ignorePatterns": [
+    "node_modules/**",
+    ".output/**",
+    ".vercel/**",
+    "dist/**",
+    ".tanstack/**",
+    "coverage/**",
+    "playwright-report/**",
+    "test-results/**",
+    "reports/**",
+    "src/routeTree.gen.ts",
+    ".agents/**",
+    ".claude/**",
+    ".codegraph/**",
+    ".rtk/**",
+    "docs/**",
+    "data/**"
+  ]
+}

@@ -1,0 +1,3 @@
+bunx --no-install lint-staged
+bun run typecheck
+bun run test

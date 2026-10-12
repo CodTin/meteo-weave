@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "ignorePatterns": [
+    "node_modules/**",
+    ".output/**",
+    ".vercel/**",
+    "dist/**",
+    ".tanstack/**",
+    "coverage/**",
+    "playwright-report/**",
+    "test-results/**",
+    "reports/**",
+    "src/routeTree.gen.ts",
+    "bun.lock",
+    "skills-lock.json",
+    ".agents/**",
+    ".claude/**",
+    ".codegraph/**",
+    ".rtk/**",
+    "CLAUDE.md",
+    "GLOSSARY.md",
+    "docs/design/**",
+    "docs/refs/**",
+    "data/**",
+    "AGENTS.md"
+  ]
+}
