@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { z } from 'zod'
 import { ArrowLeft, LockKeyhole } from 'lucide-react'
 import { EntryShell } from '@/components/entry/entry-shell'
 import { buttonVariants } from '@/components/ui/button'
@@ -8,18 +9,22 @@ import { RoleDialog } from '@/features/login/role-dialog'
 import { LoginPreview } from '@/features/login/login-preview'
 
 export const Route = createFileRoute('/login')({
+  validateSearch: z.object({ returnTo: z.string().optional().catch(undefined) }),
   head: () => ({ meta: [{ title: '登录 · MeteoWeave' }] }),
   component: LoginPage,
 })
 
 function LoginPage() {
+  const { returnTo } = Route.useSearch()
   return (
     <EntryShell>
       <div className="mx-auto max-w-lg py-4 sm:py-10">
         <p className="mb-3 text-xs tracking-widest text-muted-foreground">平台入口 / 登录</p>
         <h1 className="font-display text-3xl font-semibold">登录 MeteoWeave</h1>
         <p className="mt-3 mb-8 text-sm leading-7 text-muted-foreground">
-          这里是气象降尺度演示平台的登录入口。
+          {returnTo
+            ? '访问工作区需要先登录。请使用下方公开的 Demo 账号继续，登录后将返回目标页面。'
+            : '这里是气象降尺度演示平台的登录入口。'}
         </p>
         <Card>
           <CardHeader>

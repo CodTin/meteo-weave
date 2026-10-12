@@ -1,3 +1,4 @@
+import { signInDemo } from './demo-login'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test as base, type Page } from '@playwright/test'
 
@@ -22,6 +23,10 @@ const test = base.extend<{ browserGuard: void }>({
     },
     { auto: true },
   ],
+})
+
+test.beforeEach(async ({ context }) => {
+  await signInDemo(context)
 })
 
 async function expectPageIdentity(
@@ -111,7 +116,7 @@ test('navigates from the task table to creation and restores context through bro
   await expectPageIdentity(page, '/tasks', '任务管理')
 })
 
-test('reaches settings without claiming a session or saving preferences', async ({ page }) => {
+test('reaches settings with the signed-in account without saving preferences', async ({ page }) => {
   await page.goto('/dashboard')
   await page
     .getByRole('navigation', { name: '工作区导航', exact: true })
