@@ -18,4 +18,5 @@ reports/
 .rtk/
 .codegraph/
 .serena/
+.claude/
 src/routeTree.gen.ts
