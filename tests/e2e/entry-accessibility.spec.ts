@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect } from '@playwright/test'
+import { test } from './browser-guard'
 
 for (const width of [390, 768, 1440]) {
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {
@@ -8,11 +9,18 @@ for (const width of [390, 768, 1440]) {
 
       test('keeps entry, login and 404 readable and keyboard-operable without remote fonts', async ({
         page,
+        expectedFontFailures,
+        expectedDocument404s,
       }, testInfo) => {
         // Font delivery is a browser boundary: the real pages must still work if it fails.
-        await page.route('**/*', (route) =>
-          route.request().resourceType() === 'font' ? route.abort() : route.continue(),
-        )
+        expectedDocument404s.add(new URL('/missing-entry', testInfo.project.use.baseURL).href)
+        await page.route('**/*', (route) => {
+          if (route.request().resourceType() === 'font') {
+            expectedFontFailures.add(route.request().url())
+            return route.abort('failed')
+          }
+          return route.continue()
+        })
         const pages = [
           { path: '/', heading: '气象降尺度工作台', action: '前往登录', destination: /\/login$/ },
           {

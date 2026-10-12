@@ -2,20 +2,24 @@ import { Link, useLocation, type ErrorComponentProps } from '@tanstack/react-rou
 import { AlertTriangle, RotateCcw } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { workspacePages } from '@/components/workspace/workspace-navigation'
+import { getWorkspaceTitle } from '@/components/workspace/workspace-navigation'
 
-export function WorkspaceError({ error }: ErrorComponentProps) {
-  const pathname = useLocation({ select: (location) => location.pathname })
-  const title =
-    workspacePages.find((page) => page.path === pathname.replace(/\/$/, ''))?.title ?? '页面'
-  // Classify only; never render the raw message, URL, response or stack.
-  const resourceFailed =
+// Classify only; never render the raw message, URL, response or stack.
+export function isWorkspaceResourceError(error: unknown): error is Error {
+  return (
     error instanceof Error &&
     [
       'Failed to fetch dynamically imported module',
       'error loading dynamically imported module',
       'Importing a module script failed',
     ].some((prefix) => error.message.startsWith(prefix))
+  )
+}
+
+export function WorkspaceError({ error }: ErrorComponentProps) {
+  const pathname = useLocation({ select: (location) => location.pathname })
+  const title = getWorkspaceTitle(pathname) ?? '页面'
+  const resourceFailed = isWorkspaceResourceError(error)
 
   return (
     <Card>
