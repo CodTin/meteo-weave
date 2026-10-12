@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, type Page } from '@playwright/test'
 import { test } from './browser-guard'
 import { submitDemoLogin } from './demo-login'
+import { holdNextSessionResponse } from './held-session-response'
 
 async function openSettings(page: Page, account = 'researcher') {
   await page.goto('/login')
@@ -375,43 +376,15 @@ test('a delayed outgoing identity response cannot reappear after a confirmed rol
   expectedSessionTransportFailures,
 }) => {
   await openSettings(page)
-  let release!: () => void
-  const held = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  let received!: (url: string) => void
-  const ready = new Promise<string>((resolve) => {
-    received = resolve
-  })
-  let delivered!: () => void
-  const finished = new Promise<void>((resolve) => {
-    delivered = resolve
-  })
-  let heldOnce = false
-  await page.route('**/_serverFn/**', async (route) => {
-    if (route.request().method() !== 'GET' || heldOnce) {
-      await route.continue()
-      return
-    }
-    heldOnce = true
-    const response = await route.fetch()
-    expect(response.status()).toBe(200)
-    expect(await response.text()).toContain('researcher')
-    expectedSessionTransportFailures.add(route.request().url())
-    received(route.request().url())
-    await held
-    try {
-      await route.fulfill({ response })
-    } finally {
-      delivered()
-    }
-  })
+  const delayed = await holdNextSessionResponse(page, expectedSessionTransportFailures)
   await page
     .getByRole('navigation', { name: '工作区导航', exact: true })
     .getByRole('link', { name: '创建任务', exact: true })
     .hover()
-  const serviceUrl = await ready
+  const { url: serviceUrl, response } = await delayed.ready
   try {
+    expect(response.status()).toBe(200)
+    expect(await response.text()).toContain('researcher')
     await page.getByRole('button', { name: '切换演示角色', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '切换演示角色', exact: true })
     await dialog.getByRole('radio', { name: /决策者/ }).check()
@@ -423,8 +396,8 @@ test('a delayed outgoing identity response cannot reappear after a confirmed rol
     await page.getByLabel('密码', { exact: true }).fill('meteo-demo')
     await page.getByRole('button', { name: '登录演示账号', exact: true }).click()
     await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('policy')
-    release()
-    await finished
+    delayed.release()
+    await delayed.finished
     const current = await page.request.get(serviceUrl)
     expect(current.status()).toBe(200)
     expect(await current.text()).toContain('policy')
@@ -439,6 +412,6 @@ test('a delayed outgoing identity response cannot reappear after a confirmed rol
     await page.reload()
     await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('policy')
   } finally {
-    release()
+    delayed.release()
   }
 })

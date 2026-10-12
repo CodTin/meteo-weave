@@ -62,43 +62,47 @@ export function WorkspaceShell() {
       </aside>
       <div className="min-w-0 lg:pl-64">
         <header className="border-b bg-background px-5 py-5 sm:px-8">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-            <WorkspaceMenu contentRef={contentRef} />
-            <nav aria-label="面包屑" className="min-w-0 flex-1 text-sm">
-              <ol className="flex flex-wrap items-center gap-2 text-muted-foreground">
-                <li>
-                  <Link to="/" className="rounded-sm hover:text-foreground">
-                    平台入口
-                  </Link>
-                </li>
-                <li aria-hidden="true">/</li>
-                <li>工作区</li>
-                <li aria-hidden="true">/</li>
-                <li aria-current="page" className="text-foreground">
-                  {title}
-                </li>
-              </ol>
-            </nav>
-            <section
-              aria-label="当前演示账号"
-              className="rounded-lg border px-3 py-2 text-xs leading-6"
-            >
-              {account ? (
-                <>
-                  <p>
-                    {account.name} · {account.id}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {account.roleLabel} · {account.roleTitle}
-                  </p>
-                </>
-              ) : (
-                <p className="text-muted-foreground">未登录 · 工作区预览</p>
-              )}
-            </section>
-            <Button variant="outline" onClick={() => void endSession()}>
-              退出登录
-            </Button>
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <WorkspaceMenu contentRef={contentRef} />
+              <nav aria-label="面包屑" className="min-w-0 flex-1 text-sm">
+                <ol className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                  <li>
+                    <Link to="/" className="rounded-sm hover:text-foreground">
+                      平台入口
+                    </Link>
+                  </li>
+                  <li aria-hidden="true">/</li>
+                  <li>工作区</li>
+                  <li aria-hidden="true">/</li>
+                  <li aria-current="page" className="text-foreground">
+                    {title}
+                  </li>
+                </ol>
+              </nav>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <section
+                aria-label="当前演示账号"
+                className="rounded-lg border px-3 py-2 text-xs leading-6"
+              >
+                {account ? (
+                  <>
+                    <p>
+                      {account.name} · {account.id}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {account.roleLabel} · {account.roleTitle}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">未登录 · 工作区预览</p>
+                )}
+              </section>
+              <Button variant="outline" onClick={() => void endSession()}>
+                退出登录
+              </Button>
+            </div>
           </div>
         </header>
         <main
