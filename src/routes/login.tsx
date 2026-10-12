@@ -4,18 +4,24 @@ import { ArrowLeft, LockKeyhole } from 'lucide-react'
 import { EntryShell } from '@/components/entry/entry-shell'
 import { buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { demoAccounts, DEMO_PASSWORD } from '@/features/auth/demo-accounts'
+import { demoAccounts, DEMO_PASSWORD, resolveDemoAccount } from '@/features/auth/demo-accounts'
 import { RoleDialog } from '@/features/login/role-dialog'
 import { LoginPreview } from '@/features/login/login-preview'
 
 export const Route = createFileRoute('/login')({
-  validateSearch: z.object({ returnTo: z.string().optional().catch(undefined) }),
+  validateSearch: z.object({
+    returnTo: z.string().optional().catch(undefined),
+    account: z
+      .unknown()
+      .transform((value) => resolveDemoAccount(value)?.id)
+      .optional(),
+  }),
   head: () => ({ meta: [{ title: '登录 · MeteoWeave' }] }),
   component: LoginPage,
 })
 
 function LoginPage() {
-  const { returnTo } = Route.useSearch()
+  const { returnTo, account } = Route.useSearch()
   return (
     <EntryShell>
       <div className="mx-auto max-w-lg py-4 sm:py-10">
@@ -58,7 +64,7 @@ function LoginPage() {
                 数据，不能用于真实用户或远程数据授权。
               </p>
             </section>
-            <LoginPreview />
+            <LoginPreview key={account ?? 'unselected'} preselectedAccount={account} />
             <RoleDialog />
             <Link to="/" className={buttonVariants({ variant: 'outline', className: 'w-full' })}>
               <ArrowLeft aria-hidden="true" />

@@ -23,7 +23,7 @@ export function RoleDialog() {
         <DialogHeader className="text-left">
           <DialogTitle className="pr-8">角色与演示说明</DialogTitle>
           <DialogDescription>
-            使用公开演示账号选择体验身份。这里介绍角色定位；角色切换与参数权限尚未开放。
+            使用公开演示账号选择体验身份。设置中的角色切换会先退出，再要求重新登录；任务配置能力按当前已登录角色决定。
           </DialogDescription>
         </DialogHeader>
         <RoleDescriptions />

@@ -197,7 +197,7 @@ test('entry and remaining workspace destinations load inside the same usable she
       title: '设置',
       link: '设置',
       path: '/settings',
-      content: '偏好设置尚未接入',
+      content: '分析偏好暂不支持保存',
     },
     {
       module: /\/assets\/_workspace\.tasks\.new(?:\.lazy)?-[^/]+\.js$/,
@@ -426,7 +426,7 @@ test('leaving a delayed page keeps navigation usable and ignores its late arriva
       '正在加载任务管理',
     )
     await navigateByKeyboard(page, '设置')
-    await expect(page.getByRole('main')).toContainText('角色切换与偏好设置尚未接入')
+    await expect(page.getByRole('main')).toContainText('演示角色与分析偏好')
     await expect(page.getByRole('status', { name: '页面加载状态' })).toHaveCount(0)
     release()
     await arrived
@@ -509,7 +509,7 @@ for (const destination of [
     title: '设置',
     path: '/settings',
     module: /\/assets\/_workspace\.settings\.lazy-[^/]+\.js$/,
-    content: '角色切换与偏好设置尚未接入',
+    content: '演示角色与分析偏好',
   },
 ]) {
   for (const width of [390, 768, 1440]) {
