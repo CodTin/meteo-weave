@@ -1,0 +1,93 @@
+import { useRef } from 'react'
+import { WorkspaceMenu } from '@/components/workspace/workspace-menu'
+import { Link, Outlet, useLocation } from '@tanstack/react-router'
+import { Layers } from 'lucide-react'
+import { WorkspaceNavigation, workspacePages } from '@/components/workspace/workspace-navigation'
+
+export function WorkspaceShell() {
+  const contentRef = useRef<HTMLElement>(null)
+  const pathname = useLocation({ select: (location) => location.pathname })
+  const title =
+    workspacePages.find((page) => page.path === pathname.replace(/\/$/, ''))?.title ?? '工作区'
+
+  return (
+    <div className="min-h-svh">
+      <a href="#main-content" className="skip-link">
+        跳转到主要内容
+      </a>
+      <aside
+        aria-label="工作区侧栏"
+        className="fixed inset-y-0 left-0 hidden w-64 flex-col gap-8 border-r bg-sidebar p-6 text-sidebar-foreground lg:flex"
+      >
+        <Link
+          to="/"
+          aria-label="MeteoWeave · 平台入口"
+          className="flex items-center gap-3 rounded-md"
+        >
+          <Layers className="size-7 text-ring" aria-hidden="true" />
+          <span className="font-display text-2xl font-semibold">MeteoWeave</span>
+        </Link>
+        <div>
+          <p className="mb-4 px-3 text-xs tracking-widest text-muted-foreground">
+            工作区 / PREVIEW
+          </p>
+          <WorkspaceNavigation />
+        </div>
+        <p className="mt-auto border-t pt-5 text-xs leading-6 text-muted-foreground">
+          仅供界面预览
+          <br />
+          身份认证与任务服务尚未接入
+        </p>
+      </aside>
+      <div className="min-w-0 lg:pl-64">
+        <header className="border-b bg-background px-5 py-5 sm:px-8">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+            <WorkspaceMenu contentRef={contentRef} />
+            <nav aria-label="面包屑" className="min-w-0 flex-1 text-sm">
+              <ol className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                <li>
+                  <Link to="/" className="rounded-sm hover:text-foreground">
+                    平台入口
+                  </Link>
+                </li>
+                <li aria-hidden="true">/</li>
+                <li>工作区</li>
+                <li aria-hidden="true">/</li>
+                <li aria-current="page" className="text-foreground">
+                  {title}
+                </li>
+              </ol>
+            </nav>
+            <span className="rounded-full border px-3 py-1 text-xs text-muted-foreground">
+              界面预览 · 未连接
+            </span>
+          </div>
+        </header>
+        <main
+          ref={contentRef}
+          id="main-content"
+          aria-labelledby="workspace-title"
+          tabIndex={-1}
+          className="mx-auto w-full min-w-0 max-w-6xl px-5 py-8 sm:px-8 sm:py-10"
+        >
+          <p className="mb-3 font-mono text-xs tracking-widest text-muted-foreground">
+            METEOWEAVE / WORKSPACE
+          </p>
+          <h1
+            id="workspace-title"
+            className="mb-7 break-words font-display text-3xl font-semibold tracking-tight sm:text-4xl"
+          >
+            {title}
+          </h1>
+          <Outlet />
+        </main>
+        <output aria-live="polite" aria-atomic="true" className="sr-only">
+          已进入{title}页面
+        </output>
+        <footer className="mx-auto max-w-6xl px-5 pb-6 text-xs leading-6 text-muted-foreground sm:px-8">
+          仅用于界面与流程预览 · 不用于业务决策
+        </footer>
+      </div>
+    </div>
+  )
+}

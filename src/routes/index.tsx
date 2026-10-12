@@ -60,9 +60,12 @@ function EntryPage() {
           <CardContent>
             <ResolutionPreview />
           </CardContent>
-          <CardFooter className="flex-col items-stretch sm:flex-row sm:items-center">
+          <CardFooter className="flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-center">
             <Link to="/login" className={buttonVariants({ size: 'lg' })}>
               前往登录 <ArrowRight aria-hidden="true" />
+            </Link>
+            <Link to="/dashboard" className={buttonVariants({ variant: 'outline' })}>
+              预览工作区
             </Link>
             <a href="#demo-scope" className={buttonVariants({ variant: 'ghost' })}>
               了解演示范围
