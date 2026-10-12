@@ -1,6 +1,7 @@
 import { expect } from '@playwright/test'
 import { test } from './browser-guard'
 import { submitDemoLogin } from './demo-login'
+import { holdNextSessionResponse } from './held-session-response'
 
 test('keyboard logout ends the session and protects Back, refresh and reopened workspace pages', async ({
   page,
@@ -153,44 +154,15 @@ for (const transition of ['logout', 'public login'] as const) {
     await page.goto('/login')
     await submitDemoLogin(page)
     await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('researcher')
-    let release!: () => void
-    const held = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    let received!: (url: string) => void
-    const ready = new Promise<string>((resolve) => {
-      received = resolve
-    })
-    let delivered!: () => void
-    const finished = new Promise<void>((resolve) => {
-      delivered = resolve
-    })
-    let heldOnce = false
-    await page.route('**/_serverFn/**', async (route) => {
-      if (route.request().method() !== 'GET' || heldOnce) {
-        await route.continue()
-        return
-      }
-      heldOnce = true
-      // Hold a real required-account service response, not a fabricated account fixture.
-      const response = await route.fetch()
-      expect(response.status()).toBe(200)
-      expect(await response.text()).toContain('researcher')
-      expectedSessionTransportFailures.add(route.request().url())
-      received(route.request().url())
-      await held
-      try {
-        await route.fulfill({ response })
-      } finally {
-        delivered()
-      }
-    })
+    const delayed = await holdNextSessionResponse(page, expectedSessionTransportFailures)
     await page
       .getByRole('navigation', { name: '工作区导航', exact: true })
       .getByRole('link', { name: '设置', exact: true })
       .hover()
-    const serviceUrl = await ready
+    const { url: serviceUrl, response } = await delayed.ready
     try {
+      expect(response.status()).toBe(200)
+      expect(await response.text()).toContain('researcher')
       if (transition === 'logout') {
         await page.getByRole('button', { name: '退出登录', exact: true }).click()
         await expect(page).toHaveURL('/login')
@@ -204,8 +176,8 @@ for (const transition of ['logout', 'public login'] as const) {
       }
       await submitDemoLogin(page, 'policy')
       await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('policy')
-      release()
-      await finished
+      delayed.release()
+      await delayed.finished
       const current = await page.request.get(serviceUrl)
       expect(current.status()).toBe(200)
       expect(await current.text()).toContain('policy')
@@ -221,7 +193,7 @@ for (const transition of ['logout', 'public login'] as const) {
       await page.reload()
       await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('policy')
     } finally {
-      release()
+      delayed.release()
     }
   })
 }

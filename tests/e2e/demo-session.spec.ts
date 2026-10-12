@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect } from '@playwright/test'
+import { expect, type Page } from '@playwright/test'
 import { test } from './browser-guard'
 import { submitDemoLogin } from './demo-login'
 
@@ -36,13 +36,8 @@ for (const [id, role, name] of [
     const response = await page.reload()
     expect(response?.status()).toBe(200)
     expect(response?.headers()['cache-control']).toContain('no-store')
-    const html = await response?.text()
-    const serverIdentity = html?.match(
-      /<section aria-label="当前演示账号"[^>]*>([\s\S]*?)<\/section>/,
-    )?.[1]
-    expect(serverIdentity).toContain(role)
-    expect(serverIdentity).toContain(id)
-    expect(serverIdentity).toContain(name)
+    const html = await response!.text()
+    await expectServerIdentity(page, html, { id, role, name })
     await page.goto('/settings')
     await expect(page.getByRole('main')).toContainText(name)
     await expect(identity).toContainText(id)
@@ -91,4 +86,51 @@ test('completes login using only the keyboard and announces the pending submissi
   }
   await expect(page).toHaveURL('/dashboard')
   await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('researcher')
+})
+
+async function expectServerIdentity(
+  page: Page,
+  html: string,
+  expected: { id: string; role: string; name: string },
+) {
+  // Parse only the response body in a detached, inert document. Hydrated DOM
+  // and serialized script data cannot satisfy the named server identity region.
+  const serverIdentity = await page.evaluate((source) => {
+    const document = new DOMParser().parseFromString(source, 'text/html')
+    return document.querySelector('[aria-label="当前演示账号"]')?.textContent ?? null
+  }, html)
+  expect(serverIdentity).toContain(expected.role)
+  expect(serverIdentity).toContain(expected.id)
+  expect(serverIdentity).toContain(expected.name)
+}
+
+test('SSR identity checks accept reordered attributes but reject wrong or absent server identity', async ({
+  page,
+}) => {
+  await page.goto('/login')
+  await submitDemoLogin(page)
+  const identity = page.getByRole('region', { name: '当前演示账号' })
+  await expect(identity).toContainText('researcher')
+  const response = await page.request.get('/settings')
+  expect(response.status()).toBe(200)
+  const html = await response.text()
+  const expected = { id: 'researcher', role: '研究人员', name: '研究演示账号' }
+  await expectServerIdentity(page, html, expected)
+  // Mutate only the actual response source, never the hydrated page. This also
+  // proves a correct live identity cannot mask missing/wrong server markup.
+  const variants = await page.evaluate((source) => {
+    const document = new DOMParser().parseFromString(source, 'text/html')
+    const region = document.querySelector('[aria-label="当前演示账号"]')!
+    region.removeAttribute('aria-label')
+    region.setAttribute('aria-label', '当前演示账号')
+    const reordered = document.documentElement.outerHTML
+    region.textContent = '决策演示账号 · policy · 决策者'
+    const wrong = document.documentElement.outerHTML
+    region.remove()
+    return { reordered, wrong, missing: document.documentElement.outerHTML }
+  }, html)
+  await expectServerIdentity(page, variants.reordered, expected)
+  await expect(expectServerIdentity(page, variants.wrong, expected)).rejects.toThrow()
+  await expect(expectServerIdentity(page, variants.missing, expected)).rejects.toThrow()
+  await expect(identity).toContainText('researcher')
 })
