@@ -1,18 +1,30 @@
 import { useRef } from 'react'
 import { WorkspaceMenu } from '@/components/workspace/workspace-menu'
-import { Link, Outlet, useLocation } from '@tanstack/react-router'
+import { Link, Outlet, useLocation, useRouterState } from '@tanstack/react-router'
 import { Layers } from 'lucide-react'
 import { WorkspaceNavigation, workspacePages } from '@/components/workspace/workspace-navigation'
 
 export function WorkspaceShell() {
   const contentRef = useRef<HTMLElement>(null)
   const pathname = useLocation({ select: (location) => location.pathname })
+  const status = useRouterState({ select: (state) => state.matches.at(-1)?.status })
   const title =
     workspacePages.find((page) => page.path === pathname.replace(/\/$/, ''))?.title ?? '工作区'
 
   return (
     <div className="min-h-svh">
-      <a href="#main-content" className="skip-link">
+      <a
+        href="#main-content"
+        className="skip-link"
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+          // Native hash navigation retries failed routes and remounts focused recovery controls.
+          // This is an in-page focus action, not a new route visit; retain the no-JS anchor fallback.
+          event.preventDefault()
+          contentRef.current?.focus({ preventScroll: true })
+          contentRef.current?.scrollIntoView({ block: 'start' })
+        }}
+      >
         跳转到主要内容
       </a>
       <aside
@@ -67,6 +79,7 @@ export function WorkspaceShell() {
           ref={contentRef}
           id="main-content"
           aria-labelledby="workspace-title"
+          aria-busy={status === 'pending'}
           tabIndex={-1}
           className="mx-auto w-full min-w-0 max-w-6xl px-5 py-8 sm:px-8 sm:py-10"
         >
@@ -79,10 +92,24 @@ export function WorkspaceShell() {
           >
             {title}
           </h1>
-          <Outlet />
+          {/* Reserve the responsive table footprint across pending, error and success. */}
+          <div
+            className={
+              pathname.replace(/\/$/, '') === '/tasks'
+                ? 'min-h-[44rem] sm:min-h-[33rem] xl:min-h-[29rem]'
+                : 'min-h-[28rem]'
+            }
+          >
+            <Outlet />
+          </div>
         </main>
-        <output aria-live="polite" aria-atomic="true" className="sr-only">
-          已进入{title}页面
+        {/* Announce outside aria-busy so assistive technology need not wait for the download. */}
+        <output aria-label="页面访问状态" aria-live="polite" aria-atomic="true" className="sr-only">
+          {status === 'pending'
+            ? `正在加载${title}页面`
+            : status === 'success'
+              ? `已进入${title}页面`
+              : ''}
         </output>
         <footer className="mx-auto max-w-6xl px-5 pb-6 text-xs leading-6 text-muted-foreground sm:px-8">
           仅用于界面与流程预览 · 不用于业务决策
