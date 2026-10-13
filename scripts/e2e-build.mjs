@@ -1,14 +1,6 @@
 import { createHash } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
-import {
-  existsSync,
-  lstatSync,
-  readFileSync,
-  readdirSync,
-  readlinkSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, lstatSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -27,6 +19,8 @@ function hashFiles(paths) {
       return
     }
     const info = lstatSync(path)
+    if (info.isSymbolicLink())
+      throw new Error(`Build reuse does not accept symlink inputs or outputs: ${label}`)
     if (info.isDirectory()) {
       for (const name of readdirSync(path).sort()) {
         if (name === 'agent-build.json' || (label === 'src' && name === 'routeTree.gen.ts'))
@@ -35,7 +29,7 @@ function hashFiles(paths) {
       }
     } else {
       hash.update(label).update('\0').update(String(info.mode)).update('\0')
-      hash.update(info.isSymbolicLink() ? readlinkSync(path) : readFileSync(path)).update('\0')
+      hash.update(readFileSync(path)).update('\0')
     }
   }
   for (const name of paths.sort()) add(join(root, name), name)

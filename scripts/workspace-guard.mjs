@@ -32,7 +32,8 @@ function state(root) {
   )
   const dirty = [
     ...new Set([
-      ...paths(git(root, 'diff', 'HEAD', '--no-renames', '--name-only', '-z')),
+      ...paths(git(root, 'diff', '--cached', '--no-renames', '--name-only', '-z')),
+      ...paths(git(root, 'diff', '--no-renames', '--name-only', '-z')),
       ...paths(git(root, 'ls-files', '--others', '--exclude-standard', '-z')),
     ]),
   ]
@@ -78,13 +79,23 @@ export function checkWorkspace(root, saved) {
   }
   const owns = (name) =>
     saved.allowed.some((scope) => (scope.endsWith('/') ? name.startsWith(scope) : name === scope))
+  // A user draft can leave identical worktree/index bytes after commit: inspect the
+  // commit delta too, not only ancestry and current mutable content.
+  const committed = paths(
+    git(root, 'diff', '--no-renames', '--name-only', '-z', saved.baseline, current.head),
+  )
+  for (const name of committed) {
+    if (!owns(name) || saved.dirty.includes(name))
+      failures.push(`${name} (committed outside ownership)`)
+  }
   for (const name of new Set([...Object.keys(saved.files), ...Object.keys(current.files)])) {
     if ((!owns(name) || saved.dirty.includes(name)) && saved.files[name] !== current.files[name])
       failures.push(name)
   }
   // Preserve pre-existing index state as well as bytes; staging a user's draft is not harmless.
-  for (const name of saved.dirty) {
-    if (saved.index[name] !== current.index[name]) failures.push(`${name} (index changed)`)
+  for (const name of new Set([...Object.keys(saved.index), ...Object.keys(current.index)])) {
+    if ((!owns(name) || saved.dirty.includes(name)) && saved.index[name] !== current.index[name])
+      failures.push(`${name} (index changed)`)
   }
   return {
     passed: failures.length === 0,

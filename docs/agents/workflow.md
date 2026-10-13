@@ -34,7 +34,10 @@ The baseline must equal HEAD. The check permits descendant commits within the de
 but rejects changes outside it, branch/checkout switches, and modifications or staging of any
 pre-existing Git-visible user work—even within the owned scope. Ignored artifacts are outside
 this ownership check; `agent:verify` separately fingerprints ignored root environment files. It never stashes, resets, stages, or restores
-files. Run it before handoff and before/after merging. Protection records live alongside
+files. Run it before worker handoff. The worker does not refresh from a moving integration branch:
+that would import other owners' changes into its protected scope. The merger checks the
+approved worker SHA/scope, then merges into the current integration tip and verifies the
+combined tree. Never expand the worker allowlist to hide imported changes. Protection records live alongside
 checkpoints in the Git common directory and cannot be silently overwritten.
 
 For review, use a clean detached worktree at the exact review commit. A dirty checkout's result
@@ -103,6 +106,7 @@ bun run test:e2e:reuse tests/e2e/workspace-access.spec.ts --workers=2
 Reuse checks app/public sources, build configuration (including ignored `.env` files), lockfile,
 installed direct package manifests, Node/Bun, checkout path, runner version and output digests.
 Changed application inputs, failed/interrupted builds, copied or modified output fail closed.
+Symlinked app/config/output paths are rejected rather than trusting an unhashed external target.
 Only test/docs changes can reuse unchanged app output. Secrets appear only as hashes. Rebuild
 for SSR/startup changes and use the default fresh build for final `agent:verify`/CI. Keep builds
 and servers private to their worktree; changing `E2E_PORT` does not make shared output safe.

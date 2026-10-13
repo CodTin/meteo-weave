@@ -1,6 +1,14 @@
 import { afterEach, expect, test } from 'vitest'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, cpSync } from 'node:fs'
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  cpSync,
+  symlinkSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -87,5 +95,21 @@ test('a failed or concurrently changed build never produces reusable evidence', 
   expect(run(root, 'build', { FAIL_BUILD: '1' }).status).toBe(1)
   expect(run(root, 'assert').status).toBe(1)
   expect(run(root, 'build', { MUTATE_DURING_BUILD: '1' }).status).toBe(1)
+  expect(run(root, 'assert').status).toBe(1)
+})
+
+test('reuse fails closed on symlinked configuration or output, including links to external files', () => {
+  const root = fixture()
+  const external = mkdtempSync(join(tmpdir(), 'meteo-build-secret-'))
+  temporary.push(external)
+  writeFileSync(join(external, 'config'), 'PRIVATE_SYMLINK_CANARY=before')
+  symlinkSync(join(external, 'config'), join(root, '.env.local'))
+  const rejected = run(root, 'build')
+  expect(rejected.status).toBe(1)
+  expect(rejected.stderr).toContain('symlink')
+  expect(rejected.stdout + rejected.stderr).not.toContain('PRIVATE_SYMLINK_CANARY')
+  rmSync(join(root, '.env.local'))
+  expect(run(root, 'build').status).toBe(0)
+  symlinkSync(join(external, 'config'), join(root, '.output/extra'))
   expect(run(root, 'assert').status).toBe(1)
 })

@@ -30,9 +30,9 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch. Each implementer subagent:
    - pins the exact integration commit and runs `agent:protect` with its owned paths; confirms its worktree is based on that commit before starting; for a mismatched dirty checkout, preserves the work and resolves ownership rather than resetting it;
    - uses `tdd` to build the ticket (read its `SKILL.md` when no Skill tool is available);
-   - merges the integration branch tip into its own branch before reporting done; writes a checkpoint and a short SHA/checks/next-action handoff with detailed evidence behind pointers
+   - commits and checks its owned changes against the pinned baseline before handoff; leaves integration refresh to the merger so unrelated worker changes do not bypass the ownership gate; writes a short SHA/checks/next-action checkpoint with evidence pointers
 
-5. Check its `agent:check-protection` result. Once an **implementer subagent** completes, merge its work to the integration branch with a **merger subagent**. The merger owns the integration checkout exclusively and reports merge/conflict/check results, not a duplicate implementation narrative.
+5. Check its `agent:check-protection` result. Once an **implementer subagent** completes, merge its work to the integration branch with a **merger subagent**. The merger owns the integration checkout exclusively, merges the approved worker commit into the current tip, resolves only explicit integration conflicts and revalidates combined behavior. It reports merge/conflict/check results, not a duplicate implementation narrative.
 
 6. Use completion notifications; use one long wait only for the next blocking dependency, not repeated unchanged polling. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
 
