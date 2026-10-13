@@ -1,9 +1,11 @@
-import type { DownscalingTask } from './contracts'
-import { validateTaskRecord } from './record-validation'
+import type { DownscalingTask, TaskReply } from './contracts'
+import { validateTaskRecord, sameTaskMetadata, changedRecordIssue } from './record-validation'
+import { TaskStorageError } from './storage-diagnostics'
 
 // This module is only opened explicitly after hydration, never at import/SSR time.
 export async function openTaskStorage() {
-  if (!globalThis.indexedDB) throw new Error('Browser task storage is unavailable.')
+  if (!globalThis.indexedDB)
+    throw new TaskStorageError('open', new Error('Browser task storage is unavailable.'))
   const database = await new Promise<IDBDatabase>((resolve, reject) => {
     let blocked = false
     const request = indexedDB.open('meteo-downscaling-tasks', 1)
@@ -19,8 +21,16 @@ export async function openTaskStorage() {
       blocked = true
       reject(new Error('Close other tabs to open task storage.'))
     }
+  }).catch((error: unknown) => {
+    throw new TaskStorageError('open', error)
   })
   database.onversionchange = () => database.close()
+  let failure: TaskStorageError | undefined
+  const failed = (operation: 'read' | 'write', error: unknown): never => {
+    if (error instanceof DOMException && error.name === 'ConstraintError') throw error
+    failure = new TaskStorageError(operation, error)
+    throw failure
+  }
 
   function transaction<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>) {
     return new Promise<T>((resolve, reject) => {
@@ -30,10 +40,11 @@ export async function openTaskStorage() {
       tx.oncomplete = () => resolve(request.result)
       tx.onabort = () => reject(tx.error ?? new Error('Task storage transaction aborted.'))
       tx.onerror = () => reject(tx.error ?? request.error)
-    })
+    }).catch((error: unknown) => failed(mode === 'readonly' ? 'read' : 'write', error))
   }
 
   return {
+    getFailure: () => failure,
     delete: (ownerId: string, id: string) =>
       new Promise<boolean>((resolve, reject) => {
         const tx = database.transaction('tasks', 'readwrite')
@@ -49,14 +60,14 @@ export async function openTaskStorage() {
             deleted = true
           }
         }
-      }),
+      }).catch((error: unknown) => failed('write', error)),
     add: (task: DownscalingTask) => transaction('readwrite', (store) => store.add(task)),
     saveState: (task: DownscalingTask) =>
-      new Promise<DownscalingTask | undefined>((resolve, reject) => {
+      new Promise<TaskReply | undefined>((resolve, reject) => {
         const tx = database.transaction('tasks', 'readwrite')
         const store = tx.objectStore('tasks')
         const request = store.get([task.ownerId, task.id])
-        let saved: DownscalingTask | undefined = task
+        let saved: TaskReply | undefined = { ok: true, task }
         tx.oncomplete = () => resolve(saved)
         tx.onabort = () =>
           reject(tx.error ?? new Error('Saved task changed or became unreadable; retry the read.'))
@@ -69,7 +80,11 @@ export async function openTaskStorage() {
           }
           const current = validateTaskRecord(request.result)
           if (!current.ok) {
-            tx.abort()
+            saved = current
+            return
+          }
+          if (!sameTaskMetadata(current.task, task)) {
+            saved = changedRecordIssue(current.task)
             return
           }
           // Native transactions serialize competing tabs. A delayed poll cannot undo a terminal state.
@@ -77,12 +92,12 @@ export async function openTaskStorage() {
             current.task.status === 'Failed' ||
             (task.status === 'Running' && current.task.status !== 'Running')
           ) {
-            saved = current.task
+            saved = current
           } else {
             store.put(task)
           }
         }
-      }),
+      }).catch((error: unknown) => failed('write', error)),
     get: (ownerId: string, id: string): Promise<unknown> =>
       transaction('readonly', (store) => store.get([ownerId, id])),
     list: (ownerId: string): Promise<unknown[]> =>
