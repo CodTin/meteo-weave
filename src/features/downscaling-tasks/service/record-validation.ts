@@ -1,5 +1,12 @@
 import { z } from 'zod'
-import { TASK_DURATION_MS, TASK_SCHEMA_VERSION, unavailable, type TaskReply } from './contracts'
+import {
+  TASK_DURATION_MS,
+  TASK_SCHEMA_VERSION,
+  unavailable,
+  type TaskReply,
+  type Unavailable,
+  type DownscalingTask,
+} from './contracts'
 
 const region = z
   .strictObject({
@@ -86,19 +93,61 @@ const record = z
     )
   })
 
+export type TaskRecordIssue = Unavailable & { taskId?: string; recovery: string }
+
+export function recordIssue(input: unknown, issue: Unavailable): TaskRecordIssue {
+  const identity = z.object({ id: z.string().min(1).max(128) }).safeParse(input)
+  return {
+    ...issue,
+    ...(identity.success ? { taskId: identity.data.id } : {}),
+    recovery:
+      issue.code === 'RECORD_CHANGED'
+        ? 'Retry the read against the current saved record; the newer metadata was not overwritten.'
+        : issue.code === 'INCOMPATIBLE_SCHEMA'
+          ? 'Open this record with a compatible application version; it has not been replaced.'
+          : 'Recover from a valid metadata backup, or explicitly delete the affected task before restoring it; other history is unchanged.',
+  }
+}
+
 export function validateTaskRecord(input: unknown): TaskReply {
   const envelope = z.object({ schemaVersion: z.number() }).safeParse(input)
   if (envelope.success && envelope.data.schemaVersion !== TASK_SCHEMA_VERSION) {
-    return unavailable(
-      'INCOMPATIBLE_SCHEMA',
-      'This saved task schema is not supported; the record was not replaced.',
+    return recordIssue(
+      input,
+      unavailable(
+        'INCOMPATIBLE_SCHEMA',
+        'This saved task schema is not supported; the record was not replaced.',
+      ),
     )
   }
   const parsed = record.safeParse(input)
   return parsed.success
     ? { ok: true, task: parsed.data }
-    : unavailable(
-        'INVALID_RECORD',
-        'Saved task metadata is invalid; other tasks have not been reset.',
+    : recordIssue(
+        input,
+        unavailable(
+          'INVALID_RECORD',
+          'Saved task metadata is invalid; other tasks have not been reset.',
+        ),
       )
+}
+
+/** Inputs are schema-normalized records; lifecycle writes must not replace changed metadata. */
+export function sameTaskMetadata(left: DownscalingTask, right: DownscalingTask) {
+  return Object.keys(left).every(
+    (key) =>
+      key === 'status' ||
+      key === 'failureReason' ||
+      JSON.stringify(Reflect.get(left, key)) === JSON.stringify(Reflect.get(right, key)),
+  )
+}
+
+export function changedRecordIssue(task: DownscalingTask) {
+  return recordIssue(
+    task,
+    unavailable(
+      'RECORD_CHANGED',
+      'Saved task metadata changed during the read; retry without replacing it.',
+    ),
+  )
 }

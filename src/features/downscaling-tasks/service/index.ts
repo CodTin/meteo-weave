@@ -1,6 +1,13 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { onWorkspaceDiscard } from '@/lib/query/client'
 import { openTaskStorage } from './record-storage'
+import {
+  recordIssue,
+  validateTaskRecord,
+  sameTaskMetadata,
+  changedRecordIssue,
+} from './record-validation'
+import { resultAvailability } from './result-queries'
 import { unavailable, type TaskTransport, type ResultQuery, type TaskReply } from './contracts'
 
 export type {
@@ -12,6 +19,8 @@ export type {
   Unavailable,
 } from './contracts'
 export { RESULT_QUERY_LIMITS } from './contracts'
+export { TaskStorageError } from './storage-diagnostics'
+export type { TaskRecordIssue } from './record-validation'
 
 const serverTransport: TaskTransport = {
   account: async () =>
@@ -39,6 +48,7 @@ export function createTaskService({
   let initializing: Promise<void> | undefined
   let lifecycle = 0
   const ready = () => {
+    if (storage?.getFailure()) throw storage.getFailure()
     if (!storage) throw new Error('Task storage is not ready. Await initialize() after hydration.')
     return storage
   }
@@ -60,10 +70,24 @@ export function createTaskService({
     queryClient.removeQueries({ queryKey: reads })
   }
   const reads = ['downscaling-tasks']
+  async function readRecord(record: unknown): Promise<TaskReply> {
+    const response = await transport.read(record)
+    if (!response.ok || response.task.status === 'Failed') return response
+    // Known unavailable versions cannot complete even when their saved deadline is still ahead.
+    const failure = resultAvailability(response.task)
+    return failure
+      ? { ok: true, task: { ...response.task, status: 'Failed', failureReason: failure.error } }
+      : response
+  }
 
   return {
-    getState: () => state,
+    getState: () => (storage?.getFailure() ? ('unavailable' as const) : state),
     initialize() {
+      if (storage?.getFailure()) {
+        storage.close()
+        storage = undefined
+        initializing = undefined
+      }
       if (!initializing) {
         unsubscribe ??= onWorkspaceDiscard(queryClient, close)
         const openingLifecycle = lifecycle
@@ -150,12 +174,12 @@ export function createTaskService({
           const record = await db.get(account.id, id)
           check()
           if (record === undefined) return unavailable('NOT_FOUND', 'Task not found.')
-          const response = await transport.read(record)
+          const response = await readRecord(record)
           check()
           if (!response.ok) return response
-          const task = await db.saveState(response.task)
+          const saved = await db.saveState(response.task)
           check()
-          return task ? { ok: true, task } : unavailable('NOT_FOUND', 'Task not found.')
+          return saved ?? unavailable('NOT_FOUND', 'Task not found.')
         },
       })
     },
@@ -172,27 +196,33 @@ export function createTaskService({
           check()
           const results = await Promise.all(
             records.map(async (record) => {
-              const response = await transport.read(record)
+              const response = await readRecord(record)
               check()
-              if (!response.ok) return response
-              const task = await db.saveState(response.task)
+              if (!response.ok) return recordIssue(record, response)
+              const saved = await db.saveState(response.task)
               check()
-              return task ? { ok: true as const, task } : undefined
+              return saved && !saved.ok ? recordIssue(record, saved) : saved
             }),
           )
           check()
-          // Other responses may have waited while a previously reconciled task was deleted.
-          const tasks = await Promise.all(
-            results.map(async (result) =>
-              result?.ok && (await db.get(account.id, result.task.id)) !== undefined
-                ? [result.task]
-                : [],
-            ),
+          // Other responses may have waited while an earlier record was deleted or damaged.
+          const currentResults = await Promise.all(
+            results.map(async (result) => {
+              if (!result?.ok) return result
+              const record = await db.get(account.id, result.task.id)
+              check()
+              if (record === undefined) return undefined
+              const current = validateTaskRecord(record)
+              if (!current.ok) return recordIssue(record, current)
+              if (!sameTaskMetadata(current.task, result.task))
+                return changedRecordIssue(current.task)
+              return current
+            }),
           )
           check()
           return {
-            tasks: tasks.flat(),
-            issues: results.flatMap((result) => (result && !result.ok ? [result] : [])),
+            tasks: currentResults.flatMap((result) => (result?.ok ? [result.task] : [])),
+            issues: currentResults.flatMap((result) => (result && !result.ok ? [result] : [])),
           }
         },
       })
@@ -211,7 +241,16 @@ export function createTaskService({
           check()
           const record = await db.get(response.task.ownerId, id)
           check()
-          return record === undefined ? unavailable('NOT_FOUND', 'Task not found.') : result
+          if (record === undefined) return unavailable('NOT_FOUND', 'Task not found.')
+          const current = validateTaskRecord(record)
+          if (!current.ok) return current
+          const availability = resultAvailability(current.task)
+          if (availability) return availability
+          if (!sameTaskMetadata(current.task, response.task))
+            return changedRecordIssue(current.task)
+          if (current.task.status === 'Failed')
+            return unavailable('FAILED', current.task.failureReason!)
+          return result
         },
       })
     },
