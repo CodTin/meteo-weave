@@ -1,37 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
-
-const browserErrors = new WeakMap<Page, string[]>()
-
-test.beforeEach(async ({ page, javaScriptEnabled }) => {
-  const errors: string[] = []
-  browserErrors.set(page, errors)
-  page.on('pageerror', (error) => errors.push(error.message))
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text())
-  })
-  page.on('requestfailed', (request) => {
-    // Chromium implements JavaScript-disabled contexts by blocking scripts with CSP.
-    // Only that intentional failure is allowed; assets/errors otherwise still fail.
-    if (
-      javaScriptEnabled === false &&
-      request.resourceType() === 'script' &&
-      request.failure()?.errorText === 'csp' &&
-      new URL(request.url()).pathname.startsWith('/assets/')
-    )
-      return
-    errors.push(`Request failed: ${request.url()} ${request.failure()?.errorText}`)
-  })
-  page.on('response', (response) => {
-    if (new URL(response.url()).pathname.startsWith('/assets/') && !response.ok()) {
-      errors.push(`Asset failed: ${response.status()} ${response.url()}`)
-    }
-  })
-})
-
-test.afterEach(async ({ page }) => {
-  expect(browserErrors.get(page)).toEqual([])
-})
+import { expect, test, type Page } from './browser-guard'
 
 async function expectAccessible(page: Page) {
   // Audit the settled visible UI, not a partially transparent modal entrance frame.

@@ -57,6 +57,17 @@ Playwright 首次在其他机器运行前需安装浏览器；Linux CI 可使用
 包括直接访问模块失败及正常 SSR DOM 保留；保持严格浏览器错误与 axe 检查。
 在 390、768、1440px 与 reduced-motion 下检查键盘导航、溢出、字体不可下载时的可用性及工作区加载布局稳定性。
 
+## Agent 开发与交付
+
+开始或恢复工作：`bun run agent:doctor`，按 `docs/agents/workflow.md` 保留检查点与证据。
+完整本地验收：`bun run agent:verify`（调用同一个 `check:all` 并记录提交和日志）。
+授权发布后：`bun run agent:delivery` 只读检查远端提交与 CI；通过前不关闭实现工单。
+GitHub Verify 工作流配置在 `.github/workflows/verify.yml`，运行时版本以项目配置为准。
+
+路由使用目录式 TanStack 文件路由：工作区布局在 `src/routes/_workspace/route.tsx`，
+任务页在 `src/routes/_workspace/tasks/`；URL 与路由 ID 保持不变。详情及验收矩阵见
+`docs/development.md` 第 3 节。编码判断标准见 `CODING_STANDARDS.md`。
+
 ## 目录
 
 ```text

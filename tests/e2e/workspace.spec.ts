@@ -1,28 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test as base, type Page } from '@playwright/test'
-
-const test = base.extend<{ browserGuard: void }>({
-  browserGuard: [
-    async ({ page }, use) => {
-      const errors: string[] = []
-      page.on('pageerror', (error) => errors.push(error.message))
-      page.on('console', (message) => {
-        if (message.type() === 'error') errors.push(message.text())
-      })
-      page.on('requestfailed', (request) => {
-        errors.push(`Request failed: ${request.url()} ${request.failure()?.errorText}`)
-      })
-      page.on('response', (response) => {
-        if (new URL(response.url()).pathname.startsWith('/assets/') && !response.ok()) {
-          errors.push(`Asset failed: ${response.status()} ${response.url()}`)
-        }
-      })
-      await use()
-      expect(errors).toEqual([])
-    },
-    { auto: true },
-  ],
-})
+import { expect, test, type Page } from './browser-guard'
 
 async function expectPageIdentity(
   page: Page,

@@ -77,6 +77,36 @@
 - Mapbox / WebGL / 浏览器存储等以后通过客户端边界和按需加载使用，不在 SSR 模块顶层访问浏览器 API。
 - `data/` 不放在 `public/` 下，不会自动暴露给浏览器。需下载的数据以后通过受控接口交付。
 
+### 目录式文件路由与生命周期验收
+
+`src/routes/` 使用 TanStack **directory-based file routing**，不是手写 route config，也不是
+Next.js 迁移。`__root.tsx`、`index.tsx`、`login.tsx` 保留根入口；工作区布局在
+`_workspace/route.tsx`，页面在 `_workspace/dashboard.tsx`、`_workspace/settings.tsx`、
+`_workspace/tasks/index.tsx` 与 `_workspace/tasks/new.tsx`。页面的 `.lazy.tsx` 与它同目录。
+路径中的 `_workspace` 是无路径布局，URL 和 `createFileRoute`／`getRouteApi` 的路由 ID 不变。
+生成树只由 `routes:generate` 维护；`check:agent` 拒绝回退到点号扁平命名。
+
+导航指针：`src/client.tsx` 处理初次水合；`src/router.tsx` 配置 Router／Query；
+`src/routes/_workspace/route.tsx` 提供工作区布局；`src/components/workspace/` 提供共享导航与
+pending/error；`tests/e2e/workspace-cases.ts` 列出真实页面及可拦截资源，
+`tests/e2e/workspace-lifecycle.spec.ts` 与 `workspace.spec.ts` 验收行为。
+
+修改这些边界或升级 Router／Start 时，先读相关代码及已安装框架实现。特别保留：初次访问
+成功时复用 SSR DOM；下载失败时才进入明确的恢复路径；Spec01 不建立身份或会话。
+将特殊处理的原因和回归测试一起维护，而非拷贝旧框架示例或屏蔽水合异常。
+
+| 适用页面       | 入口                              | 必须验证的结果                                       | 证据入口                             |
+| -------------- | --------------------------------- | ---------------------------------------------------- | ------------------------------------ |
+| 每个工作区页面 | 直接访问／刷新                    | SSR 页面身份、正确内容与可访问性                     | workspace                            |
+| 每个工作区页面 | 站内跳转                          | 标题、当前项、历史返回、导航可用                     | workspace                            |
+| 每个工作区页面 | 延迟→成功                         | 焦点保留、pending 清除、三种屏宽的内容／页脚布局稳定 | workspace-lifecycle                  |
+| 每个工作区页面 | 直接访问与站内跳转的资源失败→恢复 | 可用导航、真实重新加载、目标内容、无额外水合错误     | route-recovery / workspace-lifecycle |
+| 共享水合边界   | 健康的延迟直接访问                | 原 SSR DOM 复用而不是全局改成客户端渲染              | workspace-lifecycle                  |
+| 登录预览       | 表单／说明弹层                    | 仅界面校验、焦点恢复、输入不发送或保存               | login                                |
+
+新增路由先补矩阵的适用行，再补测试。豁免必须说明原因；测试总数不是验收覆盖率。
+科学数据尚未接入的页面仍应诚实说明状态，不能用虚构业务接口制造加载测试。
+
 ## 4. 环境与监控
 
 `.env.example` 是公开模板，不含凭证；`.env`、`.env.*`（模板除外）被 Git 忽略。
@@ -144,6 +174,19 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 - Husky 提交前依次运行 lint-staged、类型检查和 Vitest；lint-staged 使用 Oxlint + Oxfmt，不额外引入 Prettier。
 - 原始设计、参考文档、术语表、已有 skills 和数据被排除在批量格式化之外，避免初始化时无关改写。
 - 初始化时仅建立本地 Git 和 hook；该历史审计见第 9 节，不代表当前仓库状态。
+
+### 自动化与证据
+
+所有浏览器测试通过 `tests/e2e/browser-guard.ts` 的公共入口取得运行时 `test`／`expect`。
+`check:agent` 使用 Bun 的导入解析器拒绝绕过入口的 import、re-export 或 require；类型导入可保留。
+它还检查目录式路由命名，并接入 `check` 和 pre-commit。共有守卫只接受按 URL／类型／状态
+明确登记的预期故障，任何 pageerror（包括水合异常）仍失败。
+`test:browser-guard` 用独立浏览器子进程验证：正常案例通过，意外控制台错误和未捕获异常必须失败。
+
+`.github/workflows/verify.yml` 在 push／PR／手动触发时读取项目运行时版本、frozen 安装，
+复用 `agent:verify` → `check:all`；日志、trace 和截图绑定提交上传。预提交保留快速检查，
+不把全量浏览器测试塞入每次 commit。CI 工作流的添加不等于远端已经运行或已配置分支保护。
+本地验证／恢复／发布门槛见 `docs/agents/workflow.md`；禁止用本地绿灯冒充远端交付。
 
 ## 7. 构建和部署
 
