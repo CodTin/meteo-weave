@@ -235,15 +235,12 @@ it('reopens native persisted Running metadata, waits only the remainder, then re
   ).toEqual(result)
 }, 30_000)
 
-it('does not create tasks for unsupported variables or probabilistic methods', async () => {
+it('does not create tasks for unsupported probabilistic methods', async () => {
   setServerTime(baseTime)
   await signIn('researcher')
   await openBrowser()
   await page.evaluate(() => window.tasks.initialize())
   for (const override of [
-    { variable: 'wind' },
-    { variable: 'pressure' },
-    { variable: 'precipitation' },
     { method: 'probabilistic' },
     { advanced: { uncertaintyQuantification: true } },
   ]) {

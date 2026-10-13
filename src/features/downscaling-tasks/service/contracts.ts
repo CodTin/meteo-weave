@@ -3,6 +3,7 @@ import type { DemoAccount } from '@/features/auth/demo-accounts'
 
 export const TASK_SCHEMA_VERSION = 1
 export const GENERATOR_VERSION = 'synthetic-temperature-v1'
+export const VARIABLE_GENERATOR_VERSION = 'synthetic-variables-v2'
 export const TASK_DURATION_MS = 2_500
 export const RESULT_QUERY_LIMITS = { points: 64, times: 168, values: 256, gridPoints: 256 } as const
 
@@ -48,7 +49,10 @@ export type WindowSampling = {
   availablePoints: number
   returnedPoints: number
 }
-export type ResultQuery =
+export type ResultQuery = {
+  /** Native queries stay unchanged. Opt into hourly values, or daily temperature/rain statistics. */
+  temporalResolution?: 'hourly' | 'daily'
+} & (
   | {
       kind: 'points'
       layer: 'original' | 'downscaled'
@@ -77,23 +81,87 @@ export type ResultQuery =
       /** Spatial budget, further bounded by the shared total-value limit. */
       maxPoints: number
     }
+)
+export type ResultValue = ResultPoint & { time: string; value: number }
+export type WindValue = ResultValue & {
+  u10: number
+  v10: number
+  speed: number
+  fromDirection: number | null
+  directionStatus: 'available' | 'calm'
+}
+export type Accumulation = {
+  /** Actual accumulated hourly coverage. It equals the requested interval only when complete. */
+  start: string
+  end: string
+  requestedStart: string
+  requestedEnd: string
+  bounds: '[start,end)'
+  sampledHours: number
+  expectedHours: number
+  complete: boolean
+}
+export type DailyTemperature = Pick<
+  Accumulation,
+  'start' | 'end' | 'bounds' | 'sampledHours' | 'expectedHours'
+> & {
+  /** Statistics of the available hourly samples; only a completeDay represents the full UTC day. */
+  mean: number
+  minimum: number
+  completeDay: boolean
+}
+export type ResultMetadata = {
+  ok: true
+  taskId: string
+  layer: ResultQuery['layer']
+  displayTimezone: 'UTC'
+  temporalStatistic: 'instantaneous' | 'accumulation' | 'daily-mean'
+  provenance: {
+    label: 'Synthetic Demo'
+    description: string
+    dataSource: DownscalingTask['configuration']['dataSource']
+    generatorVersion: string
+  }
+  grid: {
+    nominalSpacingKm: number
+    interpolation: 'bilinear'
+    crs: 'EPSG:4326'
+  } & ({ sampling: 'requested-points' } | WindowSampling)
+}
 export type ResultReply =
   | Unavailable
-  | {
-      ok: true
-      taskId: string
-      layer: ResultQuery['layer']
-      unit: '°C'
-      displayTimezone: 'UTC'
-      temporalStatistic: 'instantaneous'
-      provenance: { label: 'Synthetic Demo'; description: string }
-      grid: {
-        nominalSpacingKm: number
-        interpolation: 'bilinear'
-        crs: 'EPSG:4326'
-      } & ({ sampling: 'requested-points' } | WindowSampling)
-      values: Array<{ longitude: number; latitude: number; time: string; value: number }>
-    }
+  | (ResultMetadata &
+      (
+        | {
+            variable: 'temperature'
+            quantity: 'T2M'
+            unit: '°C'
+            temporalStatistic: 'instantaneous'
+            values: ResultValue[]
+          }
+        | {
+            variable: 'temperature'
+            quantity: 'T2M'
+            unit: '°C'
+            temporalStatistic: 'daily-mean'
+            values: Array<ResultValue & { daily: DailyTemperature }>
+          }
+        | {
+            variable: 'precipitation'
+            quantity: 'TP'
+            unit: 'mm'
+            values: Array<ResultValue & { accumulation: Accumulation }>
+          }
+        | { variable: 'pressure'; quantity: 'MSL'; unit: 'hPa'; values: ResultValue[] }
+        | {
+            variable: 'wind'
+            quantity: 'U10/V10'
+            unit: 'm/s'
+            directionUnit: 'degrees'
+            directionConvention: 'meteorological-from'
+            values: WindValue[]
+          }
+      ))
 export type TaskTransport = {
   account: () => Promise<DemoAccount>
   submit: (input: unknown) => Promise<TaskReply>

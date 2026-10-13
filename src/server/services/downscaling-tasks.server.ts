@@ -5,12 +5,13 @@ import { validateTaskRecord } from '@/features/downscaling-tasks/service/record-
 import {
   resultAvailability,
   probeTaskResult,
-  queryTemperatureResult,
+  queryTaskResult,
 } from '@/features/downscaling-tasks/service/result-queries'
 import { admitDownscalingConfiguration } from './downscaling-admission.server'
 import { requireDemoAccount } from './demo-session.server'
 import {
   GENERATOR_VERSION,
+  VARIABLE_GENERATOR_VERSION,
   TASK_SCHEMA_VERSION,
   TASK_DURATION_MS,
   unavailable,
@@ -21,9 +22,13 @@ import {
 export function submitDownscalingTask(input: unknown): TaskReply {
   const admission = admitDownscalingConfiguration(input)
   if (!admission.ok) return admission
+  const generatorVersion =
+    admission.configuration.variable === 'temperature'
+      ? GENERATOR_VERSION
+      : VARIABLE_GENERATOR_VERSION
   const unavailableResult = resultAvailability({
     configuration: admission.configuration,
-    generatorVersion: GENERATOR_VERSION,
+    generatorVersion,
   })
   if (unavailableResult) return unavailableResult
   const now = Date.now()
@@ -33,7 +38,7 @@ export function submitDownscalingTask(input: unknown): TaskReply {
     task: {
       schemaVersion: TASK_SCHEMA_VERSION,
       id,
-      name: `Synthetic Demo · Temperature · ${id}`,
+      name: `Synthetic Demo · ${{ temperature: 'Temperature', wind: 'Wind', pressure: 'MSL Pressure', precipitation: 'Precipitation' }[admission.configuration.variable]} · ${id}`,
       ownerId: admission.ownerId,
       configuration: admission.configuration,
       createdAt: new Date(now).toISOString(),
@@ -42,7 +47,7 @@ export function submitDownscalingTask(input: unknown): TaskReply {
       status: 'Running',
       failureReason: null,
       dataSeed: crypto.getRandomValues(new Uint32Array(1))[0]!,
-      generatorVersion: GENERATOR_VERSION,
+      generatorVersion,
     },
   }
 }
@@ -108,5 +113,5 @@ export function queryDownscalingTaskResult(input: unknown): ResultReply {
       read.task.status.toUpperCase(),
       read.task.failureReason ?? 'Task is still running.',
     )
-  return queryTemperatureResult(read.task, request.data.query)
+  return queryTaskResult(read.task, request.data.query)
 }
