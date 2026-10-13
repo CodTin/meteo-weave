@@ -16,7 +16,7 @@ afterEach(() => {
 describe('environment bootstrap', () => {
   it('starts without credentials and leaves telemetry disabled', async () => {
     const { clientEnv } = await import('@/lib/env/client')
-    const { serverEnv } = await import('@/lib/env/server.server')
+    const { serverEnv } = await import('@/lib/env/server')
     expect(clientEnv.VITE_ENABLE_TELEMETRY).toBe(false)
     expect(clientEnv.VITE_MAPBOX_ACCESS_TOKEN).toBeUndefined()
     expect(serverEnv.SENTRY_ENABLED).toBe(false)
@@ -44,6 +44,6 @@ describe('environment bootstrap', () => {
   it('rejects malformed server configuration', async () => {
     vi.stubEnv('SENTRY_DSN', 'not-a-url')
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    await expect(import('@/lib/env/server.server')).rejects.toThrow()
+    await expect(import('@/lib/env/server')).rejects.toThrow()
   })
 })

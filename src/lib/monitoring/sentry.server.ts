@@ -1,6 +1,6 @@
 import '@tanstack/react-start/server-only'
 import * as Sentry from '@sentry/tanstackstart-react'
-import { serverEnv } from '@/lib/env/server.server'
+import { serverEnv } from '@/lib/env/server'
 
 // Inline initialization supports Vercel; only native HTTP/fetch instrumentation
 // is guaranteed without a Node preload hook. There is no database layer yet.
