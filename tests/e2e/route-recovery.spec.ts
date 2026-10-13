@@ -1,6 +1,11 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from './browser-guard'
+import { signInDemo } from './demo-login'
 import { workspaceCases } from './workspace-cases'
+
+test.beforeEach(async ({ context }) => {
+  await signInDemo(context)
+})
 
 for (const destination of workspaceCases) {
   for (const entry of ['direct', 'navigation']) {

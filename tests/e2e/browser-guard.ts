@@ -15,6 +15,7 @@ type BrowserGuard = {
   expectedModuleFailures: Set<string>
   expectedFontFailures: Set<string>
   expectedDocument404s: Set<string>
+  expectedSessionTransportFailures: Set<string>
 }
 
 export const test = base.extend<BrowserGuard>({
@@ -30,6 +31,10 @@ export const test = base.extend<BrowserGuard>({
   expectedDocument404s: async ({}, use) => {
     await use(new Set<string>())
   },
+  // oxlint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
+  expectedSessionTransportFailures: async ({}, use) => {
+    await use(new Set<string>())
+  },
   browserGuard: [
     async (
       {
@@ -39,6 +44,7 @@ export const test = base.extend<BrowserGuard>({
         expectedModuleFailures,
         expectedFontFailures,
         expectedDocument404s,
+        expectedSessionTransportFailures,
       },
       use,
     ) => {
@@ -73,6 +79,24 @@ export const test = base.extend<BrowserGuard>({
       const unexpected = errors.filter((error) => {
         // No page error (including hydration errors) is ever an expected resource failure.
         if (error.kind === 'page' || !error.url) return true
+        // Only explicitly intercepted session requests may fail or be cancelled in these tests.
+        // Never exempt page/hydration errors, other endpoints, or arbitrary console output.
+        if (expectedSessionTransportFailures.has(error.url)) {
+          if (
+            error.kind === 'request' &&
+            error.resourceType === 'fetch' &&
+            error.text === 'net::ERR_ABORTED'
+          )
+            return false
+          if (error.kind === 'response' && error.resourceType === 'fetch' && error.text === '503')
+            return false
+          if (
+            error.kind === 'console' &&
+            error.text ===
+              'Failed to load resource: the server responded with a status of 503 (Service Unavailable)'
+          )
+            return false
+        }
         // Chromium implements disabled JavaScript using CSP. No other failure is allowed.
         if (
           javaScriptEnabled === false &&

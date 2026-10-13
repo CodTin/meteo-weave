@@ -23,13 +23,14 @@ export function RoleDialog() {
         <DialogHeader className="text-left">
           <DialogTitle className="pr-8">角色与演示说明</DialogTitle>
           <DialogDescription>
-            真实 Demo 登录属于 Spec 02。这里仅说明计划中的角色定位，不能登录、切换角色或更改权限。
+            使用公开演示账号选择体验身份。设置中的角色切换会先退出，再要求重新登录；任务配置能力按当前已登录角色决定。
           </DialogDescription>
         </DialogHeader>
         <RoleDescriptions />
         <p className="flex gap-2 rounded-md border bg-muted p-3 text-sm leading-7">
           <Info className="mt-1 size-5 shrink-0 text-ring" aria-hidden="true" />
-          请勿输入真实凭证。表单只检查必填项，不验证身份，不发送或保存输入。
+          请勿输入真实凭证。会话仅保存公开演示账号标识，不是生产认证或防篡改机制，只能用于合成 Demo
+          数据。
         </p>
         <DialogFooter>
           <DialogClose className={buttonVariants({ variant: 'outline' })}>

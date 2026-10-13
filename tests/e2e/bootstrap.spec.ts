@@ -25,7 +25,7 @@ test('serves the Chinese product entry and reaches the login entry without brows
   await page.getByRole('link', { name: '前往登录' }).click()
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('heading', { level: 1, name: '登录 MeteoWeave' })).toBeVisible()
-  await expect(page.getByRole('main')).toContainText('认证尚未接入')
+  await expect(page.getByRole('main')).toContainText('Demo 账号登录')
   const login = await page.reload()
   expect(login?.status()).toBe(200)
   expect(await login?.text()).toContain('登录 MeteoWeave')

@@ -34,7 +34,7 @@ Before implementation, toolchain setup or resuming interrupted work, read
 
 ### Routes and SSR
 
-Before changing route organization, client startup, SSR or recovery boundaries,
+Before changing route organization, sessions, workspace lifecycle, client startup or SSR,
 read `docs/development.md` section 3 and its lifecycle test matrix.
 
 ### Review

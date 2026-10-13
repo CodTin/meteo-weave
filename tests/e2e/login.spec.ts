@@ -15,18 +15,18 @@ async function expectAccessible(page: Page) {
   ).toEqual([])
 }
 
-test('locates required fields and explains that completed input is not authentication', async ({
+test('rejects missing and wrong demo details with accessible correction and no new session', async ({
   page,
 }) => {
   await page.goto('/login')
   const account = page.getByLabel('账号', { exact: true })
   const password = page.getByLabel('密码', { exact: true })
   await expect(account).toBeVisible()
-  await expect(account).toHaveAccessibleDescription(/必填.*虚构/)
+  await expect(account).toHaveAccessibleDescription(/必填.*公开/)
   await expect(password).toHaveAccessibleDescription(/必填.*真实密码/)
   await expectAccessible(page)
 
-  await page.getByRole('button', { name: '检查登录表单' }).click()
+  await page.getByRole('button', { name: '登录演示账号' }).click()
   await expect(account).toBeFocused()
   await expect(account).toHaveAttribute('aria-invalid', 'true')
   await expect(password).toHaveAttribute('aria-invalid', 'true')
@@ -35,23 +35,35 @@ test('locates required fields and explains that completed input is not authentic
   await expectAccessible(page)
 
   await account.fill('随意虚构的账号')
-  await page.getByRole('button', { name: '检查登录表单' }).click()
+  await page.getByRole('button', { name: '登录演示账号' }).click()
   await expect(password).toBeFocused()
   await password.fill('x')
   await password.press('Enter')
   const status = page.getByRole('status')
-  await expect(status).toContainText('演示认证尚未接入')
-  await expect(status).toContainText('未验证账号或密码，也未建立会话')
-  await expect(account).toHaveAttribute('aria-invalid', 'false')
-  await expect(password).toHaveAttribute('aria-invalid', 'false')
+  await expect(status).toContainText('演示账号或密码不正确')
+  await expect(account).toBeFocused()
+  await expect(account).toHaveAttribute('aria-invalid', 'true')
+  await expect(password).toHaveAttribute('aria-invalid', 'true')
+  await expect(account).toHaveAccessibleDescription(/演示账号或密码不正确/)
+  await expect(password).toHaveAccessibleDescription(/演示账号或密码不正确/)
+  expect(await page.context().cookies()).toEqual([])
   await expect(page).toHaveURL(/\/login$/)
   const explanation = page.getByRole('button', { name: '查看角色与演示说明' })
   await explanation.click()
   await expect(page.getByRole('dialog', { name: '角色与演示说明' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(explanation).toBeFocused()
-  await expect(status).toContainText('演示认证尚未接入')
+  await expect(status).toContainText('演示账号或密码不正确')
   await expectAccessible(page)
+  await account.fill('researcher')
+  await password.fill('wrong-demo-password')
+  await password.press('Enter')
+  await expect(status).toContainText('演示账号或密码不正确')
+  expect(await page.context().cookies()).toEqual([])
+  await password.fill('meteo-demo')
+  await password.press('Enter')
+  await expect(page).toHaveURL('/dashboard')
+  await expect(page.getByRole('region', { name: '当前演示账号' })).toContainText('researcher')
 })
 
 test('reveals and hides the password without losing its value or keyboard focus', async ({
@@ -97,7 +109,7 @@ test('switches named tabs with arrows and preserves the in-memory form without s
   await expect(login).toHaveAttribute('aria-selected', 'false')
   const panel = page.getByRole('tabpanel', { name: '演示说明', exact: true })
   await expect(panel).toBeVisible()
-  await expect(panel).toContainText('Spec 02')
+  await expect(panel).toContainText('公开演示账号')
   await expect(panel).toContainText('研究人员')
   await expect(panel).toContainText('决策者')
   await expect(panel).toContainText('农业用户')
@@ -123,7 +135,7 @@ test('explains the three roles in a modal and returns focus after Escape and Clo
   await trigger.click()
   const dialog = page.getByRole('dialog', { name: '角色与演示说明' })
   await expect(dialog).toBeVisible()
-  await expect(dialog).toHaveAccessibleDescription(/Spec 02.*不能.*切换角色/)
+  await expect(dialog).toHaveAccessibleDescription(/公开演示账号.*角色切换.*重新登录/)
   await expect(dialog).toContainText('研究人员')
   await expect(dialog).toContainText('模型细节')
   await expect(dialog).toContainText('决策者')
@@ -147,18 +159,18 @@ test('explains the three roles in a modal and returns focus after Escape and Clo
   await expect(page).toHaveURL(/\/login$/)
 })
 
-test('clears an outdated completion notice on edits while keeping required errors until corrected', async ({
+test('clears an outdated rejection notice on edits while keeping required errors until corrected', async ({
   page,
 }) => {
   await page.goto('/login')
   const account = page.getByLabel('账号', { exact: true })
   await account.fill('fictional')
   await page.getByLabel('密码', { exact: true }).fill('x')
-  await page.getByRole('button', { name: '检查登录表单' }).click()
-  await expect(page.getByRole('status')).toContainText('演示认证尚未接入')
+  await page.getByRole('button', { name: '登录演示账号' }).click()
+  await expect(page.getByRole('status')).toContainText('演示账号或密码不正确')
   await account.fill('   ')
   await expect(page.getByRole('status')).toBeEmpty()
-  await page.getByRole('button', { name: '检查登录表单' }).click()
+  await page.getByRole('button', { name: '登录演示账号' }).click()
   await expect(account).toBeFocused()
   await expect(account).toHaveAccessibleDescription(/请输入账号/)
   await page.getByRole('button', { name: '查看角色与演示说明' }).click()
@@ -169,25 +181,23 @@ test('clears an outdated completion notice on edits while keeping required error
   await expect(page.getByRole('status')).toBeEmpty()
 })
 
-test('keeps fictional inputs out of requests, logs and persistence, including a revealed password', async ({
+test('sends demo input only in a same-origin POST and keeps it out of URLs, logs and browser persistence', async ({
   page,
   context,
 }) => {
   await page.goto('/login')
   await page.waitForLoadState('networkidle')
-  const beforeStorage = await context.storageState()
-  const beforeSession = await page.evaluate(() => ({ ...sessionStorage }))
   const observed: string[] = []
-  const submissions: string[] = []
+  const submissions: { url: string; body: string }[] = []
   page.on('console', (message) => observed.push(message.text()))
   page.on('request', (request) => {
-    observed.push(request.url(), request.postData() ?? '')
-    if (request.method() !== 'GET') submissions.push(request.url())
+    observed.push(request.url())
+    if (request.method() !== 'GET')
+      submissions.push({ url: request.url(), body: request.postData() ?? '' })
   })
   const account = page.getByLabel('账号', { exact: true })
   const password = page.getByLabel('密码', { exact: true })
-  // These are documented Replay boundary selectors, not private component state.
-  await expect(page.getByRole('form', { name: '登录表单预览' })).toHaveAttribute(
+  await expect(page.getByRole('form', { name: 'Demo 登录表单' })).toHaveAttribute(
     'data-sentry-block',
   )
   for (const input of [account, password]) {
@@ -195,21 +205,23 @@ test('keeps fictional inputs out of requests, logs and persistence, including a 
     await expect(input).toHaveAttribute('data-sentry-ignore')
     await expect(input).toHaveAttribute('autocomplete', 'off')
   }
-  const markers = ['fictional-account-20-never-send', 'fictional-password-20-never-send'] as const
+  const markers = ['fictional-unknown-account', 'fictional-wrong-password'] as const
   await account.fill(markers[0])
   await password.fill(markers[1])
   await page.getByRole('button', { name: '显示密码', exact: true }).click()
   await expect(password).toHaveAttribute('type', 'text')
   await expect(password).toHaveAttribute('data-sentry-mask')
   await expect(password).toHaveAttribute('data-sentry-ignore')
-  await page.getByRole('button', { name: '检查登录表单' }).click()
-  await expect(page.getByRole('status')).toContainText('演示认证尚未接入')
+  await page.getByRole('button', { name: '登录演示账号' }).click()
+  await expect(page.getByRole('status')).toContainText('演示账号或密码不正确')
   await expect(page).toHaveURL(/\/login$/)
-  expect(await context.storageState()).toEqual(beforeStorage)
-  expect(await page.evaluate(() => ({ ...sessionStorage }))).toEqual(beforeSession)
-  expect(await page.evaluate(() => indexedDB.databases())).toEqual([])
-  expect(submissions).toEqual([])
+  expect(await context.cookies()).toEqual([])
+  expect(submissions).toHaveLength(1)
+  const [submission] = submissions
+  if (!submission) throw new Error('Demo login did not send a request')
+  expect(new URL(submission.url).origin).toBe(new URL(page.url()).origin)
   for (const marker of markers) {
+    expect(submission.body).toContain(marker)
     expect(observed.join('\n')).not.toContain(marker)
     await expect(page.getByRole('status')).not.toContainText(marker)
   }
@@ -230,7 +242,7 @@ test.describe('without JavaScript', () => {
     expect(response?.status()).toBe(200)
     await expect(page.getByLabel('账号', { exact: true })).toBeDisabled()
     await expect(page.getByLabel('密码', { exact: true })).toBeDisabled()
-    await expect(page.getByRole('button', { name: '检查登录表单' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: '登录演示账号' })).toBeDisabled()
     await expect(page.getByRole('main')).toContainText('当前输入与提交已禁用，不会发送数据')
     await expect(page).toHaveURL(/\/login$/)
   })
@@ -245,14 +257,14 @@ for (const width of [390, 768, 1440]) {
         page,
       }, testInfo) => {
         await page.goto('/login')
-        await page.getByRole('button', { name: '检查登录表单' }).click()
+        await page.getByRole('button', { name: '登录演示账号' }).click()
         await expect(page.getByLabel('账号', { exact: true })).toBeFocused()
         await expectAccessible(page)
         await page.screenshot({ path: testInfo.outputPath('required-errors.png'), fullPage: true })
         await page.getByLabel('账号', { exact: true }).fill('虚构预览内容')
         await page.getByLabel('密码', { exact: true }).fill('x')
-        await page.getByRole('button', { name: '检查登录表单' }).click()
-        await expect(page.getByRole('status')).toContainText('演示认证尚未接入')
+        await page.getByRole('button', { name: '登录演示账号' }).click()
+        await expect(page.getByRole('status')).toContainText('演示账号或密码不正确')
         await expectAccessible(page)
         await page.screenshot({ path: testInfo.outputPath('inline-status.png'), fullPage: true })
         await page.getByRole('tab', { name: '演示说明', exact: true }).click()
@@ -293,7 +305,7 @@ for (const width of [390, 768, 1440]) {
           ).toBe('0s')
         }
         await page.getByRole('tab', { name: '登录', exact: true }).click()
-        await expect(page.getByRole('status')).toContainText('演示认证尚未接入')
+        await expect(page.getByRole('status')).toContainText('演示账号或密码不正确')
       })
     })
   }

@@ -25,16 +25,16 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 2. (optional) Use an **exploration subagent** to conduct any exploration required by the tickets - relevant codebase files or external documentation. Ensure the exploration subagent can save files - it should save its markdown notes in a directory outside the repo, accessible by all future subagents. This lets **implementer subagents** focus on implementation rather than exploration.
 
-3. Create the integration branch. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
+3. Create the integration branch in its own managed worktree, separate from the user's active checkout. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
 
 4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch. Each implementer subagent:
-   - confirms its worktree is based on the integration branch before starting; for a mismatched dirty checkout, preserves the work and resolves ownership rather than resetting it;
+   - pins the exact integration commit and runs `agent:protect` with its owned paths; confirms its worktree is based on that commit before starting; for a mismatched dirty checkout, preserves the work and resolves ownership rather than resetting it;
    - uses `tdd` to build the ticket (read its `SKILL.md` when no Skill tool is available);
-   - merges the integration branch tip into its own branch before reporting done; writes a checkpoint and a short SHA/checks/next-action handoff with detailed evidence behind pointers
+   - commits and checks its owned changes against the pinned baseline before handoff; leaves integration refresh to the merger so unrelated worker changes do not bypass the ownership gate; writes a short SHA/checks/next-action checkpoint with evidence pointers
 
-5. Once an **implementer subagent** completes, merge its work to the integration branch with a **merger subagent**. The merger owns the integration checkout exclusively and reports merge/conflict/check results, not a duplicate implementation narrative.
+5. Check its `agent:check-protection` result. Once an **implementer subagent** completes, merge its work to the integration branch with a **merger subagent**. The merger owns the integration checkout exclusively, merges the approved worker commit into the current tip, resolves only explicit integration conflicts and revalidates combined behavior. It reports merge/conflict/check results, not a duplicate implementation narrative.
 
-6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
+6. Use completion notifications; use one long wait only for the next blocking dependency, not repeated unchanged polling. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
 
 7. Once all tickets are complete, use `code-review` on the integration branch (read its `SKILL.md` if needed). Fix all issues raised in a single **implementer subagent**. Map acceptance requirements to evidence and run `bun run agent:verify` on the final integrated content.
 

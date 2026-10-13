@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
 import { execFileSync, spawn } from 'node:child_process'
 import {
+  accessSync,
+  constants,
   createWriteStream,
   existsSync,
   lstatSync,
@@ -13,12 +15,23 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { createConnection } from 'node:net'
+import { createRequire } from 'node:module'
+import { protectWorkspace, checkWorkspace } from './workspace-guard.mjs'
 
 const [command = 'doctor', ...args] = process.argv.slice(2)
 const options = {}
 for (let i = 0; i < args.length; i += 2) {
   if (
-    !['--id', '--next', '--status', '--evidence', '--issues', '--port'].includes(args[i]) ||
+    ![
+      '--id',
+      '--next',
+      '--status',
+      '--evidence',
+      '--issues',
+      '--port',
+      '--allow',
+      '--base',
+    ].includes(args[i]) ||
     !args[i + 1]
   ) {
     throw new Error(`Unknown or incomplete option: ${args[i]}`)
@@ -143,12 +156,31 @@ async function doctor() {
         nodeRange,
       ]),
     ) === 'true'
+  const baseline = readFileSync(join(root, '.node-version'), 'utf8').trim()
+  const baselineOkay = process.versions.node.split('.')[0] === baseline
+  const require = createRequire(join(root, 'package.json'))
+  const browserPath = optional(() => require('@playwright/test').chromium.executablePath())
+  const browserReady = Boolean(
+    browserPath &&
+    optional(() => {
+      accessSync(browserPath, constants.X_OK)
+      return true
+    }),
+  )
   const port = Number(options.port ?? process.env.E2E_PORT ?? 4173)
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Port must be 1–65535.')
   const occupied = await portBusy(port)
   const result = {
     ...snapshot(),
-    node: { actual: process.versions.node, required: nodeRange, okay: nodeOkay },
+    node: {
+      executable: process.execPath,
+      actual: process.versions.node,
+      supportedRange: nodeRange,
+      supported: nodeOkay,
+      baseline,
+      baselineOkay,
+    },
+    browser: { name: 'chromium', executable: browserPath, ready: browserReady },
     bun: {
       localPath: bun,
       local: localBun,
@@ -165,7 +197,15 @@ async function doctor() {
     port: { port, occupied },
   }
   json(result)
-  if (!nodeOkay || localBun !== expectedBun || occupied) process.exitCode = 1
+  if (
+    !nodeOkay ||
+    !baselineOkay ||
+    !browserReady ||
+    !result.lockfile.present ||
+    localBun !== expectedBun ||
+    occupied
+  )
+    process.exitCode = 1
 }
 async function verify() {
   const before = snapshot()
@@ -175,6 +215,7 @@ async function verify() {
   const output = createWriteStream(log)
   const child = spawn(join(root, 'node_modules/.bin/bun'), ['run', 'check:all'], {
     cwd: root,
+    env: { ...process.env, E2E_REUSE_BUILD: '0' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   child.stdout.on('data', (data) => {
@@ -274,6 +315,21 @@ function captureIssues() {
 }
 try {
   switch (command) {
+    case 'protect': {
+      const path = join(dirname(stateFile()), 'protection.json')
+      if (existsSync(path))
+        throw new Error('Protection already exists; use a new task ID after inspecting changes.')
+      const saved = protectWorkspace(root, options)
+      save(path, saved)
+      json({ path, baseline: saved.baseline, allowed: saved.allowed, preserved: saved.dirty })
+      break
+    }
+    case 'check-protection': {
+      const result = checkWorkspace(root, readJson(join(dirname(stateFile()), 'protection.json')))
+      json(result)
+      if (!result.passed) process.exitCode = 1
+      break
+    }
     case 'doctor':
       await doctor()
       break
@@ -323,7 +379,9 @@ try {
       captureIssues()
       break
     default:
-      throw new Error('Use doctor, checkpoint, resume, verify, delivery, or snapshot.')
+      throw new Error(
+        'Use doctor, protect, check-protection, checkpoint, resume, verify, delivery, or snapshot.',
+      )
   }
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error))

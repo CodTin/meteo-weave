@@ -14,7 +14,7 @@ export const workspaceCases = [
     path: '/dashboard',
     module: /\/assets\/dashboard\.lazy-[^/]+\.js$/,
     content: '任务服务尚未接入',
-    contentHeading: '身份认证与任务服务尚未接入',
+    contentHeading: '任务服务尚未接入',
   },
   {
     title: '创建任务',
@@ -27,8 +27,8 @@ export const workspaceCases = [
     title: '设置',
     path: '/settings',
     module: /\/assets\/settings\.lazy-[^/]+\.js$/,
-    content: '当前无法切换角色或保存设置',
-    contentHeading: '账号与偏好设置尚未接入',
+    content: '演示角色与分析偏好',
+    contentHeading: '演示角色与分析偏好',
   },
 ]
 

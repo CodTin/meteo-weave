@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
-import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router'
+import { createRootRouteWithContext, HeadContent, Scripts } from '@tanstack/react-router'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import { clientEnv } from '@/lib/env/client'
 import stylesheet from '@/styles/globals.css?url'
+import { DemoSessionBoundary } from '@/features/auth/session-transition'
 import { NotFoundPage } from '@/components/entry/not-found-page'
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -16,7 +17,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [{ rel: 'stylesheet', href: stylesheet }],
   }),
-  component: Outlet,
+  component: DemoSessionBoundary,
   // Router preserves the HTTP 404 status for unmatched document requests.
   notFoundComponent: NotFoundPage,
   shellComponent: RootDocument,

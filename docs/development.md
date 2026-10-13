@@ -6,15 +6,15 @@
 深色主题、样式和脚本插槽，并通过 Router 的 `notFoundComponent` 显示可恢复的 404。
 
 - `/` 是中文产品入口（HTTP 200），显示平台身份、演示范围与登录导航。
-- `/login` 是 UI-only 登录表单（HTTP 200），提供本地校验、密码可见性切换、Tab、角色说明 Dialog 和通知；不发送凭证或建立会话。
-- `/dashboard`、`/tasks/new`、`/tasks`、`/settings` 提供公开工作区预览：共享导航／面包屑、配置流程说明、任务字段表格和设置说明，不读取或保存业务数据。
+- `/login` 提供三类公开固定演示账号、本地必填校验、密码可见性切换、Tab、角色说明 Dialog 和可访问反馈；通过服务器登录入口建立 Demo 会话，默认进入 Dashboard；目录验证后的 `account` 搜索参数只预选账号，密码保持为空，不建立会话。
+- `/dashboard`、`/tasks/new`、`/tasks`、`/settings` 提供需要 Demo 登录的工作区预览：共享导航／面包屑、当前演示账号、当前角色配置能力、任务字段表格和设置角色切换，不读取或保存任务数据或分析偏好。登录身份在导航、刷新与直接访问时恢复；未登录先转到登录入口，不先输出受保护内容。
 - 工作区实际路由模块按需加载，提供等待状态、资源失败说明、明确的整页重新加载与安全返回；恢复后显示真实目标内容。
 - 未知地址保留 Router 的真实 HTTP 404，同时提供原因与有效返回路径，不做 HTTP 200 的伪 404。
 
-当前不实现认证、数据库、业务 API 或降尺度计算；分辨率示意不代表真实数据或计算结果。
+当前不实现生产认证、数据库、任务服务或降尺度计算；分辨率示意不代表真实数据或计算结果。#22 提供演示登录与身份恢复，#23 提供工作区／身份服务保护和安全回跳；#24 提供真实退出、账号查询／临时 UI 清理与成功登录的工作区替换；#25 提供设置角色切换与下次登录预选；#26 提供可复用的服务器配置准入和角色能力展示。完整 Spec02 不等于真实任务提交、持久化或执行已经实现。
 
-功能目录按平台设计和已有领域术语划分；目前不增加领域实体、状态机、权限规则或接口协议。
-登录 UI 校验和工作区预览位于对应 feature；后续业务查询、持久化与计算仍按实际需求添加，避免预先制造空抽象。
+功能目录按平台设计和已有领域术语划分；固定账号目录位于 auth feature，登录 UI 和工作区位于对应 feature。
+角色配置能力已由 UI 与准入共用；后续业务查询、持久化与计算按真实需求接入，不制造空 store 或假任务。
 
 ## 2. 依赖基线
 
@@ -49,8 +49,10 @@
 - 本机全局 Bun 1.3.11 无法解析 React 19.3 的生产 SSR 代码，已通过最小复现确认。
   使用无版本参数安装项目本地 `bun`（1.4.3）后同一代码通过，不降级 React、不修改全局 Bun。
   应用脚本经项目本地 Bun 运行；`.bun-version` 和 `packageManager` 记录 1.4.3。
+  Node 验收基线由 `.node-version` 定义（24.x）；`engines` 描述更宽的可用范围，不代表那些版本均完成验收。
+  `agent:doctor` 校验实际进程与基线、Chromium 安装、锁文件和端口，不修改系统运行时。
   Node 工具链选用 24.x LTS，
-  jsdom 当前要求至少 Node 24.15；`.node-version`、`engines` 已对应设置。
+  当前项目最低 Node 版本见 `engines`；固定验收路径见 `docs/agents/workflow.md`。
 - Bun 是应用运行时和包管理器；测试等 CLI 可由其 Node shebang 使用 Node 运行。
 - 一些上游构建包目前会输出 `use client` 模块指令或循环依赖警告。
   项目没有启用 RSC；不通过全局忽略警告或降级来隐藏这些上游提示。
@@ -62,8 +64,8 @@
   单独运行 `bun run routes:generate` 也可生成。
 - `src/start.ts` 默认全文档 SSR。后续按路由需要选择 `ssr: true`、`false` 或 `data-only`，
   不虚构业务 loader 或搜索参数。当前正常访问继续水合真实 SSR 文档。
-- 客户端先完成 Start 初始化并核验匹配的工作区模块；仅确认初始模块下载失败时，让 Router 生成错误状态，
-  再客户端挂载可用的恢复外壳，避免用错误内容水合成功文档。不关闭全局 SSR，也不屏蔽水合错误。
+- 客户端先完成 Start 初始化并核验匹配的工作区模块；仅确认初始模块下载失败时，通过 `router.invalidate({ sync: true })` 重新验证身份与路由，
+  再客户端挂载错误外壳或登录页，避免沿用服务器传输的旧身份，或用重定向后的内容水合原工作区文档。不关闭全局 SSR，也不屏蔽水合错误。
 - 后续搜索参数用 Zod schema 配置 `validateSearch`；服务端输入使用 Server Function 的 `inputValidator`。
 - `getRouter()` 每次新建 QueryClient，并接入官方 SSR Query integration；缓存不会在不同 SSR 请求间共享，
   provider、脱水 / 水合和查询流式传输由集成负责。
@@ -76,6 +78,60 @@
   不从公共 barrel re-export；Start import protection 在开发和构建中都设为报错。
 - Mapbox / WebGL / 浏览器存储等以后通过客户端边界和按需加载使用，不在 SSR 模块顶层访问浏览器 API。
 - `data/` 不放在 `public/` 下，不会自动暴露给浏览器。需下载的数据以后通过受控接口交付。
+
+### Demo 会话与工作区保护（Spec 02 · #22 / #23 / #24 / #25）
+
+- `src/features/auth/demo-accounts.ts` 是统一目录：`researcher` / `policy` / `agriculture`，一一对应研究人员 / 决策者 / 农业用户。`DemoAccount`、`demoAccounts`、`resolveDemoAccount` 供角色显示与后续业务复用；公开密码 `DEMO_PASSWORD` 为 `meteo-demo`，不是秘密。
+- 客户端可导入 `src/server/functions/demo-session.ts` 的 `loginDemo({ data: { account, password } })`（POST）及 `getDemoSession()`（GET）。实现位于 `src/server/services/demo-session.server.ts`，使用 server-only 标记；`loginDemoAccount` 和 `readDemoSession` 供服务器后续入口复用。
+- 服务器校验固定账号和公开密码，不采信额外的 `role`。错误输入返回可纠正错误，不写新会话；缺失或未知 cookie 返回 `null`。失败登录不替换已有有效会话。
+- `meteo-demo-account` 是仅含目录账号标识的会话 cookie：HttpOnly、SameSite=Lax、Path=/，HTTPS 时 Secure；无过期时间（浏览器会话范围）。HTTPS 代理须正确覆盖 `X-Forwarded-Proto`；采用 Start 请求协议解析。身份响应设为 `Cache-Control: no-store`。
+- 该 cookie **未签名**，不是生产认证、防篡改或真实多租户授权。仅能用于合成 Demo 数据，不能用来保护真实用户或远程数据。页面明确说明此边界，不提供注册或真实凭证管理。
+- `/_workspace` 的 `beforeLoad` 在 SSR、导航和 intent preload 中调用 `requireDemoSession({ data: location.href, signal })`，通过 route context 的 `account` 将同一必需身份传给页头与设置页。不跳过预加载检查，不另建身份 store；登录成功经过统一会话切换边界清理旧工作区，以新 SSR 文档重新验证身份；普通工作区导航仍为 SPA。
+- `src/server/functions/demo-session.ts` 的 `requireDemoSession` 是工作区实际使用的必需账号读取入口；实现复用 `src/server/services/demo-session.server.ts` 的 `requireDemoAccount(returnTo?)` 与 #22 的 `readDemoSession`。缺失／未知／无效 cookie 抛出带 `no-store` 的 307 登录重定向；正常返回目录中的 `DemoAccount`。公开登录和可选的会话读取保持原契约。后续配置准入／任务服务必须在服务器实际操作前调用 `requireDemoAccount`，不能只靠页面 guard。
+- `src/features/auth/return-to.ts` 的 `safeReturnTo` 仅接受当前四个工作区的字面路径：`/dashboard`、`/tasks`、`/tasks/new`、`/settings`。保留正常 query/hash，拒绝绝对／协议相对、反斜线、控制字符、编码路径、登录循环和未知路径；无效目标回退 Dashboard。后续新增真实任务路由时显式扩展，不再次解码已验证目标。
+- 登录页用 Zod 解析可选 `returnTo`，并经统一目录验证可选 `account`；未知账号、数组或对象不会填入账号框。预选只初始化可编辑表单，密码为空；仅访问或修改 URL 不改变任何已验证身份。确认退出后，未验证或验证失败均保持未登录，只有真实登录成功才恢复工作区。`returnTo` 与预选独立；服务器重定向与登录后最终导航均校验目标。SSR 请求不携带 fragment，因此登录页也保留浏览器随重定向继承的合法目标 fragment。正常 Query 参数可由 Router 等价重序列化（例如空格 `%20` → `+`）。未知页面继续是真实公开 404。
+- `logoutDemo()` 是客户端可调用的 POST；服务器 `endDemoSession()` 仅以同一个 cookie 名、Path=/、Max-Age=0 结束 Demo 会话，保留 HttpOnly、SameSite=Lax 与 HTTPS Secure，并返回 no-store。无会话时也可安全重复调用。底层函数不提供另一套 UI 退出路径。
+- `src/features/auth/session-transition.tsx` 的 `DemoSessionBoundary` 位于根路由。工作区页头和移动菜单调用 `useDemoSessionTransition().endSession()`：同步卸载旧页面／菜单，取消查询并清空 Router 预加载；POST 成功后再次清理内存并替换到登录文档；无预选目标时为 `/login`。网络失败保持工作区隐藏，明确说明尚未确认退出，并将键盘焦点交给重试；不假装清 cookie 已成功。已确认的登录目标保留在根边界中，无参数重试不会丢失目标。
+- 公共登录页即使已有会话也可提交另一账号。只有登录成功才调用同一 hook 的 `completeLogin(destination)`；它再校验 `safeReturnTo`，同步卸载旧内容、清理缓存并替换为目标 SSR 文档。错误凭证保留已有会话。只有身份切换使用整文档导航；不把每次普通路由导航变成刷新，也不改动 #23 的初始失败模块／会话过期恢复路径。
+- `src/lib/query/client.ts` 的 `discardWorkspaceQueries(queryClient)` 先取消 Query 请求再清除该客户端的 query/mutation 内存缓存。根边界在清理之前卸载内容，因此取消时恢复的数据不会重新显示；文档替换为下个账号创建新的 Router、QueryClient、React 状态及 JS 执行环境，旧响应／回调不能进入新工作区。`router.clearCache()` 用于预加载／缓存，不被误当成当前页面卸载；不通过 `invalidateQueries` 代替清理。
+- 设置 `RoleSwitchDialog` 的当前账号来自受保护 route context，另外两类候选来自 `demoAccounts`。选择不改身份；取消／关闭／Escape 不调用退出，不清查询或临时状态，关闭后焦点返回触发按钮。确认才调用同一个 `endSession(targetAccount?: string)`，不能另组清 cookie／导航链。该入口用 `resolveDemoAccount` 验证目标，未知值回退普通 `/login`；合法值仅生成 `/login?account=<id>`。首个已确认目标在根边界保存到成功替换文档，覆盖无参数重试；不放入浏览器存储。
+- 清理范围仅为会话与可丢弃的内存状态，不读取／删除 localStorage、sessionStorage、IndexedDB 或任务仓库。当前真实临时状态包括移动导航 Dialog 和设置角色选择 Dialog，卸载会清理选择、焦点约束与滚动锁。未来任务选择、地图实例等应归属这个工作区生命周期；不要在模块级单例里保留跨账号状态。
+- 当前没有真实任务持久化／历史、任务选择或地图功能，不创建空 store 或伪造任务来验收。Spec03 #4 的持久化／历史、Spec05 #6 的完整配置／执行及后续地图 Spec 必须补齐真实保存任务在退出及切换后的保留联调；Query 取消不撤销已提交的服务器写操作，也不代替未来持久化服务的账号校验。
+
+### 角色能力与配置准入（Spec 02 · #26，稳定公共契约）
+
+这是配置准入，不是任务创建。页面显示当前角色能力与明确范围说明，`提交降尺度任务` 仍禁用；没有任务 ID、任务记录、运行状态、结果、地图或伪造保存成功。
+
+**实际服务器边界**
+
+- `src/server/services/downscaling-admission.server.ts` 导出同步 `admitDownscalingConfiguration(input: unknown)`，必须在真实 Start 请求上下文中调用。先调用 `requireDemoAccount('/tasks/new')`，再处理包括畸形值在内的输入；缺失／无效 cookie 得到 no-store 的 307 `/login?returnTo=%2Ftasks%2Fnew`，有效会话响应也 no-store。
+- 账号仅来自当前请求 cookie 经统一目录解析的 `DemoAccount`。成功为 `{ ok: true, ownerId, configuration }`，其中 ownerId 为当前账号，configuration 为规范化配置；失败为 `{ ok: false, code, error }`。`code` 为 `ROLE_RESTRICTED`、`INVALID_CONFIGURATION` 或 `INCOMPATIBLE_METHOD`，`error` 为中文可读说明；调用方按 code 分支，不解析文案。
+- `src/server/functions/downscaling-admission.ts` 的 `admitDownscaling({ data: input })` 是薄 POST 适配器，保留 unknown 输入，让服务先认证再做业务校验。当前没有消费该适配器的完整表单，不宣称已验收浏览器任务 RPC。将来 #6 客户端导入后由 Start 生成传输地址，不硬编码生成 URL 或添加测试专用端点。
+- `getDownscalingCapabilities(account: DemoAccount)` 位于 `src/features/downscaling-tasks/capabilities.ts`，UI 与校验共同使用其 `methods` / `allowsAdvanced`；UI 身份取自工作区 route context。纯函数 `checkDownscalingConfiguration` 要求已解析的目录账号，不代替服务器认证。
+
+**输入与规范化规则**
+
+`src/features/downscaling-tasks/configuration-admission.ts` 导出 `DownscalingConfigurationInput` 和 `AdmittedDownscalingConfiguration`。
+
+| 字段         | 公共约束                                                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `dataSource` | 必填 `ecmwf` / `gfs` / `fusion`                                                                                                                                    |
+| `region`     | `{ north, south, east, west }` 有限数值；纬度 ±90、经度 ±180；north > south、east > west，不表达跨反子午线区域                                                     |
+| `timeRange`  | historical：真实日期 `YYYY-MM-DD`，2020–2024 内且 start ≤ end；forecast：UTC ISO 时间、整小时，从当前 UTC 小时到其后 7 天（含端点），start ≤ end。合法输入原样保留 |
+| `variable`   | 必填 `temperature` / `wind` / `pressure` / `precipitation`                                                                                                         |
+| `resolution` | 必填 `1km` / `3km` / `5km`                                                                                                                                         |
+| `method`     | `recommended` / `deterministic` / `probabilistic`，省略默认 recommended                                                                                            |
+| `advanced`   | 研究人员可选对象：`uncertaintyQuantification?: boolean`、`ensembleMembers` 可选 5／10／20；提供 advanced 时不确定性默认 false                                      |
+
+- 决策者与农业用户只接受 recommended；显式确定性／概率式或任何 advanced 对象（包括空对象／null）被拒绝，不只是隐藏控件。所有角色均保留合法共同输入。
+- 研究人员 recommended 默认解析为 deterministic；`uncertaintyQuantification=true` 时解析为 probabilistic。显式概率式可有或无不确定性；显式确定性 + 不确定性为 true 拒绝，而非悄悄换方法。
+- 概率式输出 `advanced.ensembleMembers` 默认 10，只允许 5／10／20，表示概率集合成员而非训练多个真实模型。确定性输出若携带集合成员则拒绝，包括未启用不确定性的 recommended；不会为确定性输出添加无关集合默认值。
+- 输出保留请求 `method` 并增加 `resolvedMethod: 'deterministic' | 'probabilistic'`。顶层 `role` / `ownerId` 仅为被忽略并剔除的传输提示；其他未知字段（包括嵌套字段和放错位置的高级字段）拒绝，避免静默丢失用户意图。
+- 创建参数限制不限制未来预置概率案例的查看。准入也不意味着生产认证或真实多租户授权。
+
+**#4 / #6 必须补齐的真实集成**
+
+Spec03 #4 提供任务服务、账号归属与持久化；Spec05 #6 提供完整配置表单与执行。真实任务写入端必须直接调用服务器准入服务，并使用返回的 ownerId / configuration，不能信任客户端先前的准入结果或传入身份。接入时增加真实提交、执行、历史保留、退出／切换隔离等集成测试。当前准入测试在真实 Start 请求／响应上下文调用公共服务器服务，浏览器仅验证角色能力展示，不制造虚假的任务、历史或地图断言。
 
 ### 目录式文件路由与生命周期验收
 
@@ -92,17 +148,18 @@ pending/error；`tests/e2e/workspace-cases.ts` 列出真实页面及可拦截资
 `tests/e2e/workspace-lifecycle.spec.ts` 与 `workspace.spec.ts` 验收行为。
 
 修改这些边界或升级 Router／Start 时，先读相关代码及已安装框架实现。特别保留：初次访问
-成功时复用 SSR DOM；下载失败时才进入明确的恢复路径；Spec01 不建立身份或会话。
+成功时复用 SSR DOM；下载失败时才进入明确的恢复路径。Spec02 的工作区保护与恢复路径必须重新验证会话，不得水合过时身份。
 将特殊处理的原因和回归测试一起维护，而非拷贝旧框架示例或屏蔽水合异常。
 
-| 适用页面       | 入口                              | 必须验证的结果                                       | 证据入口                             |
-| -------------- | --------------------------------- | ---------------------------------------------------- | ------------------------------------ |
-| 每个工作区页面 | 直接访问／刷新                    | SSR 页面身份、正确内容与可访问性                     | workspace                            |
-| 每个工作区页面 | 站内跳转                          | 标题、当前项、历史返回、导航可用                     | workspace                            |
-| 每个工作区页面 | 延迟→成功                         | 焦点保留、pending 清除、三种屏宽的内容／页脚布局稳定 | workspace-lifecycle                  |
-| 每个工作区页面 | 直接访问与站内跳转的资源失败→恢复 | 可用导航、真实重新加载、目标内容、无额外水合错误     | route-recovery / workspace-lifecycle |
-| 共享水合边界   | 健康的延迟直接访问                | 原 SSR DOM 复用而不是全局改成客户端渲染              | workspace-lifecycle                  |
-| 登录预览       | 表单／说明弹层                    | 仅界面校验、焦点恢复、输入不发送或保存               | login                                |
+| 适用页面        | 入口                                   | 必须验证的结果                                       | 证据入口                                                |
+| --------------- | -------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| 每个工作区页面  | 直接访问／刷新                         | SSR 页面身份、正确内容与可访问性                     | workspace                                               |
+| 每个工作区页面  | 站内跳转                               | 标题、当前项、历史返回、导航可用                     | workspace                                               |
+| 每个工作区页面  | 延迟→成功                              | 焦点保留、pending 清除、三种屏宽的内容／页脚布局稳定 | workspace-lifecycle                                     |
+| 每个工作区页面  | 直接访问与站内跳转的资源失败→恢复      | 可用导航、真实重新加载、目标内容、无额外水合错误     | route-recovery / workspace-lifecycle                    |
+| 共享水合边界    | 健康的延迟直接访问                     | 原 SSR DOM 复用而不是全局改成客户端渲染              | workspace-lifecycle                                     |
+| Demo 登录／会话 | 表单、站内回跳、退出与角色切换         | 统一身份、重新验证、旧响应隔离与错误恢复             | login / workspace-access / session-ending / role-switch |
+| 共享页头        | 390／768／1440px，普通／reduced-motion | 可读面包屑、身份与操作、键盘焦点                     | workspace-header                                        |
 
 新增路由先补矩阵的适用行，再补测试。豁免必须说明原因；测试总数不是验收覆盖率。
 科学数据尚未接入的页面仍应诚实说明状态，不能用虚构业务接口制造加载测试。
@@ -149,7 +206,7 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 - 品牌分类图表色 `--chart-*` 不可替代气象地图连续色阶；入口网格仅为中性流程示意。
 - 根文档固定深色，支持清晰的键盘焦点、跳过导航及 reduced-motion；不增加亮色主题。
 - 后续通过 `bun run ui:add <组件名>` 按需添加组件，复用这里的 tokens。
-- 登录预览使用 React Hook Form / Zod 做本地表单校验，通过持久内联 output（live region）提供反馈，未挂载 Toaster；不发送认证请求或保存凭证。
+- 登录使用 React Hook Form / Zod 做本地必填校验，通过持久内联 output（live region）提供等待和错误反馈，未挂载 Toaster。字段错误关联到实际消息文本，服务器拒绝后恢复账号焦点；等待时禁用控件。登录验证通过同源 POST；密码不放入 URL、浏览器凭证存储或日志，继续保留 Sentry 遮罩。角色切换的 `account` URL 提示仅允许公开目录标识，不包含密码，也不是身份授权。
   Recharts 与 Zustand 已安装但未为本 Spec 新建样例图表或业务 store。
 
 ## 6. 测试和提交检查
@@ -160,15 +217,15 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 - Playwright 会自行构建、默认在 4173 端口启动 Bun 生产服务并在结束时关闭；不复用未知的已有服务。
   并行工作树用 `E2E_PORT=4181 bun run test:e2e` 指定各自端口（1–65535），不共享构建输出。
 - 三浏览器项目均已配置；默认 `test:e2e` 运行 Chromium，`test:e2e:all` 运行全部。
-  覆盖产品入口、UI-only 登录交互、工作区导航／表格、未知地址返回与实际路由模块的等待／失败／恢复。
+  覆盖产品入口、Demo 登录交互、匿名保护／安全回跳、工作区导航／表格、未知地址返回与实际路由模块的等待／失败／恢复。三类账号通过真实表单、导航、刷新和直接访问验证 SSR 身份；Vitest 通过真实请求上下文调用公共会话服务，检查 cookie、白名单、错误输入及请求间隔离。退出测试通过真实键盘操作、打开的移动菜单、失败重试和延迟的真实身份响应验证；Query 测试断言公共请求结果和取消，不读取私有 store 或缓存键布局。角色切换覆盖六个有向账号组合、取消／关闭／Escape、重新验证失败／成功、退回受保护页面、URL 预选拒绝、延迟身份响应及保留目标的失败重试。准入测试通过真实 Start 请求上下文验证认证优先、越权拒绝、共同输入保留及规范化结果；不把它等同于实际任务提交测试。
   检查 SSR 实际内容、正确 HTTP 状态、水合、资源失败以及 axe WCAG 2.1 A/AA；包括直接访问失败后重新加载，
   以及正常访问保留服务器 DOM。只定向豁免刻意拦截的确切字体／模块及确切未知文档 404 的预期诊断，
   不忽略其他脚本／样式失败、控制台异常或任何页面／水合错误。
 - 入口、登录、404 均在 390、768、1440px 的普通／reduced-motion 模式下检查无整体横向溢出、
   键盘跳转、可见焦点及主要操作；拦截字体下载以验证回退，并保存固定视口全页截图。
-  工作区同时检查这三个宽度的导航／生命周期、reduced-motion 与各目标页加载前后主要内容及页脚的稳定位置。
+  工作区通过同一个公开表单辅助模块在独立页面完成真实登录，保持被测页面模块缓存／历史／文档计数初始状态；同时检查这三个宽度的导航／生命周期、reduced-motion 与各目标页加载前后主要内容及页脚的稳定位置。
   这些检查不证明尚未实现的业务流程已经符合 WCAG。
-- 历史初始化外壳冒烟在本机 Chromium / WebKit 通过；当前 Spec01 回归以 Chromium 为验证范围，不把历史结果当作新增流程的 WebKit 验证。Firefox 在独立启动最小复现中即报 `Could not find profile folder`，
+- 历史初始化外壳冒烟在本机 Chromium / WebKit 通过；当前 Spec01／Spec02 回归以 Chromium 为验证范围，不把历史结果当作新增流程的 WebKit 验证。Firefox 在独立启动最小复现中即报 `Could not find profile folder`，
   临时目录 / 持久化 profile / 重新下载均无效。该环境限制未通过跳过或捕获失败来伪装成功，完整套件会如实失败。
 - 覆盖率输出到 `coverage/`，浏览器报告到 `playwright-report/`，失败产物到 `test-results/`。
 - Husky 提交前依次运行 lint-staged、类型检查和 Vitest；lint-staged 使用 Oxlint + Oxfmt，不额外引入 Prettier。

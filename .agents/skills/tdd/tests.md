@@ -75,3 +75,15 @@ test("calculateTotal sums line items", () => {
   expect(calculateTotal([{ price: 10 }, { price: 5 }])).toBe(15);
 });
 ```
+
+
+## Representation versus behavior
+
+Use parsed URL origin/path/query values/hash for navigation requirements. Preserve byte-level
+assertions only when the spec explicitly requires that encoding. Inspect returned SSR HTML in
+an inert parsed document; do not infer server output from the hydrated page or regex-match tag
+attribute order (`check:agent` enforces the narrow tag-regex prohibition).
+
+Public CLI tests for agent tooling should use isolated fixture repositories and invoke the
+actual command, observing exit status, output and preserved user files. Remove inherited Git
+repository variables from fixture subprocesses; never let a test reconfigure the caller's repo.

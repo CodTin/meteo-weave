@@ -18,7 +18,8 @@ export const Route = createFileRoute('/')({
       { title: '平台入口 · MeteoWeave' },
       {
         name: 'description',
-        content: 'MeteoWeave 气象降尺度演示平台：了解分析流程，前往登录入口。认证与计算尚未接入。',
+        content:
+          'MeteoWeave 气象降尺度演示平台：了解分析流程，前往登录入口。提供固定演示账号登录，计算尚未接入。',
       },
     ],
   }),
@@ -54,7 +55,7 @@ function EntryPage() {
             </div>
             <CardTitle className="text-2xl">探索精细化气象分析</CardTitle>
             <CardDescription>
-              从登录入口了解演示方式。当前仅开放界面预览，不会创建会话或执行计算。
+              工作区需要登录。请使用公开的 Demo 账号进入界面预览；不会执行计算。
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -90,8 +91,8 @@ function EntryPage() {
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-3 py-4">
-                <dt>身份认证</dt>
-                <dd className="text-muted-foreground">尚未接入</dd>
+                <dt>Demo 登录</dt>
+                <dd className="text-muted-foreground">固定演示账号</dd>
               </div>
               <div className="flex items-center justify-between gap-3 pt-4">
                 <dt>降尺度计算</dt>
@@ -104,7 +105,8 @@ function EntryPage() {
                 aria-hidden="true"
               />
               <p className="text-xs leading-6 text-muted-foreground">
-                认证尚未接入。当前无需提交账号或任何个人信息，页面中的分辨率仅用于说明流程。
+                登录仅使用公开演示账号，不收集真实个人信息；会话不是生产认证，只能用于合成 Demo
+                数据。页面中的分辨率仅用于说明流程。
               </p>
             </div>
           </CardContent>

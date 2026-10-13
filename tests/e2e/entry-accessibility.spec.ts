@@ -59,14 +59,14 @@ for (const width of [390, 768, 1440]) {
           await expect(page.getByRole('main')).toBeFocused()
           await page.keyboard.press('Tab')
           if (entry.path === '/login') {
-            // The real login preview now precedes the existing return action.
+            // The Demo login controls precede the return action.
             const loginControls = [
               page.getByRole('tab', { name: '登录', exact: true }),
               page.getByRole('tabpanel', { name: '登录', exact: true }),
               page.getByLabel('账号', { exact: true }),
               page.getByLabel('密码', { exact: true }),
               page.getByRole('button', { name: '显示密码', exact: true }),
-              page.getByRole('button', { name: '检查登录表单' }),
+              page.getByRole('button', { name: '登录演示账号' }),
               page.getByRole('button', { name: '查看角色与演示说明' }),
             ]
             for (const control of loginControls) {
