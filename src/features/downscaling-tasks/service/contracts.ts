@@ -4,13 +4,20 @@ import type { DemoAccount } from '@/features/auth/demo-accounts'
 export const TASK_SCHEMA_VERSION = 1
 export const GENERATOR_VERSION = 'synthetic-temperature-v1'
 export const VARIABLE_GENERATOR_VERSION = 'synthetic-variables-v2'
+export const ENSEMBLE_GENERATOR_VERSION = 'synthetic-ensemble-v3'
 // This identity is also the permanent fallback for pre-observation schema-1 backups.
 export const OBSERVATION_REFERENCE = {
   referenceSeed: 1729,
   referenceVersion: 'synthetic-observations-v1',
 } as const
 export const TASK_DURATION_MS = 2_500
-export const RESULT_QUERY_LIMITS = { points: 64, times: 168, values: 256, gridPoints: 256 } as const
+export const RESULT_QUERY_LIMITS = {
+  points: 64,
+  times: 168,
+  values: 256,
+  gridPoints: 256,
+  members: 20,
+} as const
 
 export type DownscalingTask = {
   schemaVersion: number
@@ -63,7 +70,10 @@ export type ObservationSupport =
   | { mode: 'stations'; station: ObservationStation; distanceKm: number }
   | { mode: 'interpolated'; stations: Array<{ station: ObservationStation; weight: number }> }
 
+export type EnsembleSelection = { kind: 'members' | 'mean'; memberIds?: string[] }
 export type ResultQuery = {
+  /** Only probabilistic tasks have members. Source/reference layers remain shared. */
+  ensemble?: EnsembleSelection
   /** Native queries stay unchanged. Opt into hourly values, or daily temperature/rain statistics. */
   temporalResolution?: 'hourly' | 'daily'
 } & (
@@ -104,6 +114,14 @@ export type ResultValue = ResultPoint & {
   time: string
   value: number
   observation?: ObservationSupport
+  /** Present only on an actual probabilistic downscaled member sample. */
+  memberId?: string
+  ensembleMean?: {
+    sampleCount: number
+    validMemberIds: string[]
+    unavailableMemberIds: string[]
+    meanMemberSpeed?: number
+  }
 }
 export type WindValue = ResultValue & {
   u10: number
@@ -132,7 +150,26 @@ export type DailyTemperature = Pick<
   minimum: number
   completeDay: boolean
 }
+export type EnsembleUnavailable = ResultPoint & {
+  time: string
+  memberId: string
+  code: string
+  error: string
+}
+export type EnsembleSample = ResultValue &
+  Partial<WindValue> & { daily?: DailyTemperature; accumulation?: Accumulation }
+export type EnsembleMetadata = {
+  kind: 'members' | 'mean'
+  missingPolicy: 'exclude-unavailable-per-location-time'
+  /** Exact member samples used by the mean, not independently generated summary data. */
+  samples?: EnsembleSample[]
+  meanDefinition?: string
+  allMemberIds: string[]
+  memberIds: string[]
+  unavailable: EnsembleUnavailable[]
+}
 export type ResultMetadata = {
+  ensemble?: EnsembleMetadata
   ok: true
   taskId: string
   /** Present only for Observation Data; independent of the task generator identity. */

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   GENERATOR_VERSION,
   VARIABLE_GENERATOR_VERSION,
+  ENSEMBLE_GENERATOR_VERSION,
   RESULT_QUERY_LIMITS,
   unavailable,
   type DownscalingTask,
@@ -11,6 +12,7 @@ import {
   type WindowSampling,
   type ResultMetadata,
 } from './contracts'
+import { selectEnsemble, queryEnsemble } from './ensemble-results'
 import { temperatureDay } from './temperature-aggregation'
 import { temperatureAt } from './temperature-field'
 import { windAt, pressureAt, precipitationAt } from './variable-fields'
@@ -30,11 +32,25 @@ const windowSchema = z
   })
   .refine((value) => value.west <= value.east && value.south <= value.north)
 const timesSchema = z.array(instantSchema).min(1).max(RESULT_QUERY_LIMITS.times)
+const ensembleSchema = z
+  .strictObject({
+    kind: z.enum(['members', 'mean']),
+    memberIds: z
+      .array(z.string().min(1).max(64))
+      .min(1)
+      .max(RESULT_QUERY_LIMITS.members)
+      .optional(),
+  })
+  .refine(
+    (selection) =>
+      !selection.memberIds || new Set(selection.memberIds).size === selection.memberIds.length,
+  )
 const querySchema = z.discriminatedUnion('kind', [
   z
     .strictObject({
       kind: z.literal('points'),
       layer: layerSchema,
+      ensemble: ensembleSchema.optional(),
       observationMode: z.enum(['stations', 'interpolated']).optional(),
       temporalResolution: z.enum(['hourly', 'daily']).optional(),
       points: z.array(pointSchema).min(1).max(RESULT_QUERY_LIMITS.points),
@@ -44,6 +60,7 @@ const querySchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('time-series'),
     layer: layerSchema,
+    ensemble: ensembleSchema.optional(),
     observationMode: z.enum(['stations', 'interpolated']).optional(),
     temporalResolution: z.enum(['hourly', 'daily']).optional(),
     point: pointSchema,
@@ -54,6 +71,7 @@ const querySchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.enum(['grid', 'export']),
     layer: layerSchema,
+    ensemble: ensembleSchema.optional(),
     observationMode: z.enum(['stations', 'interpolated']).optional(),
     temporalResolution: z.enum(['hourly', 'daily']).optional(),
     window: windowSchema,
@@ -62,6 +80,7 @@ const querySchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('preview'),
     layer: layerSchema,
+    ensemble: ensembleSchema.optional(),
     observationMode: z.enum(['stations', 'interpolated']).optional(),
     temporalResolution: z.enum(['hourly', 'daily']).optional(),
     window: windowSchema,
@@ -75,7 +94,8 @@ export function resultAvailability(
 ) {
   if (
     task.generatorVersion !== GENERATOR_VERSION &&
-    task.generatorVersion !== VARIABLE_GENERATOR_VERSION
+    task.generatorVersion !== VARIABLE_GENERATOR_VERSION &&
+    task.generatorVersion !== ENSEMBLE_GENERATOR_VERSION
   ) {
     return unavailable(
       'INCOMPATIBLE_GENERATOR',
@@ -83,10 +103,12 @@ export function resultAvailability(
     )
   }
   if (
-    task.configuration.resolvedMethod !== 'deterministic' ||
-    (task.generatorVersion === GENERATOR_VERSION
-      ? task.configuration.variable !== 'temperature'
-      : !['wind', 'pressure', 'precipitation'].includes(task.configuration.variable))
+    task.generatorVersion === ENSEMBLE_GENERATOR_VERSION
+      ? task.configuration.resolvedMethod !== 'probabilistic'
+      : task.configuration.resolvedMethod !== 'deterministic' ||
+        (task.generatorVersion === GENERATOR_VERSION
+          ? task.configuration.variable !== 'temperature'
+          : !['wind', 'pressure', 'precipitation'].includes(task.configuration.variable))
   ) {
     return unavailable(
       'UNAVAILABLE_COMBINATION',
@@ -111,6 +133,12 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
       'UNAVAILABLE_QUERY',
       'The observation layer requires an explicit stations or interpolated mode; other layers do not accept it.',
     )
+  const selection = selectEnsemble(task, requested.ensemble)
+  if (selection && 'ok' in selection) return selection
+  const memberFactor =
+    requested.layer === 'downscaled' && selection
+      ? selection.memberIds.length + (selection.kind === 'mean' ? 1 : 0)
+      : 1
   const { region, timeRange } = task.configuration
   const daily = requested.temporalResolution === 'daily'
   if (daily && !['temperature', 'precipitation'].includes(task.configuration.variable)) {
@@ -147,7 +175,7 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
       )
     }
     const count = (last - first) / step + 1
-    if (count > RESULT_QUERY_LIMITS.times) {
+    if (count > RESULT_QUERY_LIMITS.times || count * memberFactor > RESULT_QUERY_LIMITS.values) {
       return unavailable('QUERY_LIMIT_EXCEEDED', 'Request a time slice of at most 168 instants.')
     }
     query = {
@@ -172,23 +200,34 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
         'The entire window must be inside task coverage; it is not silently clipped.',
       )
     }
+    if (requested.times.length * memberFactor > RESULT_QUERY_LIMITS.values)
+      return unavailable(
+        'QUERY_LIMIT_EXCEEDED',
+        'The time/member product exceeds the bounded result budget.',
+      )
     const result =
       requested.layer === 'observation' && requested.observationMode === 'stations'
         ? stationWindow(
             window,
-            requested.times.length,
+            requested.times.length * memberFactor,
             requested.kind === 'preview' ? requested.maxPoints : undefined,
           )
         : windowPoints(
             task,
             requested.layer,
             window,
-            requested.times.length,
+            requested.times.length * memberFactor,
             requested.kind === 'preview' ? requested.maxPoints : undefined,
           )
     if ('ok' in result) return result
     sampling = result.grid
     query = { layer: requested.layer, points: result.points, times: requested.times }
+  }
+  if (query.points.length * query.times.length * memberFactor > RESULT_QUERY_LIMITS.values) {
+    return unavailable(
+      'QUERY_LIMIT_EXCEEDED',
+      'Request fewer points, times or members: at most 256 member sample/mean rows, including the samples returned with each mean.',
+    )
   }
   if (
     query.points.some(
@@ -243,6 +282,14 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
   }
   if (query.layer === 'observation') {
     return queryObservations(task, requested, query, metadata)
+  }
+  if (selection && query.layer === 'downscaled') {
+    return queryEnsemble(
+      task,
+      { ...query, temporalResolution: requested.temporalResolution },
+      selection,
+      metadata,
+    )
   }
   if (daily && task.configuration.variable === 'temperature') {
     const values = []
@@ -349,6 +396,9 @@ export function probeTaskResult(task: DownscalingTask) {
       layer,
       points: [{ longitude: region.west, latitude: region.south }],
       times: [new Date(timeRange.start).toISOString()],
+      ...(task.configuration.resolvedMethod === 'probabilistic'
+        ? { ensemble: { kind: 'members', memberIds: ['member-01'] } }
+        : {}),
     })
     // A declared data gap is not a corrupt generator or a failed task. Query callers still
     // receive explicit unavailable replies; no missing value is converted to zero.
