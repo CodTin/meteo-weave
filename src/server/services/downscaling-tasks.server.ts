@@ -26,7 +26,9 @@ import {
 } from '@/features/downscaling-tasks/service/contracts'
 
 export function submitDownscalingTask(input: unknown): TaskReply {
-  const admission = admitDownscalingConfiguration(input)
+  // Admission and persisted timestamps must describe the same server-owned instant.
+  const now = Date.now()
+  const admission = admitDownscalingConfiguration(input, now)
   if (!admission.ok) return admission
   const generatorVersion =
     admission.configuration.resolvedMethod === 'probabilistic'
@@ -39,7 +41,6 @@ export function submitDownscalingTask(input: unknown): TaskReply {
     generatorVersion,
   })
   if (unavailableResult) return unavailableResult
-  const now = Date.now()
   const id = crypto.randomUUID()
   return {
     ok: true,

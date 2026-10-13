@@ -1,3 +1,4 @@
+import { previewSampling } from './preview-sampling'
 import {
   RESULT_QUERY_LIMITS,
   unavailable,
@@ -92,27 +93,12 @@ export function windowPoints(
   }
   // Determine the sampling arithmetically, before allocating even an axis. Exact windows
   // retain every node; only an explicitly requested preview may decimate the target grid.
-  const targetColumns =
-    count <= budget
-      ? columns
-      : Math.min(columns, Math.max(1, Math.floor(Math.sqrt((budget * columns) / rows))), budget)
-  const targetRows = count <= budget ? rows : Math.min(rows, Math.floor(budget / targetColumns))
-  function sampling(size: number, target: number) {
-    const stride = target === 1 ? size : Math.max(1, Math.ceil((size - 1) / (target - 1)))
-    return { stride, count: target === 1 ? 1 : Math.ceil((size - 1) / stride) + 1 }
-  }
-  const sampledX = sampling(columns, targetColumns)
-  const sampledY = sampling(rows, targetRows)
-  const returnedPoints = sampledX.count * sampledY.count
-  const points: ResultPoint[] = []
-  for (let row = 0; row < sampledY.count; row++) {
-    for (let column = 0; column < sampledX.count; column++) {
-      points.push({
-        longitude: longitude(Math.min(x.last, x.first + column * sampledX.stride)),
-        latitude: latitude(Math.min(y.last, y.first + row * sampledY.stride)),
-      })
-    }
-  }
+  const plan = previewSampling(columns, rows, budget)
+  const points = plan.indices.map(({ column, row }) => ({
+    longitude: longitude(x.first + column),
+    latitude: latitude(y.first + row),
+  }))
+  const returnedPoints = points.length
   return {
     points,
     grid: {
@@ -121,8 +107,8 @@ export function windowPoints(
       order: 'time-row-column',
       logicalGrid: grid,
       window: { firstColumn: x.first, lastColumn: x.last, firstRow: y.first, lastRow: y.last },
-      stride: { columns: sampledX.stride, rows: sampledY.stride },
-      sampled: { columns: sampledX.count, rows: sampledY.count },
+      stride: plan.stride,
+      sampled: plan.sampled,
       availablePoints: count,
       returnedPoints,
     },

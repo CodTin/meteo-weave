@@ -1,8 +1,23 @@
+import { windDiagnostics } from './wind-diagnostics'
 import { unavailable, type DownscalingTask, type ResultPoint, type ResultQuery } from './contracts'
 import { taskGrid } from './result-grid'
-import { coveredHours } from './temperature-aggregation'
+import { coveredHours, accumulationCoverage } from './temporal-summary'
 
 const round = (value: number) => Math.round(value * 10_000) / 10_000
+
+/** Exact emitted nodes need only themselves, even when inverse division rounds below an integer.
+ * Compare coordinates, not an epsilon: nearby interior points still require both neighbors.
+ * Keep the v2 interpolation arithmetic unchanged for non-native coordinates.
+ */
+function interpolationAxis(point: number, origin: number, end: number, spacing: number) {
+  const index = (point - origin) / spacing
+  const nearest = Math.min(end, origin + Math.round(index) * spacing)
+  if (point === nearest || point === end) return [point, point, 0] as const
+  const lower = origin + Math.floor(index) * spacing
+  const upper = Math.min(end, lower + spacing)
+  const fraction = upper === lower ? 0 : Math.max(0, Math.min(1, (point - lower) / (upper - lower)))
+  return [lower, upper, fraction] as const
+}
 
 /** V2 components are sampled before deriving a vector magnitude or direction. */
 function sample(
@@ -27,12 +42,8 @@ function sample(
   const { west, east, south, north } = grid.extent
   const dx = grid.spacingDegrees.longitude
   const dy = grid.spacingDegrees.latitude
-  const x0 = west + Math.floor((point.longitude - west) / dx) * dx
-  const y0 = south + Math.floor((point.latitude - south) / dy) * dy
-  const x1 = Math.min(east, x0 + dx)
-  const y1 = Math.min(north, y0 + dy)
-  const x = x1 === x0 ? 0 : Math.max(0, Math.min(1, (point.longitude - x0) / (x1 - x0)))
-  const y = y1 === y0 ? 0 : Math.max(0, Math.min(1, (point.latitude - y0) / (y1 - y0)))
+  const [x0, x1, x] = interpolationAxis(point.longitude, west, east, dx)
+  const [y0, y1, y] = interpolationAxis(point.latitude, south, north, dy)
   let value = 0
   for (const [lon, lat, weight] of [
     [x0, y0, (1 - x) * (1 - y)],
@@ -90,16 +101,7 @@ export function windAt(
     )
   if (!Number.isFinite(u10) || !Number.isFinite(v10))
     return unavailable('GENERATION_FAILED', 'The wind components could not be reconstructed.')
-  const speed = round(Math.hypot(u10, v10))
-  return {
-    u10,
-    v10,
-    speed,
-    value: speed,
-    fromDirection:
-      speed === 0 ? null : round(((Math.atan2(-u10, -v10) * 180) / Math.PI + 360) % 360) % 360,
-    directionStatus: speed === 0 ? ('calm' as const) : ('available' as const),
-  }
+  return windDiagnostics(u10, v10)
 }
 
 /** Synthetic sea-level pressure in hPa, not converted/relabelled SP. */
@@ -174,15 +176,6 @@ export function precipitationAt(
   }
   return {
     value: round(value),
-    accumulation: {
-      start: new Date(hours[0]!).toISOString(),
-      end: new Date(hours.at(-1)! + 3_600_000).toISOString(),
-      requestedStart: new Date(start).toISOString(),
-      requestedEnd: new Date(start + duration * 3_600_000).toISOString(),
-      bounds: '[start,end)' as const,
-      sampledHours: hours.length,
-      expectedHours: duration,
-      complete: hours.length === duration,
-    },
+    accumulation: accumulationCoverage(start, duration, hours),
   }
 }

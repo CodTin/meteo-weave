@@ -12,7 +12,7 @@ function files(directory: string): string[] {
 }
 const failures: string[] = []
 const scanner = new Bun.Transpiler({ loader: 'tsx' })
-for (const file of files(join(root, 'tests/e2e')).filter((file) => /\.[cm]?[jt]sx?$/.test(file))) {
+for (const file of files(join(root, 'tests')).filter((file) => /\.[cm]?[jt]sx?$/.test(file))) {
   if (relative(root, file) === 'tests/e2e/browser-guard.ts') continue
   // Parse imports/re-exports/require calls, not comments or string-literal lookalikes.
   const source = readFileSync(file, 'utf8')
@@ -43,9 +43,13 @@ for (const file of files(join(root, 'tests/e2e')).filter((file) => /\.[cm]?[jt]s
     CallExpression: checkConstructor,
     NewExpression: checkConstructor,
   }).visit(parsed.program)
-  if (imports.some(({ path }) => path === '@playwright/test' || path === 'playwright/test')) {
+  if (
+    imports.some(({ path }) =>
+      ['@playwright/test', 'playwright/test', 'playwright', 'playwright-core'].includes(path),
+    )
+  ) {
     failures.push(
-      `${relative(root, file)}: use ./browser-guard for runtime Playwright imports; type-only imports remain allowed.`,
+      `${relative(root, file)}: use tests/e2e/browser-guard for runtime Playwright imports; type-only imports remain allowed.`,
     )
   }
 }
