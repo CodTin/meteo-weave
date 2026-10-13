@@ -34,18 +34,39 @@ export async function openTaskStorage() {
   }
 
   return {
+    delete: (ownerId: string, id: string) =>
+      new Promise<boolean>((resolve, reject) => {
+        const tx = database.transaction('tasks', 'readwrite')
+        const store = tx.objectStore('tasks')
+        const request = store.getKey([ownerId, id])
+        let deleted = false
+        tx.oncomplete = () => resolve(deleted)
+        tx.onabort = () => reject(tx.error ?? new Error('Task deletion aborted.'))
+        tx.onerror = () => reject(tx.error ?? request.error)
+        request.onsuccess = () => {
+          if (request.result !== undefined) {
+            store.delete([ownerId, id])
+            deleted = true
+          }
+        }
+      }),
     add: (task: DownscalingTask) => transaction('readwrite', (store) => store.add(task)),
     saveState: (task: DownscalingTask) =>
-      new Promise<DownscalingTask>((resolve, reject) => {
+      new Promise<DownscalingTask | undefined>((resolve, reject) => {
         const tx = database.transaction('tasks', 'readwrite')
         const store = tx.objectStore('tasks')
         const request = store.get([task.ownerId, task.id])
-        let saved = task
+        let saved: DownscalingTask | undefined = task
         tx.oncomplete = () => resolve(saved)
         tx.onabort = () =>
           reject(tx.error ?? new Error('Saved task changed or became unreadable; retry the read.'))
         tx.onerror = () => reject(tx.error ?? request.error)
         request.onsuccess = () => {
+          // Deletion wins over a response generated from an older snapshot, including other tabs.
+          if (request.result === undefined) {
+            saved = undefined
+            return
+          }
           const current = validateTaskRecord(request.result)
           if (!current.ok) {
             tx.abort()
