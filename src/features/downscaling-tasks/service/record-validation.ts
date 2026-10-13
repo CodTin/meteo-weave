@@ -76,7 +76,10 @@ const record = z
     failureReason: z.string().min(1).max(500).nullable(),
     dataSeed: z.number().int().min(0).max(0xffff_ffff),
     generatorVersion: z.string().min(1).max(100),
+    referenceSeed: z.number().int().min(0).max(0xffff_ffff).optional(),
+    referenceVersion: z.string().min(1).max(100).optional(),
   })
+  .refine((value) => (value.referenceSeed === undefined) === (value.referenceVersion === undefined))
   .refine(
     (value) =>
       Date.parse(value.createdAt) <= Date.parse(value.submittedAt) &&

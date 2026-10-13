@@ -14,11 +14,13 @@ import {
 import { temperatureDay } from './temperature-aggregation'
 import { temperatureAt } from './temperature-field'
 import { windAt, pressureAt, precipitationAt } from './variable-fields'
+import { stationWindow } from './observation-reference'
+import { queryObservations } from './observation-queries'
 import { windowPoints } from './result-grid'
 
 const pointSchema = z.strictObject({ longitude: z.number(), latitude: z.number() })
 const instantSchema = z.iso.datetime({ offset: true })
-const layerSchema = z.enum(['original', 'downscaled'])
+const layerSchema = z.enum(['original', 'downscaled', 'observation'])
 const windowSchema = z
   .strictObject({
     west: z.number().min(-180).max(180),
@@ -33,6 +35,7 @@ const querySchema = z.discriminatedUnion('kind', [
     .strictObject({
       kind: z.literal('points'),
       layer: layerSchema,
+      observationMode: z.enum(['stations', 'interpolated']).optional(),
       temporalResolution: z.enum(['hourly', 'daily']).optional(),
       points: z.array(pointSchema).min(1).max(RESULT_QUERY_LIMITS.points),
       times: timesSchema,
@@ -41,6 +44,7 @@ const querySchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('time-series'),
     layer: layerSchema,
+    observationMode: z.enum(['stations', 'interpolated']).optional(),
     temporalResolution: z.enum(['hourly', 'daily']).optional(),
     point: pointSchema,
     timeRange: z
@@ -50,6 +54,7 @@ const querySchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.enum(['grid', 'export']),
     layer: layerSchema,
+    observationMode: z.enum(['stations', 'interpolated']).optional(),
     temporalResolution: z.enum(['hourly', 'daily']).optional(),
     window: windowSchema,
     times: timesSchema,
@@ -57,6 +62,7 @@ const querySchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('preview'),
     layer: layerSchema,
+    observationMode: z.enum(['stations', 'interpolated']).optional(),
     temporalResolution: z.enum(['hourly', 'daily']).optional(),
     window: windowSchema,
     times: timesSchema,
@@ -100,6 +106,11 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
       'Use points, time-series, grid, preview or export: at most 64 requested points, 256 grid points, 168 times and 256 total values.',
     )
   const requested = parsed.data
+  if ((requested.layer === 'observation') !== (requested.observationMode !== undefined))
+    return unavailable(
+      'UNAVAILABLE_QUERY',
+      'The observation layer requires an explicit stations or interpolated mode; other layers do not accept it.',
+    )
   const { region, timeRange } = task.configuration
   const daily = requested.temporalResolution === 'daily'
   if (daily && !['temperature', 'precipitation'].includes(task.configuration.variable)) {
@@ -161,13 +172,20 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
         'The entire window must be inside task coverage; it is not silently clipped.',
       )
     }
-    const result = windowPoints(
-      task,
-      requested.layer,
-      window,
-      requested.times.length,
-      requested.kind === 'preview' ? requested.maxPoints : undefined,
-    )
+    const result =
+      requested.layer === 'observation' && requested.observationMode === 'stations'
+        ? stationWindow(
+            window,
+            requested.times.length,
+            requested.kind === 'preview' ? requested.maxPoints : undefined,
+          )
+        : windowPoints(
+            task,
+            requested.layer,
+            window,
+            requested.times.length,
+            requested.kind === 'preview' ? requested.maxPoints : undefined,
+          )
     if ('ok' in result) return result
     sampling = result.grid
     query = { layer: requested.layer, points: result.points, times: requested.times }
@@ -222,6 +240,9 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
       interpolation: 'bilinear',
       crs: 'EPSG:4326',
     },
+  }
+  if (query.layer === 'observation') {
+    return queryObservations(task, requested, query, metadata)
   }
   if (daily && task.configuration.variable === 'temperature') {
     const values = []
