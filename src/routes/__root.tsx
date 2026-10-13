@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import { clientEnv } from '@/lib/env/client'
 import stylesheet from '@/styles/globals.css?url'
+import { NotFoundPage } from '@/components/entry/not-found-page'
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
@@ -16,14 +17,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     links: [{ rel: 'stylesheet', href: stylesheet }],
   }),
   component: Outlet,
-  // No product pages or custom 404 UI are part of the bootstrap.
-  notFoundComponent: () => null,
+  // Router preserves the HTTP 404 status for unmatched document requests.
+  notFoundComponent: NotFoundPage,
   shellComponent: RootDocument,
 })
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" className="dark">
       <head>
         <HeadContent />
       </head>

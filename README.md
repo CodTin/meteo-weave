@@ -1,8 +1,14 @@
 # MeteoWeave
 
-气象降尺度演示平台。目前仅完成**工程初始化**：依赖、目录、SSR 外壳和开发工具链。
-没有首页、登录页、地图、表单、业务接口、Mock 账号或降尺度逻辑；启动后空白是预期行为。
-因为没有任何页面路由，`/` 返回带完整文档外壳的 404；添加首个真实路由后再调整对应冒烟断言。
+气象降尺度演示平台。已提供**中文深色产品入口**、UI-only 登录表单、响应式工作区预览、可恢复的路由加载状态与 404，以及 SSR 和开发工具链。
+
+- `/`：产品入口，说明演示范围并引导到登录页，返回 HTTP 200。
+- `/login`：本地表单校验、密码可见性、Tab、角色说明 Dialog 与通知，明确认证尚未接入；不发送凭证或创建会话。
+- `/dashboard`、`/tasks/new`、`/tasks`、`/settings`：公开工作区预览，共享导航与面包屑，展示流程、字段表格及未接入状态；不会执行任务或保存设置。
+- 工作区模块加载延迟／失败时保留导航与恢复操作；可明确重新加载当前页或返回安全入口。正常访问保留真实 SSR 与水合。
+- 未知地址：返回真实 HTTP 404，显示原因并提供返回平台入口和登录入口的链接。
+
+当前没有真实认证、Mock 账号、地图、业务接口或降尺度计算。页面的分辨率图是流程示意，不是计算结果。
 
 需求依据：[平台设计](docs/design/platform-design.md)、[技术栈选型](docs/design/tech-stack.md)。
 术语沿用 [GLOSSARY.md](GLOSSARY.md)。原始设计文件未修改。
@@ -36,7 +42,7 @@ bun run dev
 | `bun run test` / `bun run test:watch`     | Vitest 单次 / 监听测试                      |
 | `bun run test:coverage`                   | V8 覆盖率报告                               |
 | `bun run test:e2e:install`                | 安装 Playwright 三种浏览器                  |
-| `bun run test:e2e`                        | 构建、启动生产服务并运行 Chromium 冒烟测试  |
+| `bun run test:e2e`                        | 构建、启动生产服务并运行 Chromium E2E 测试  |
 | `bun run test:e2e:all`                    | Chromium、Firefox、WebKit 全部运行          |
 | `bun run test:e2e:ui`                     | Playwright 交互调试                         |
 | `bun run check`                           | 格式、Lint、类型、单元与组件环境检查        |
@@ -46,26 +52,44 @@ bun run dev
 
 请使用 **`bun run test`**，不是 `bun test`：项目选用 Vitest，而非 Bun 内置测试运行器。
 Playwright 首次在其他机器运行前需安装浏览器；Linux CI 可使用 `bunx playwright install --with-deps`。
+默认生产测试端口为 4173；并行工作树请使用独立端口，例如 `E2E_PORT=4181 bun run test:e2e`。
+浏览器回归覆盖入口、登录交互、工作区导航／表格和真实模块的等待 → 成功、失败 → 重新加载／安全返回，
+包括直接访问模块失败及正常 SSR DOM 保留；保持严格浏览器错误与 axe 检查。
+在 390、768、1440px 与 reduced-motion 下检查键盘导航、溢出、字体不可下载时的可用性及工作区加载布局稳定性。
+
+## Agent 开发与交付
+
+开始或恢复工作：`bun run agent:doctor`，按 `docs/agents/workflow.md` 保留检查点与证据。
+完整本地验收：`bun run agent:verify`（调用同一个 `check:all` 并记录提交和日志）。
+授权发布后：`bun run agent:delivery` 只读检查远端提交与 CI；通过前不关闭实现工单。
+GitHub Verify 工作流配置在 `.github/workflows/verify.yml`，运行时版本以项目配置为准。
+
+路由使用目录式 TanStack 文件路由：工作区布局在 `src/routes/_workspace/route.tsx`，
+任务页在 `src/routes/_workspace/tasks/`；URL 与路由 ID 保持不变。详情及验收矩阵见
+`docs/development.md` 第 3 节。编码判断标准见 `CODING_STANDARDS.md`。
 
 ## 目录
 
 ```text
 src/
-  routes/                  文件路由；目前只有 __root.tsx 文档外壳
+  routes/                  文档外壳、入口、登录与工作区路由／生命周期
   router.tsx               每次 SSR 请求独立的 Router 和 QueryClient
   start.ts                 SSR 默认设置、全局监控中间件
   client.tsx / server.ts   客户端水合、服务器入口
   components/
-    ui/                    预留 shadcn 基础组件
+    entry/                 入口外壳、分辨率示意、可恢复的 404
+    workspace/             导航、面包屑、加载占位与恢复反馈
+    ui/                    共享按钮、卡片、表单、Tabs、Dialog（shadcn 语义 tokens）
     maps/ charts/ tables/ forms/  预留跨业务复用的组件
   features/
-    auth/                  Mock 认证与角色入口（仅目录）
-    dashboard/             任务概览（仅目录）
+    auth/                  认证功能预留（仅目录）
+    login/                 UI-only 登录校验与角色说明（无认证服务）
+    dashboard/             工作区流程与未接入状态预览
     data-catalog/          数据源与数据浏览（仅目录）
-    downscaling-tasks/     任务配置、提交与管理（仅目录）
+    downscaling-tasks/     配置流程说明与任务字段表格（无提交／管理服务）
     result-analysis/      结果分析各维度及导出（仅目录）
     task-comparison/       任务对比（仅目录）
-    user-settings/         用户设置（仅目录）
+    user-settings/         账号与偏好说明（不保存设置）
   lib/
     env/                   分离的公开 / 服务器环境变量验证
     query/                 QueryClient 工厂
@@ -77,7 +101,7 @@ src/
     services/              预留服务器内部数据访问
     mocks/                 预留 Mock 数据服务
   hooks/ stores/ types/    预留共享 hooks、Zustand 状态和类型
-  styles/                  Tailwind v4、shadcn 中性默认变量
+  styles/                  Tailwind v4、深色语义 tokens、字体回退与 reduced-motion
 public/                    公开静态资源
 data/                     原始资料及 mock/、precomputed/ 数据预留目录
 tests/                    unit/、components/、e2e/、fixtures/
@@ -102,11 +126,11 @@ docs/                     设计与开发说明
 数据库、Drizzle、better-auth、Storybook、PWA、国际化、真实气象 API 接入均未引入。
 监控默认关闭，只有主动配置后才启用；没有创建或连接任何云端项目。
 
-本地 Git 已初始化且 Husky 已启用，但**未暂存文件、未创建提交、未设置远程仓库**。
+Husky 提交检查已启用；初始化时的 Git／工具链审计保留在开发说明的历史基线中。
 
 ## 已知验证限制
 
-Chromium 和 WebKit 的生产外壳 / 可访问性冒烟已通过。当前机器上的 Playwright Firefox
+历史初始化阶段的 Chromium 和 WebKit 生产外壳 / 可访问性冒烟已通过；当前 Spec01 新增流程以 Chromium 验证，不据此宣称 WebKit 全套通过。当前机器上的 Playwright Firefox
 在打开应用前报 `Could not find profile folder`；默认、独立临时目录、持久化临时 profile
 以及重新安装浏览器均能复现，未宣称 Firefox 通过。`test:e2e` 使用 Chromium 作为默认冒烟，
 `test:e2e:all` 保留完整三浏览器检查并如实报告失败。修复 Firefox 环境后可直接重跑，无需修改应用。
