@@ -4,6 +4,11 @@ import type { DemoAccount } from '@/features/auth/demo-accounts'
 export const TASK_SCHEMA_VERSION = 1
 export const GENERATOR_VERSION = 'synthetic-temperature-v1'
 export const VARIABLE_GENERATOR_VERSION = 'synthetic-variables-v2'
+// This identity is also the permanent fallback for pre-observation schema-1 backups.
+export const OBSERVATION_REFERENCE = {
+  referenceSeed: 1729,
+  referenceVersion: 'synthetic-observations-v1',
+} as const
 export const TASK_DURATION_MS = 2_500
 export const RESULT_QUERY_LIMITS = { points: 64, times: 168, values: 256, gridPoints: 256 } as const
 
@@ -21,6 +26,9 @@ export type DownscalingTask = {
   failureReason: string | null
   dataSeed: number
   generatorVersion: string
+  /** Absent only in legacy backups; both absent means the immutable v1 reference. */
+  referenceSeed?: number
+  referenceVersion?: string
 }
 
 export type Unavailable = { ok: false; code: string; error: string }
@@ -49,40 +57,54 @@ export type WindowSampling = {
   availablePoints: number
   returnedPoints: number
 }
+export type ObservationReference = { referenceSeed: number; referenceVersion: string }
+export type ObservationStation = ResultPoint & { id: string }
+export type ObservationSupport =
+  | { mode: 'stations'; station: ObservationStation; distanceKm: number }
+  | { mode: 'interpolated'; stations: Array<{ station: ObservationStation; weight: number }> }
+
 export type ResultQuery = {
   /** Native queries stay unchanged. Opt into hourly values, or daily temperature/rain statistics. */
   temporalResolution?: 'hourly' | 'daily'
 } & (
+  | { layer: 'original' | 'downscaled'; observationMode?: never }
   | {
-      kind: 'points'
-      layer: 'original' | 'downscaled'
-      points: ResultPoint[]
-      times: string[]
+      layer: 'observation'
+      /** Explicit: station points match within 25 km; station windows list actual stations. */
+      observationMode: 'stations' | 'interpolated'
     }
-  | {
-      kind: 'time-series'
-      layer: 'original' | 'downscaled'
-      point: ResultPoint
-      /** Inclusive task-aligned instants: daily historical snapshots or hourly forecast. */
-      timeRange: { start: string; end: string }
-    }
-  | {
-      /** Inclusive bounding box of native logical nodes, never a resampled image. */
-      kind: 'grid' | 'export'
-      layer: 'original' | 'downscaled'
-      window: ResultWindow
-      times: string[]
-    }
-  | {
-      kind: 'preview'
-      layer: 'original' | 'downscaled'
-      window: ResultWindow
-      times: string[]
-      /** Spatial budget, further bounded by the shared total-value limit. */
-      maxPoints: number
-    }
-)
-export type ResultValue = ResultPoint & { time: string; value: number }
+) &
+  (
+    | {
+        kind: 'points'
+        points: ResultPoint[]
+        times: string[]
+      }
+    | {
+        kind: 'time-series'
+        point: ResultPoint
+        /** Inclusive task-aligned instants: daily historical snapshots or hourly forecast. */
+        timeRange: { start: string; end: string }
+      }
+    | {
+        /** Inclusive bounding box of native logical nodes, never a resampled image. */
+        kind: 'grid' | 'export'
+        window: ResultWindow
+        times: string[]
+      }
+    | {
+        kind: 'preview'
+        window: ResultWindow
+        times: string[]
+        /** Spatial budget, further bounded by the shared total-value limit. */
+        maxPoints: number
+      }
+  )
+export type ResultValue = ResultPoint & {
+  time: string
+  value: number
+  observation?: ObservationSupport
+}
 export type WindValue = ResultValue & {
   u10: number
   v10: number
@@ -113,6 +135,17 @@ export type DailyTemperature = Pick<
 export type ResultMetadata = {
   ok: true
   taskId: string
+  /** Present only for Observation Data; independent of the task generator identity. */
+  reference?: ObservationReference & {
+    kind: 'synthetic-stations'
+    spacingDegrees: { longitude: 1; latitude: 1 }
+    extent: ResultWindow
+    maximumMatchDistanceKm: 25
+    distanceMetric: 'great-circle'
+    earthRadiusKm: 6371.0088
+    interpolation: 'bilinear-station-values'
+    missingPolicy: 'required-support-unavailable'
+  }
   layer: ResultQuery['layer']
   displayTimezone: 'UTC'
   temporalStatistic: 'instantaneous' | 'accumulation' | 'daily-mean'
@@ -123,8 +156,9 @@ export type ResultMetadata = {
     generatorVersion: string
   }
   grid: {
-    nominalSpacingKm: number
-    interpolation: 'bilinear'
+    /** Null for the angular reference station lattice; see spacingDegrees on its logical grid. */
+    nominalSpacingKm: number | null
+    interpolation: 'bilinear' | 'nearest-station'
     crs: 'EPSG:4326'
   } & ({ sampling: 'requested-points' } | WindowSampling)
 }

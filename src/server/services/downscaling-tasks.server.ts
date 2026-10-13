@@ -10,6 +10,7 @@ import {
 import { admitDownscalingConfiguration } from './downscaling-admission.server'
 import { requireDemoAccount } from './demo-session.server'
 import {
+  OBSERVATION_REFERENCE,
   GENERATOR_VERSION,
   VARIABLE_GENERATOR_VERSION,
   TASK_SCHEMA_VERSION,
@@ -48,6 +49,7 @@ export function submitDownscalingTask(input: unknown): TaskReply {
       failureReason: null,
       dataSeed: crypto.getRandomValues(new Uint32Array(1))[0]!,
       generatorVersion,
+      ...OBSERVATION_REFERENCE,
     },
   }
 }
