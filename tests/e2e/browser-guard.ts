@@ -1,5 +1,8 @@
 import { expect, test as base } from '@playwright/test'
 
+export { expect }
+export type { Page, Locator, BrowserContext, APIResponse } from '@playwright/test'
+
 type BrowserFailure = {
   kind: 'page' | 'console' | 'request' | 'response'
   text: string
@@ -36,6 +39,8 @@ export const test = base.extend<BrowserGuard>({
     async (
       {
         page,
+        javaScriptEnabled,
+        baseURL,
         expectedModuleFailures,
         expectedFontFailures,
         expectedDocument404s,
@@ -92,6 +97,16 @@ export const test = base.extend<BrowserGuard>({
           )
             return false
         }
+        // Chromium implements disabled JavaScript using CSP. No other failure is allowed.
+        if (
+          javaScriptEnabled === false &&
+          error.kind === 'request' &&
+          error.resourceType === 'script' &&
+          error.text === 'csp' &&
+          new URL(error.url).origin === new URL(baseURL ?? page.url()).origin &&
+          new URL(error.url).pathname.startsWith('/assets/')
+        )
+          return false
         if (expectedFontFailures.has(error.url)) {
           if (
             error.kind === 'request' &&

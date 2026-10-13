@@ -1,4 +1,4 @@
-import { expect, type BrowserContext, type Page } from '@playwright/test'
+import { expect, type BrowserContext, type Page } from './browser-guard'
 
 // Always exercise the published login form; never manufacture an authenticated cookie.
 export async function submitDemoLogin(page: Page, account = 'researcher') {

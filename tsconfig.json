@@ -21,7 +21,7 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "tests", "*.config.ts"],
+  "include": ["src", "tests", "*.config.ts", "scripts/**/*.ts"],
   "exclude": [
     "node_modules",
     ".output",

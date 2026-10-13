@@ -26,3 +26,17 @@ read `docs/agents/triage-labels.md`.
 
 This is a single-context repo. Before exploring the codebase or proposing
 domain changes, read `docs/agents/domain.md`.
+
+### Execution and recovery
+
+Before implementation, toolchain setup or resuming interrupted work, read
+`docs/agents/workflow.md` and run `bun run agent:doctor`.
+
+### Routes and SSR
+
+Before changing route organization, client startup, SSR or recovery boundaries,
+read `docs/development.md` section 3 and its lifecycle test matrix.
+
+### Review
+
+During review, read `CODING_STANDARDS.md`; mechanical rules are enforced by `bun run check`.

@@ -1,6 +1,7 @@
 import { signInDemo, submitDemoLogin } from './demo-login'
+import { taskCase, workspaceCases, workspaceCase } from './workspace-cases'
 import AxeBuilder from '@axe-core/playwright'
-import { expect, type Page, type Locator } from '@playwright/test'
+import { expect, type Page, type Locator } from './browser-guard'
 
 import { test } from './browser-guard'
 
@@ -9,7 +10,7 @@ test.beforeEach(async ({ context }) => {
 })
 
 // Intercept the real production route module, before focus/intent can preload it.
-const taskModule = /\/assets\/_workspace\.tasks\.index(?:\.lazy)?-[^/]+\.js$/
+const taskModule = taskCase.module
 
 async function expectAccessible(page: Page) {
   expect(
@@ -184,29 +185,9 @@ test('entry and remaining workspace destinations load inside the same usable she
   page,
 }) => {
   await page.goto('/')
-  const destinations = [
-    {
-      module: /\/assets\/_workspace\.dashboard(?:\.lazy)?-[^/]+\.js$/,
-      title: 'Dashboard',
-      link: '预览工作区',
-      path: '/dashboard',
-      content: '任务服务尚未接入',
-    },
-    {
-      module: /\/assets\/_workspace\.settings(?:\.lazy)?-[^/]+\.js$/,
-      title: '设置',
-      link: '设置',
-      path: '/settings',
-      content: '分析偏好暂不支持保存',
-    },
-    {
-      module: /\/assets\/_workspace\.tasks\.new(?:\.lazy)?-[^/]+\.js$/,
-      title: '创建任务',
-      link: '创建任务',
-      path: '/tasks/new',
-      content: '任务配置与计算尚未接入',
-    },
-  ]
+  const destinations = workspaceCases
+    .filter((entry) => entry !== taskCase)
+    .map((entry) => ({ ...entry, link: entry.path === '/dashboard' ? '预览工作区' : entry.title }))
   for (const destination of destinations) {
     let release = () => {}
     const held = new Promise<void>((resolve) => {
@@ -340,7 +321,7 @@ for (const width of [390, 768, 1440]) {
           await page.screenshot({ path: testInfo.outputPath('recovered.png'), fullPage: true })
 
           // A different failed page must not trap the user, even while its resource stays down.
-          const settingsModule = /\/assets\/_workspace\.settings\.lazy-[^/]+\.js$/
+          const settingsModule = workspaceCase('/settings').module
           await page.route(settingsModule, async (route) => {
             expectedModuleFailures.add(route.request().url())
             await route.fulfill({
@@ -447,7 +428,7 @@ test('a failed first workspace visit has local recovery and a safe product entry
   page,
   expectedModuleFailures,
 }) => {
-  await page.route(/\/assets\/_workspace\.dashboard\.lazy-[^/]+\.js$/, async (route) => {
+  await page.route(workspaceCase('/dashboard').module, async (route) => {
     expectedModuleFailures.add(route.request().url())
     await route.fulfill({ status: 503, contentType: 'text/plain', body: 'Temporarily unavailable' })
   })
@@ -492,26 +473,7 @@ for (const width of [390, 768, 1440]) {
   })
 }
 
-for (const destination of [
-  {
-    title: 'Dashboard',
-    path: '/dashboard',
-    module: /\/assets\/_workspace\.dashboard\.lazy-[^/]+\.js$/,
-    content: '任务服务尚未接入',
-  },
-  {
-    title: '创建任务',
-    path: '/tasks/new',
-    module: /\/assets\/_workspace\.tasks\.new\.lazy-[^/]+\.js$/,
-    content: '任务配置与计算尚未接入',
-  },
-  {
-    title: '设置',
-    path: '/settings',
-    module: /\/assets\/_workspace\.settings\.lazy-[^/]+\.js$/,
-    content: '演示角色与分析偏好',
-  },
-]) {
+for (const destination of workspaceCases.filter((entry) => entry !== taskCase)) {
   for (const width of [390, 768, 1440]) {
     test(`${destination.title} content reserves its footprint through download completion at ${width}px`, async ({
       page,
@@ -536,7 +498,7 @@ for (const destination of [
         await page.screenshot({ path: testInfo.outputPath('pending.png'), fullPage: true })
         release()
         await expect(
-          page.getByRole('heading', { name: destination.content, exact: true }),
+          page.getByRole('heading', { name: destination.contentHeading, exact: true }),
         ).toBeVisible()
         await expect(page.getByRole('status', { name: '页面加载状态' })).toHaveCount(0)
         const loadedMain = await page.getByRole('main').boundingBox()

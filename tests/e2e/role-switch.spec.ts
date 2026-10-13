@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, type Page } from '@playwright/test'
+import { expect, type Page } from './browser-guard'
 import { test } from './browser-guard'
 import { submitDemoLogin } from './demo-login'
 import { holdNextSessionResponse } from './held-session-response'

@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test'
+import { expect } from './browser-guard'
 import { test } from './browser-guard'
 import { submitDemoLogin } from './demo-login'
 import { holdNextSessionResponse } from './held-session-response'

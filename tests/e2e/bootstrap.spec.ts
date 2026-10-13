@@ -1,23 +1,9 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test } from './browser-guard'
 
 test('serves the Chinese product entry and reaches the login entry without browser errors', async ({
   page,
 }) => {
-  const errors: string[] = []
-  page.on('pageerror', (error) => errors.push(error.message))
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text())
-  })
-  page.on('requestfailed', (request) => {
-    errors.push(`Request failed: ${request.url()} ${request.failure()?.errorText}`)
-  })
-  page.on('response', (response) => {
-    if (new URL(response.url()).pathname.startsWith('/assets/') && !response.ok()) {
-      errors.push(`Asset failed: ${response.status()} ${response.url()}`)
-    }
-  })
-
   const response = await page.goto('/')
   expect(response?.status()).toBe(200)
   // Content must be in the server document, not only added after hydration.
@@ -51,31 +37,15 @@ test('serves the Chinese product entry and reaches the login entry without brows
         .analyze()
     ).violations,
   ).toEqual([])
-  expect(errors).toEqual([])
 })
 
 test('returns a real HTTP 404 with an accessible route back to the product entry', async ({
   page,
+  baseURL,
+  expectedDocument404s,
 }) => {
   const missingPath = '/this-page-does-not-exist'
-  const errors: string[] = []
-  page.on('pageerror', (error) => errors.push(error.message))
-  page.on('console', (message) => {
-    // Only the deliberately missing document may report a 404 resource error.
-    const expected404 =
-      message.location().url === new URL(missingPath, page.url()).href &&
-      /Failed to load resource.*404/.test(message.text())
-    if (message.type() === 'error' && !expected404) errors.push(message.text())
-  })
-  page.on('requestfailed', (request) => {
-    errors.push(`Request failed: ${request.url()} ${request.failure()?.errorText}`)
-  })
-  page.on('response', (response) => {
-    if (new URL(response.url()).pathname.startsWith('/assets/') && !response.ok()) {
-      errors.push(`Asset failed: ${response.status()} ${response.url()}`)
-    }
-  })
-
+  expectedDocument404s.add(new URL(missingPath, baseURL).href)
   const response = await page.goto(missingPath)
   expect(response?.status()).toBe(404)
   expect(await response?.text()).toContain('找不到这个页面')
@@ -97,5 +67,4 @@ test('returns a real HTTP 404 with an accessible route back to the product entry
   await expect(page).toHaveURL(/\/login$/)
   await expect(page.getByRole('heading', { level: 1, name: '登录 MeteoWeave' })).toBeVisible()
   await page.waitForLoadState('networkidle')
-  expect(errors).toEqual([])
 })

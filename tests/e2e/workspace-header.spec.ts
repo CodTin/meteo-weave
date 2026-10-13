@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright'
-import { expect } from '@playwright/test'
+import { expect } from './browser-guard'
 import { test } from './browser-guard'
 import { signInDemo } from './demo-login'
 
