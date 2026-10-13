@@ -1,5 +1,9 @@
 import '@tanstack/react-start/server-only'
 import { z } from 'zod'
+import {
+  demoCatalogFor,
+  isCanonicalCatalogTask,
+} from '@/features/downscaling-tasks/service/demo-catalog'
 import { getDownscalingCapabilities } from '@/features/downscaling-tasks/capabilities'
 import { validateTaskRecord } from '@/features/downscaling-tasks/service/record-validation'
 import {
@@ -57,7 +61,7 @@ export function submitDownscalingTask(input: unknown): TaskReply {
   }
 }
 
-function ownedRecord(input: unknown): TaskReply {
+function ownedRecord(input: unknown, allowCanonicalRead = false): TaskReply {
   const account = requireDemoAccount()
   if (
     !input ||
@@ -69,6 +73,7 @@ function ownedRecord(input: unknown): TaskReply {
   }
   const parsed = validateTaskRecord(input)
   if (!parsed.ok) return parsed
+  if (allowCanonicalRead && isCanonicalCatalogTask(parsed.task)) return parsed
   const capabilities = getDownscalingCapabilities(account)
   const configuration = parsed.task.configuration
   if (
@@ -84,7 +89,7 @@ function ownedRecord(input: unknown): TaskReply {
 }
 
 export function readDownscalingTask(input: unknown): TaskReply {
-  const parsed = ownedRecord(input)
+  const parsed = ownedRecord(input, true)
   if (!parsed.ok) return parsed
   const task = parsed.task
   if (task.status === 'Failed') return parsed
@@ -119,4 +124,9 @@ export function queryDownscalingTaskResult(input: unknown): ResultReply {
       read.task.failureReason ?? 'Task is still running.',
     )
   return queryTaskResult(read.task, request.data.query)
+}
+
+export function getDemoTaskCatalog() {
+  const account = requireDemoAccount()
+  return { ownerId: account.id, tasks: demoCatalogFor(account.id) }
 }

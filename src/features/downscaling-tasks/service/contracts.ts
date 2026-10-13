@@ -19,6 +19,14 @@ export const RESULT_QUERY_LIMITS = {
   members: 20,
 } as const
 
+export type DemoCatalogCase = {
+  id: string
+  version: number
+  terrain: 'mountains' | 'coastal-plain' | 'plateau' | 'lowland-plain'
+  label: 'Synthetic Demo'
+  description: string
+}
+
 export type DownscalingTask = {
   schemaVersion: number
   id: string
@@ -36,6 +44,7 @@ export type DownscalingTask = {
   /** Absent only in legacy backups; both absent means the immutable v1 reference. */
   referenceSeed?: number
   referenceVersion?: string
+  catalog?: DemoCatalogCase
 }
 
 export type Unavailable = { ok: false; code: string; error: string }
@@ -235,6 +244,7 @@ export type ResultReply =
       ))
 export type TaskTransport = {
   account: () => Promise<DemoAccount>
+  catalog: () => Promise<{ ownerId: DemoAccount['id']; tasks: DownscalingTask[] }>
   submit: (input: unknown) => Promise<TaskReply>
   read: (record: unknown) => Promise<TaskReply>
   restore: (record: unknown) => Promise<TaskReply>

@@ -10,7 +10,7 @@ import {
 
 let environment: Awaited<ReturnType<typeof createRecoveryEnvironment>>
 beforeAll(async () => {
-  environment = await createRecoveryEnvironment()
+  environment = await createRecoveryEnvironment({ emptyWorkspace: true })
 })
 afterEach(async () => {
   await environment.reset()

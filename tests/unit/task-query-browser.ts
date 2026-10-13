@@ -10,6 +10,7 @@ import { isRedirect } from '@tanstack/react-router'
 import { loginDemoAccount, requireDemoAccount } from '@/server/services/demo-session.server'
 import {
   submitDownscalingTask,
+  getDemoTaskCatalog,
   readDownscalingTask,
   restoreDownscalingTask,
   queryDownscalingTaskResult,
@@ -64,6 +65,9 @@ export async function startQueryBrowser() {
       const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime)
       try {
         switch (operation) {
+          case 'catalog':
+            value = getDemoTaskCatalog()
+            break
           case 'account':
             value = requireDemoAccount()
             break
@@ -99,6 +103,19 @@ export async function startQueryBrowser() {
       Response.json(loginDemoAccount({ account, password: 'meteo-demo' })),
     )(new Request('http://demo.test/login', { method: 'POST' }), {})
     cookie = response.headers.get('set-cookie')!.split(';')[0]!
+    if (page && !page.isClosed()) {
+      await page.evaluate(() => window.queryTasks.close())
+      await prepareEmptyFixture()
+    }
+  }
+
+  async function prepareEmptyFixture() {
+    await page.evaluate(async () => {
+      await window.queryTasks.initialize()
+      for (const task of (await window.queryTasks.list()).tasks) {
+        if (task.catalog) await window.queryTasks.delete(task.id)
+      }
+    })
   }
 
   async function open() {
@@ -116,14 +133,14 @@ export async function startQueryBrowser() {
         import { createQueryClient } from '/src/lib/query/client.ts'
         window.queryTasks = createTaskService({
           queryClient: createQueryClient(),
-          transport: Object.fromEntries(['account', 'submit', 'read', 'restore', 'result'].map(
+          transport: Object.fromEntries(['account', 'catalog', 'submit', 'read', 'restore', 'result'].map(
             operation => [operation, data => window.queryRpc(operation, data)]
           )),
         })
       `,
     })
     await page.waitForFunction(() => !!window.queryTasks)
-    await page.evaluate(() => window.queryTasks.initialize())
+    await prepareEmptyFixture()
   }
 
   async function reset() {

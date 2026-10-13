@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import {
   submitDownscalingTask,
+  getDemoTaskCatalog,
   readDownscalingTask,
   restoreDownscalingTask,
   queryDownscalingTaskResult,
@@ -20,3 +21,6 @@ export const restoreTask = createServerFn({ method: 'POST' })
 export const queryTaskResult = createServerFn({ method: 'POST' })
   .inputValidator((input: { task: DownscalingTask; query: ResultQuery }) => input)
   .handler(({ data }) => queryDownscalingTaskResult(data))
+
+// No input/configuration channel: the server supplies only its fixed authenticated catalog.
+export const getTaskCatalog = createServerFn({ method: 'GET' }).handler(() => getDemoTaskCatalog())

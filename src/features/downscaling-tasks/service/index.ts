@@ -23,6 +23,7 @@ export { TaskStorageError } from './storage-diagnostics'
 export type { TaskRecordIssue } from './record-validation'
 
 const serverTransport: TaskTransport = {
+  catalog: async () => (await import('@/server/functions/downscaling-tasks')).getTaskCatalog(),
   account: async () =>
     (await import('@/server/functions/demo-session')).requireDemoSession({ data: '/tasks' }),
   submit: async (data) =>
@@ -49,7 +50,8 @@ export function createTaskService({
   let lifecycle = 0
   const ready = () => {
     if (storage?.getFailure()) throw storage.getFailure()
-    if (!storage) throw new Error('Task storage is not ready. Await initialize() after hydration.')
+    if (!storage || state !== 'ready')
+      throw new Error('Task storage is not ready. Await initialize() after hydration.')
     return storage
   }
   let unsubscribe: (() => void) | undefined
@@ -92,20 +94,40 @@ export function createTaskService({
         unsubscribe ??= onWorkspaceDiscard(queryClient, close)
         const openingLifecycle = lifecycle
         state = 'initializing'
-        initializing = openTaskStorage()
-          .then((value) => {
+        initializing = (storage ? Promise.resolve(storage) : openTaskStorage())
+          .then(async (value) => {
             if (openingLifecycle !== lifecycle) {
               value.close()
               return
             }
             storage = value
+            const account = await transport.account()
+            if (openingLifecycle !== lifecycle) return
+            const initialized = await value.catalogInitialized(account.id)
+            if (openingLifecycle !== lifecycle) return
+            if (!initialized) {
+              const catalog = await transport.catalog()
+              if (openingLifecycle !== lifecycle) return
+              if (
+                catalog.ownerId !== account.id ||
+                catalog.tasks.some((task) => task.ownerId !== account.id)
+              )
+                throw new Error(
+                  'Demo account changed during initialization; retry in the current workspace.',
+                )
+              await value.initializeCatalog(account.id, catalog.tasks)
+              if (openingLifecycle !== lifecycle) return
+            }
             state = 'ready'
+            // Coalesce in-flight callers only; a later initialization revalidates the account.
+            initializing = undefined
           })
           .catch((error) => {
-            if (openingLifecycle === lifecycle) {
-              state = 'unavailable'
-              initializing = undefined
-            }
+            if (openingLifecycle !== lifecycle) return
+            storage?.close()
+            storage = undefined
+            state = 'unavailable'
+            initializing = undefined
             throw error
           })
       }
