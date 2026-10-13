@@ -35,7 +35,14 @@
     "agent:verify": "node scripts/agent.mjs verify",
     "agent:delivery": "node scripts/agent.mjs delivery",
     "agent:snapshot": "node scripts/agent.mjs snapshot",
-    "test:browser-guard": "node scripts/test-browser-guard.mjs"
+    "test:browser-guard": "node scripts/test-browser-guard.mjs",
+    "agent:protect": "node scripts/agent.mjs protect",
+    "agent:check-protection": "node scripts/agent.mjs check-protection",
+    "e2e:build": "node scripts/e2e-build.mjs build",
+    "e2e:assert-build": "node scripts/e2e-build.mjs assert",
+    "e2e:serve": "node scripts/e2e-build.mjs serve",
+    "test:e2e:reuse": "E2E_REUSE_BUILD=1 bun run test:e2e",
+    "test:e2e:layout": "bun run test:e2e tests/e2e/workspace-header.spec.ts tests/e2e/workspace-lifecycle.spec.ts tests/e2e/entry-accessibility.spec.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
@@ -89,6 +96,7 @@
     "jsdom": "^30.1.2",
     "lint-staged": "^17.6.0",
     "nitro": "^3.0.260903-beta",
+    "oxc-parser": "0.152.0",
     "oxfmt": "^0.72.0",
     "oxlint": "^1.87.0",
     "rollup-plugin-visualizer": "^7.1.1",

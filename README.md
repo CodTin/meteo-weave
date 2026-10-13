@@ -144,3 +144,13 @@ Husky 提交检查已启用；初始化时的 Git／工具链审计保留在开�
 在打开应用前报 `Could not find profile folder`；默认、独立临时目录、持久化临时 profile
 以及重新安装浏览器均能复现，未宣称 Firefox 通过。`test:e2e` 使用 Chromium 作为默认冒烟，
 `test:e2e:all` 保留完整三浏览器检查并如实报告失败。修复 Firefox 环境后可直接重跑，无需修改应用。
+
+### Agent 环境与验证入口
+
+开始、恢复、隔离工作区和最终交付使用 [执行约定](docs/agents/workflow.md)。
+`agent:protect` / `agent:check-protection` 固定基线及修改范围，并保护已有用户修改；
+`agent:doctor` 区分支持版本与验收基线并检查浏览器。CI 复用 `agent:verify`，保留提交绑定证据。
+
+仅测试变化可先 `bun run e2e:build`，再用 `bun run test:e2e:reuse <测试文件>`；过时、跨工作区
+或被修改的构建会被拒绝。最终验收始终使用默认新构建。共享页头变更运行 `test:e2e:layout`
+并查看移动端截图。非 Chromium 兼容性通过独立手动 workflow 验证，不算默认全绿承诺。

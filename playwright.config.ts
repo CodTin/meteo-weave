@@ -23,7 +23,7 @@ export default defineConfig({
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
   webServer: {
-    command: 'bun run build && bun run start',
+    command: 'bun run e2e:serve',
     port,
     env: { PORT: String(port), HOST: '127.0.0.1', NODE_ENV: 'production' },
     reuseExistingServer: false,

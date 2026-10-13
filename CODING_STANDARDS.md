@@ -22,6 +22,17 @@ the guardrail is missing, bypassed or wrong.
 - **Scientific scope:** UI placeholders, synthetic data, role permissions and computation claims
   must match the actual public behavior. Respect `GLOSSARY.md` and the originating spec.
 
+- **Semantic assertions:** Distinguish requirements from incidental representation. A safe
+  return URL should preserve origin, pathname, query values and hash; `%20` versus `+` is not
+  a product requirement unless the spec says so. SSR checks must inspect returned server HTML,
+  not a later hydrated page. Tag-regex syntax is mechanically rejected by `check:agent`.
+- **Readable shared chrome:** Shared navigation/account changes need actual narrow-screen
+  evidence, not only overflow/axe passes. Inspect 390px screenshots and existing geometry tests;
+  controls and breadcrumbs must remain readable while pending, loaded and in dialogs.
+- **Shared test boundaries:** Reuse `demo-login`, `browser-guard`, `held-session-response` and
+  `workspace-cases` when testing those same behaviors. Keep scenario-specific assertions local;
+  extract real repeated coordination, not a generic testing framework.
+
 ## Authority
 
 The originating spec defines scope. `docs/development.md` describes the current framework and

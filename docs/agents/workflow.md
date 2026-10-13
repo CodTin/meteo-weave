@@ -4,15 +4,41 @@
 
 1. Read the applicable repo instructions and domain pointer. Run `bun run agent:doctor`
    before code changes, dependency installation or browser checks. It reports the checkout,
-   exact HEAD, dirty paths, actual runtimes, lockfile digest, local index and port status.
+   exact HEAD, dirty paths, actual runtimes, lockfile digest, local index, Chromium executable
+   and port status. The supported Node range is broader than the `.node-version` verification
+   baseline; the doctor requires both. Missing dependencies/browser/lockfile are setup failures,
+   not permission to bypass checks. Install with the pinned Bun and frozen lockfile, select the
+   baseline Node, install Chromium, then rerun the doctor.
    Set `--port <number>` when a parallel worker owns a different E2E port.
 2. Preserve existing dirty work. Use a separate managed worktree when ownership overlaps;
    initialize it from the named integration branch, never silently reset a dirty checkout.
-   Each worker owns its dependencies, build output and browser port. Only one merger writes
-   to the integration checkout. Use the host's managed worktree lifecycle tools when available.
+   Each worker owns its dependencies, build output and browser port. Keep integration and review
+   in separate managed checkouts, not in the user's active checkout. Review a pinned commit;
+   only one merger writes to the integration checkout. Use the host's managed worktree lifecycle tools when available.
 3. For an interrupted task run `bun run agent:resume --id <task-id>`. A changed HEAD, checkout
    path or working-tree fingerprint exits nonzero. Inspect the difference before updating the
    checkpoint; the command never resets files, resumes agents or starts servers.
+
+## Ownership protection
+
+Before writes, pin the exact starting commit and declare owned paths:
+
+```sh
+bun run agent:protect --id spec-03-ticket-01 --base codex/spec-03 \
+  --allow src/features/downscaling-tasks/,tests/unit/task-service.test.ts
+bun run agent:check-protection --id spec-03-ticket-01
+```
+
+Use a unique ID. A trailing `/` permits a directory; a file path permits only that file.
+The baseline must equal HEAD. The check permits descendant commits within the declared scope,
+but rejects changes outside it, branch/checkout switches, and modifications or staging of any
+pre-existing Git-visible user work—even within the owned scope. Ignored artifacts are outside
+this ownership check; `agent:verify` separately fingerprints ignored root environment files. It never stashes, resets, stages, or restores
+files. Run it before handoff and before/after merging. Protection records live alongside
+checkpoints in the Git common directory and cannot be silently overwritten.
+
+For review, use a clean detached worktree at the exact review commit. A dirty checkout's result
+is not evidence for its clean HEAD: `agent:verify` binds evidence to both HEAD and content.
 
 ## Checkpoints
 
@@ -58,8 +84,37 @@ Run targeted red→green checks while implementing; run complete integration che
 Keep the handoff summary to: ticket/status, branch/SHA, changed ownership scope, checks and
 remaining risk/action, with pointers to detailed logs. Reuse results only when HEAD/content and
 runtime configuration match; report that reuse explicitly. Merger reports cover merge/conflicts
-and integration validation, not a second copy of implementation history. Avoid polling agents
-when independent work is available; wait for the next result needed on the critical path.
+and integration validation, not a second copy of implementation history. Prefer completion notifications. When blocked on the next dependency, use one bounded long
+wait; do not follow an unchanged timeout with repeated status/log reads. Dispatch the ticket,
+worktree, baseline, ownership scope and protocol/evidence pointers rather than repeating this
+protocol in every prompt. Existing checkpoint fields are the status record; update them on
+phase completion, a real blocker, or handoff, not on a timer.
+
+## Browser iteration and visual gates
+
+The default `test:e2e` still rebuilds a production server and never reuses an unknown running
+server. For repeated test-only edits in the **same** checkout:
+
+```sh
+bun run e2e:build
+bun run test:e2e:reuse tests/e2e/workspace-access.spec.ts --workers=2
+```
+
+Reuse checks app/public sources, build configuration (including ignored `.env` files), lockfile,
+installed direct package manifests, Node/Bun, checkout path, runner version and output digests.
+Changed application inputs, failed/interrupted builds, copied or modified output fail closed.
+Only test/docs changes can reuse unchanged app output. Secrets appear only as hashes. Rebuild
+for SSR/startup changes and use the default fresh build for final `agent:verify`/CI. Keep builds
+and servers private to their worktree; changing `E2E_PORT` does not make shared output safe.
+
+Changes to shell/navigation/account controls must run `test:e2e:layout` and inspect an actual
+390px screenshot before handoff, plus 768/1440px and reduced-motion coverage. No overflow and
+an axe pass do not prove readable layout. Preserve the existing public geometry and lifecycle
+assertions; do not substitute CSS-class snapshots or trim controls to make them pass.
+
+Chromium is the required CI gate. Run `.github/workflows/browser-compatibility.yml` manually
+for WebKit or Firefox; it reports failures and uploads evidence, without silently skipping them
+or claiming historical smoke results validate current flows.
 
 ## Delivery
 
