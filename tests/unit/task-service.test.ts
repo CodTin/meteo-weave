@@ -235,7 +235,7 @@ it('reopens native persisted Running metadata, waits only the remainder, then re
   ).toEqual(result)
 }, 30_000)
 
-it('does not create tasks for unsupported probabilistic methods', async () => {
+it('creates admitted probabilistic tasks and rejects conflicting deterministic ensemble settings', async () => {
   setServerTime(baseTime)
   await signIn('researcher')
   await openBrowser()
@@ -246,9 +246,25 @@ it('does not create tasks for unsupported probabilistic methods', async () => {
   ]) {
     expect(
       await page.evaluate((input) => window.tasks.create(input), { ...config, ...override }),
-    ).toMatchObject({ ok: false, code: 'UNAVAILABLE_COMBINATION' })
+    ).toMatchObject({
+      ok: true,
+      task: {
+        generatorVersion: 'synthetic-ensemble-v3',
+        configuration: { resolvedMethod: 'probabilistic', advanced: { ensembleMembers: 10 } },
+      },
+    })
   }
-  expect(await page.evaluate(() => window.tasks.list())).toEqual({ tasks: [], issues: [] })
+  for (const override of [
+    { method: 'deterministic', advanced: { uncertaintyQuantification: true } },
+    { method: 'deterministic', advanced: { ensembleMembers: 5 } },
+  ]) {
+    expect(
+      await page.evaluate((input) => window.tasks.create(input), { ...config, ...override }),
+    ).toMatchObject({ ok: false, code: 'INCOMPATIBLE_METHOD' })
+  }
+  const listed = await page.evaluate(() => window.tasks.list())
+  expect(listed.tasks).toHaveLength(2)
+  expect(listed.issues).toEqual([])
 }, 30_000)
 
 it('restores metadata without replacing an unsupported generator, and persists an explicit Failed result', async () => {

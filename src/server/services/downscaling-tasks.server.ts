@@ -13,6 +13,7 @@ import {
   OBSERVATION_REFERENCE,
   GENERATOR_VERSION,
   VARIABLE_GENERATOR_VERSION,
+  ENSEMBLE_GENERATOR_VERSION,
   TASK_SCHEMA_VERSION,
   TASK_DURATION_MS,
   unavailable,
@@ -24,9 +25,11 @@ export function submitDownscalingTask(input: unknown): TaskReply {
   const admission = admitDownscalingConfiguration(input)
   if (!admission.ok) return admission
   const generatorVersion =
-    admission.configuration.variable === 'temperature'
-      ? GENERATOR_VERSION
-      : VARIABLE_GENERATOR_VERSION
+    admission.configuration.resolvedMethod === 'probabilistic'
+      ? ENSEMBLE_GENERATOR_VERSION
+      : admission.configuration.variable === 'temperature'
+        ? GENERATOR_VERSION
+        : VARIABLE_GENERATOR_VERSION
   const unavailableResult = resultAvailability({
     configuration: admission.configuration,
     generatorVersion,
