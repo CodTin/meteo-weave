@@ -1,4 +1,5 @@
 import type { DownscalingTask, ResultQuery } from './contracts'
+import { taskGrid } from './result-grid'
 
 /** Pure v1 field, sampled on the declared lattice. No grid-sized allocation. */
 export function temperatureAt(
@@ -8,12 +9,10 @@ export function temperatureAt(
   latitude: number,
   time: string,
 ) {
-  const { region, resolution, dataSource } = task.configuration
-  const spacingKm = layer === 'original' ? 10 : Number.parseInt(resolution)
-  const longitudeKm =
-    111.32 * Math.max(0.01, Math.cos(((region.south + region.north) * Math.PI) / 360))
-  const dx = spacingKm / longitudeKm
-  const dy = spacingKm / 111.32
+  const { region, dataSource } = task.configuration
+  const grid = taskGrid(task, layer)
+  const dx = grid.spacingDegrees.longitude
+  const dy = grid.spacingDegrees.latitude
   const x0 = region.west + Math.floor((longitude - region.west) / dx) * dx
   const y0 = region.south + Math.floor((latitude - region.south) / dy) * dy
   const x1 = Math.min(region.east, x0 + dx)

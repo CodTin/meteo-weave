@@ -5,23 +5,56 @@ import {
   unavailable,
   type DownscalingTask,
   type ResultReply,
+  type ResultPoint,
+  type ResultQuery,
+  type WindowSampling,
 } from './contracts'
 import { temperatureAt } from './temperature-field'
+import { windowPoints } from './result-grid'
 
-const querySchema = z
+const pointSchema = z.strictObject({ longitude: z.number(), latitude: z.number() })
+const instantSchema = z.iso.datetime({ offset: true })
+const layerSchema = z.enum(['original', 'downscaled'])
+const windowSchema = z
   .strictObject({
-    kind: z.literal('points'),
-    layer: z.enum(['original', 'downscaled']),
-    points: z
-      .array(z.strictObject({ longitude: z.number(), latitude: z.number() }))
-      .min(1)
-      .max(RESULT_QUERY_LIMITS.points),
-    times: z
-      .array(z.iso.datetime({ offset: true }))
-      .min(1)
-      .max(RESULT_QUERY_LIMITS.times),
+    west: z.number().min(-180).max(180),
+    east: z.number().min(-180).max(180),
+    south: z.number().min(-90).max(90),
+    north: z.number().min(-90).max(90),
   })
-  .refine((value) => value.points.length * value.times.length <= RESULT_QUERY_LIMITS.values)
+  .refine((value) => value.west <= value.east && value.south <= value.north)
+const timesSchema = z.array(instantSchema).min(1).max(RESULT_QUERY_LIMITS.times)
+const querySchema = z.discriminatedUnion('kind', [
+  z
+    .strictObject({
+      kind: z.literal('points'),
+      layer: layerSchema,
+      points: z.array(pointSchema).min(1).max(RESULT_QUERY_LIMITS.points),
+      times: timesSchema,
+    })
+    .refine((value) => value.points.length * value.times.length <= RESULT_QUERY_LIMITS.values),
+  z.strictObject({
+    kind: z.literal('time-series'),
+    layer: layerSchema,
+    point: pointSchema,
+    timeRange: z
+      .strictObject({ start: instantSchema, end: instantSchema })
+      .refine((value) => Date.parse(value.start) <= Date.parse(value.end)),
+  }),
+  z.strictObject({
+    kind: z.enum(['grid', 'export']),
+    layer: layerSchema,
+    window: windowSchema,
+    times: timesSchema,
+  }),
+  z.strictObject({
+    kind: z.literal('preview'),
+    layer: layerSchema,
+    window: windowSchema,
+    times: timesSchema,
+    maxPoints: z.number().int().min(1).max(RESULT_QUERY_LIMITS.gridPoints),
+  }),
+])
 
 export function resultAvailability(
   task: Pick<DownscalingTask, 'generatorVersion' | 'configuration'>,
@@ -51,13 +84,61 @@ export function queryTemperatureResult(task: DownscalingTask, input: unknown): R
   if (!parsed.success)
     return unavailable(
       'UNAVAILABLE_QUERY',
-      'Use original/downscaled point queries: at most 64 points, 168 times and 256 values.',
+      'Use points, time-series, grid, preview or export: at most 64 requested points, 256 grid points, 168 times and 256 total values.',
     )
-  const query = parsed.data
+  const requested = parsed.data
   const { region, timeRange } = task.configuration
   const start = Date.parse(timeRange.start)
   const end = Date.parse(timeRange.end)
   const step = timeRange.mode === 'historical' ? 86_400_000 : 3_600_000
+  let sampling: { sampling: 'requested-points' } | WindowSampling = { sampling: 'requested-points' }
+  let query: { layer: ResultQuery['layer']; points: ResultPoint[]; times: string[] }
+  if (requested.kind === 'time-series') {
+    const first = Date.parse(requested.timeRange.start)
+    const last = Date.parse(requested.timeRange.end)
+    if (first < start || last > end || (first - start) % step || (last - start) % step) {
+      return unavailable(
+        'OUTSIDE_COVERAGE',
+        'Times must be on the task coverage; missing times are not filled.',
+      )
+    }
+    const count = (last - first) / step + 1
+    if (count > RESULT_QUERY_LIMITS.times) {
+      return unavailable('QUERY_LIMIT_EXCEEDED', 'Request a time slice of at most 168 instants.')
+    }
+    query = {
+      layer: requested.layer,
+      points: [requested.point],
+      times: Array.from({ length: count }, (_, index) =>
+        new Date(first + index * step).toISOString(),
+      ),
+    }
+  } else if (requested.kind === 'points') {
+    query = requested
+  } else {
+    const window = requested.window
+    if (
+      window.west < region.west ||
+      window.east > region.east ||
+      window.south < region.south ||
+      window.north > region.north
+    ) {
+      return unavailable(
+        'OUTSIDE_COVERAGE',
+        'The entire window must be inside task coverage; it is not silently clipped.',
+      )
+    }
+    const result = windowPoints(
+      task,
+      requested.layer,
+      window,
+      requested.times.length,
+      requested.kind === 'preview' ? requested.maxPoints : undefined,
+    )
+    if ('ok' in result) return result
+    sampling = result.grid
+    query = { layer: requested.layer, points: result.points, times: requested.times }
+  }
   if (
     query.points.some(
       (point) =>
@@ -107,7 +188,7 @@ export function queryTemperatureResult(task: DownscalingTask, input: unknown): R
     grid: {
       nominalSpacingKm:
         query.layer === 'original' ? 10 : Number.parseInt(task.configuration.resolution),
-      sampling: 'requested-points',
+      ...sampling,
       interpolation: 'bilinear',
       crs: 'EPSG:4326',
     },
