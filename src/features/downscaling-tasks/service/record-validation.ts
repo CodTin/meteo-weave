@@ -78,6 +78,15 @@ const record = z
     generatorVersion: z.string().min(1).max(100),
     referenceSeed: z.number().int().min(0).max(0xffff_ffff).optional(),
     referenceVersion: z.string().min(1).max(100).optional(),
+    catalog: z
+      .strictObject({
+        id: z.string().min(1).max(100),
+        version: z.number().int().positive(),
+        terrain: z.enum(['mountains', 'coastal-plain', 'plateau', 'lowland-plain']),
+        label: z.literal('Synthetic Demo'),
+        description: z.string().min(1).max(500),
+      })
+      .optional(),
   })
   .refine((value) => (value.referenceSeed === undefined) === (value.referenceVersion === undefined))
   .refine(

@@ -14,6 +14,7 @@ import {
 } from '@/server/services/demo-session.server'
 import {
   submitDownscalingTask,
+  getDemoTaskCatalog,
   readDownscalingTask,
   restoreDownscalingTask,
   queryDownscalingTaskResult,
@@ -25,7 +26,8 @@ declare global {
     lifecycleTasks: ReturnType<typeof createTaskService>
     lifecycleRpc: (operation: string, data?: unknown) => Promise<unknown>
     lifecycleDiscard: () => Promise<void>
-    lifecycleMount: () => Promise<void>
+    lifecycleMount: (initialize?: boolean) => Promise<void>
+    lifecycleMounted: boolean
   }
 }
 
@@ -44,7 +46,7 @@ export const lifecyclePointQuery = {
 } satisfies ResultQuery
 
 /** Native Chromium storage and real public server services; only transport/time are controlled. */
-export async function createLifecycleEnvironment() {
+export async function createLifecycleEnvironment({ emptyWorkspace = false } = {}) {
   // Transform modules without binding a second port beside the existing foundation suite.
   const vite = await createServer({
     configFile: false,
@@ -72,6 +74,9 @@ export async function createLifecycleEnvironment() {
       const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
       try {
         switch (operation) {
+          case 'catalog':
+            value = getDemoTaskCatalog()
+            break
           case 'account':
             value = requireDemoAccount()
             break
@@ -114,30 +119,41 @@ export async function createLifecycleEnvironment() {
     return value
   }
 
-  async function mount(page: Page) {
+  async function mount(page: Page, initialize = true) {
     await page.goto(`${origin}/task-lifecycle-environment`)
     await page.addScriptTag({
       type: 'module',
       content: `
       import { createTaskService } from '/src/features/downscaling-tasks/service/index.ts'
       import { createQueryClient, discardWorkspaceQueries } from '/src/lib/query/client.ts'
-      window.lifecycleMount = async () => {
+      window.lifecycleMounted = false
+      window.lifecycleMount = async (initialize = true) => {
+        window.lifecycleMounted = false
         const queryClient = createQueryClient()
         window.lifecycleDiscard = () => discardWorkspaceQueries(queryClient)
         window.lifecycleTasks = createTaskService({ queryClient, transport: Object.fromEntries(
-          ['account', 'submit', 'read', 'restore', 'result'].map(operation =>
+          ['account', 'catalog', 'submit', 'read', 'restore', 'result'].map(operation =>
             [operation, data => window.lifecycleRpc(operation, data)])
         ) })
-        await window.lifecycleTasks.initialize()
+        if (initialize) {
+          await window.lifecycleTasks.initialize()
+          // Explicit fixture preparation uses the real public delete/list paths, never a seed bypass.
+          if (${emptyWorkspace}) {
+            for (const task of (await window.lifecycleTasks.list()).tasks) {
+              if (task.catalog) await window.lifecycleTasks.delete(task.id)
+            }
+          }
+        }
+        window.lifecycleMounted = true
       }
-      await window.lifecycleMount()
+      await window.lifecycleMount(${initialize})
     `,
     })
-    await page.waitForFunction(() => window.lifecycleTasks?.getState() === 'ready')
+    await page.waitForFunction(() => window.lifecycleMounted)
     return page
   }
 
-  async function open() {
+  async function open({ initialize = true } = {}) {
     profile ||= await mkdtemp(join(tmpdir(), 'meteo-task-lifecycle-'))
     context = await chromium.launchPersistentContext(profile, { headless: true })
     await context.exposeBinding('lifecycleRpc', ({ page }, operation: string, data?: unknown) =>
@@ -156,14 +172,14 @@ export async function createLifecycleEnvironment() {
         await route.fulfill({ contentType: 'text/javascript', body: transformed.code })
       }
     })
-    return mount(await context.newPage())
+    return mount(await context.newPage(), initialize)
   }
 
   return {
     open,
-    async tab() {
+    async tab({ initialize = true } = {}) {
       if (!context) throw new Error('Open the browser first')
-      return mount(await context.newPage())
+      return mount(await context.newPage(), initialize)
     },
     async reopen() {
       await context?.close()
@@ -212,4 +228,30 @@ export async function createLifecycleEnvironment() {
       await vite.close()
     },
   }
+}
+
+/** A native pre-catalog (database v1) backup fixture, not an initialization-marker test API. */
+export async function seedPreCatalogHistory(
+  page: Page,
+  tasks: import('@/features/downscaling-tasks/service').DownscalingTask[],
+) {
+  await page.evaluate(async (tasks) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('meteo-downscaling-tasks', 1)
+      request.onupgradeneeded = () =>
+        request.result.createObjectStore('tasks', { keyPath: ['ownerId', 'id'] })
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction('tasks', 'readwrite')
+        for (const task of tasks) tx.objectStore('tasks').add(task)
+        tx.oncomplete = () => resolve()
+        tx.onabort = () => reject(tx.error)
+      })
+    } finally {
+      db.close()
+    }
+  }, tasks)
 }

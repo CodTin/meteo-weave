@@ -7,7 +7,7 @@ import {
 
 let environment: Awaited<ReturnType<typeof createLifecycleEnvironment>>
 beforeAll(async () => {
-  environment = await createLifecycleEnvironment()
+  environment = await createLifecycleEnvironment({ emptyWorkspace: true })
 })
 afterEach(async () => {
   await environment.reset()

@@ -10,6 +10,7 @@ import { isRedirect } from '@tanstack/react-router'
 import { loginDemoAccount, requireDemoAccount } from '@/server/services/demo-session.server'
 import {
   submitDownscalingTask,
+  getDemoTaskCatalog,
   readDownscalingTask,
   restoreDownscalingTask,
   queryDownscalingTaskResult,
@@ -20,6 +21,7 @@ declare global {
   interface Window {
     tasks: ReturnType<typeof createTaskService>
     taskRpc: (operation: string, data?: unknown) => Promise<unknown>
+    taskFixture: () => Promise<void>
   }
 }
 
@@ -73,6 +75,9 @@ async function rpc(operation: string, data?: unknown) {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime)
     try {
       switch (operation) {
+        case 'catalog':
+          value = getDemoTaskCatalog()
+          break
         case 'account':
           value = requireDemoAccount()
           break
@@ -114,6 +119,7 @@ async function signIn(account: string) {
     Response.json(loginDemoAccount({ account, password: 'meteo-demo' })),
   )(new Request('http://demo.test/login', { method: 'POST' }), {})
   cookie = response.headers.get('set-cookie')!.split(';')[0]!
+  if (page && !page.isClosed()) await page.evaluate(() => window.taskFixture())
 }
 
 async function openBrowser() {
@@ -133,15 +139,26 @@ async function mountClient(page: Page) {
     content: `
     import { createTaskService } from '/src/features/downscaling-tasks/service/index.ts'
     import { createQueryClient } from '/src/lib/query/client.ts'
-    window.tasks = createTaskService({
+    const createService = () => createTaskService({
       queryClient: createQueryClient(),
-      transport: Object.fromEntries(['account', 'submit', 'read', 'restore', 'result'].map(
+      transport: Object.fromEntries(['account', 'catalog', 'submit', 'read', 'restore', 'result'].map(
         operation => [operation, data => window.taskRpc(operation, data)]
       )),
     })
+    window.tasks = createService()
+    window.taskFixture = async () => {
+      const fixture = createService()
+      try {
+        await fixture.initialize()
+        for (const task of (await fixture.list()).tasks) {
+          if (task.catalog) await fixture.delete(task.id)
+        }
+      } finally { fixture.close() }
+    }
   `,
   })
-  await page.waitForFunction(() => !!window.tasks)
+  await page.waitForFunction(() => !!window.tasks && !!window.taskFixture)
+  if (cookie) await page.evaluate(() => window.taskFixture())
 }
 
 it('submits, saves, reads and lists a named task for the authenticated account', async () => {
@@ -314,12 +331,15 @@ it('restores metadata without replacing an unsupported generator, and persists a
 
 it('requires a real Demo session and rejects restricted configuration without saving a task', async () => {
   await openBrowser()
-  await page.evaluate(() => window.tasks.initialize())
-  await expect(page.evaluate((input) => window.tasks.create(input), config)).rejects.toThrow(
+  await expect(page.evaluate(() => window.tasks.initialize())).rejects.toThrow(
     'AUTHENTICATION_REQUIRED',
+  )
+  await expect(page.evaluate((input) => window.tasks.create(input), config)).rejects.toThrow(
+    'not ready',
   )
   for (const account of ['policy', 'agriculture']) {
     await signIn(account)
+    await page.evaluate(() => window.tasks.initialize())
     expect(
       await page.evaluate((input) => window.tasks.create(input), {
         ...config,
@@ -330,6 +350,10 @@ it('requires a real Demo session and rejects restricted configuration without sa
     ).toMatchObject({ ok: false, code: 'ROLE_RESTRICTED' })
     expect(await page.evaluate(() => window.tasks.list())).toEqual({ tasks: [], issues: [] })
   }
+  cookie = ''
+  await expect(page.evaluate((input) => window.tasks.create(input), config)).rejects.toThrow(
+    'AUTHENTICATION_REQUIRED',
+  )
 }, 30_000)
 
 it('separates accounts even when the same service and QueryClient are reused', async () => {
@@ -600,6 +624,7 @@ it('does not let a delayed Running response replace a completion saved by anothe
 }, 30_000)
 
 it('has explicit hydration waiting and can close during initialization without reopening itself', async () => {
+  await signIn('researcher')
   await openBrowser()
   expect(await page.evaluate(() => window.tasks.getState())).toBe('waiting-for-client')
   await expect(page.evaluate(() => window.tasks.list())).rejects.toThrow('not ready')
