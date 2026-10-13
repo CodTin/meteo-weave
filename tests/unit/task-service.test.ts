@@ -2,19 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest'
-import { chromium, type BrowserContext, type Page } from '@playwright/test'
+import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
+import {
+  launchGuardedPersistentContext,
+  type BrowserContext,
+  type Page,
+} from '../e2e/browser-guard'
 import { createServer, type ViteDevServer } from 'vite'
 import { requestHandler } from '@tanstack/react-start/server'
-import { isRedirect } from '@tanstack/react-router'
-import { loginDemoAccount, requireDemoAccount } from '@/server/services/demo-session.server'
-import {
-  submitDownscalingTask,
-  getDemoTaskCatalog,
-  readDownscalingTask,
-  restoreDownscalingTask,
-  queryDownscalingTaskResult,
-} from '@/server/services/downscaling-tasks.server'
+import { loginDemoAccount } from '@/server/services/demo-session.server'
+import { browserTaskTransport, dispatchTaskRequest } from './task-test-transport'
 import type { createTaskService } from '@/features/downscaling-tasks/service'
 
 declare global {
@@ -33,6 +30,7 @@ const config = {
   resolution: '3km',
 }
 let vite: ViteDevServer
+let guardedBrowser: Awaited<ReturnType<typeof launchGuardedPersistentContext>> | undefined
 let context: BrowserContext
 let profile: string
 let cookie = ''
@@ -47,64 +45,41 @@ function setServerTime(value: number) {
 beforeAll(async () => {
   vite = await createServer({
     configFile: false,
+    plugins: [
+      {
+        name: 'task-test-environment',
+        configureServer(server) {
+          server.middlewares.use('/task-test-environment', (_request, response) => {
+            response.statusCode = 200
+            response.setHeader('Content-Type', 'text/html')
+            response.end('<!doctype html><title>Native browser environment</title>')
+          })
+        },
+      },
+    ],
     optimizeDeps: { noDiscovery: true, include: ['@tanstack/react-query'] },
     resolve: { alias: { '@': fileURLToPath(new URL('../../src', import.meta.url)) } },
     server: { host: '127.0.0.1', port: Number(process.env.E2E_PORT ?? 4181), strictPort: true },
-  })
-  vite.middlewares.use('/task-test-environment', (_request, response) => {
-    response.setHeader('Content-Type', 'text/html')
-    response.end('<!doctype html><title>Native browser environment</title>')
   })
   await vite.listen()
 })
 
 afterEach(async () => {
-  await context?.close()
-  if (profile) await rm(profile, { recursive: true, force: true })
-  profile = ''
-  cookie = ''
+  try {
+    await guardedBrowser?.close()
+  } finally {
+    guardedBrowser = undefined
+    if (profile) await rm(profile, { recursive: true, force: true })
+    profile = ''
+    cookie = ''
+  }
 }, 30_000)
 afterAll(async () => {
   await vite?.close()
 })
 
 async function rpc(operation: string, data?: unknown) {
-  let value: unknown
-  const response = await requestHandler(() => {
-    // Freeze the business request only, not Vite or the browser process lifecycle.
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime)
-    try {
-      switch (operation) {
-        case 'catalog':
-          value = getDemoTaskCatalog()
-          break
-        case 'account':
-          value = requireDemoAccount()
-          break
-        case 'submit':
-          value = submitDownscalingTask(data)
-          break
-        case 'read':
-          value = readDownscalingTask(data)
-          break
-        case 'restore':
-          value = restoreDownscalingTask(data)
-          break
-        case 'result':
-          value = queryDownscalingTaskResult(data)
-          break
-        default:
-          throw new Error('Unknown transport operation')
-      }
-      return Response.json(value)
-    } catch (error) {
-      if (isRedirect(error)) return error
-      throw error
-    } finally {
-      clock.mockRestore()
-    }
-  })(new Request('http://demo.test/tasks', { method: 'POST', headers: { cookie } }), {})
-  if (response.status === 307) throw new Error('AUTHENTICATION_REQUIRED')
+  const value = await dispatchTaskRequest(operation, data, { cookie, now: serverTime })
   if (operation === 'read' && heldRead) {
     const held = heldRead
     heldRead = undefined
@@ -124,7 +99,8 @@ async function signIn(account: string) {
 
 async function openBrowser() {
   profile ||= await mkdtemp(join(tmpdir(), 'meteo-task-'))
-  context = await chromium.launchPersistentContext(profile, { headless: true })
+  guardedBrowser = await launchGuardedPersistentContext(profile)
+  context = guardedBrowser.context
   await context.exposeBinding('taskRpc', (_source, operation: string, data?: unknown) =>
     rpc(operation, data),
   )
@@ -141,9 +117,7 @@ async function mountClient(page: Page) {
     import { createQueryClient } from '/src/lib/query/client.ts'
     const createService = () => createTaskService({
       queryClient: createQueryClient(),
-      transport: Object.fromEntries(['account', 'catalog', 'submit', 'read', 'restore', 'result'].map(
-        operation => [operation, data => window.taskRpc(operation, data)]
-      )),
+      transport: ${browserTaskTransport('taskRpc')},
     })
     window.tasks = createService()
     window.taskFixture = async () => {
@@ -216,7 +190,7 @@ it('reopens native persisted Running metadata, waits only the remainder, then re
       query: pointQuery,
     }),
   ).toMatchObject({ ok: false, code: 'RUNNING' })
-  await context.close()
+  await guardedBrowser?.close()
   setServerTime(baseTime + 2_499)
   await openBrowser()
   await page.evaluate(() => window.tasks.initialize())
@@ -240,7 +214,7 @@ it('reopens native persisted Running metadata, waits only the remainder, then re
   expect(result.values).toHaveLength(4)
   expect(new Set(result.values.map((value) => value.value)).size).toBe(4)
   expect(result.values[0]?.time).toBe('2024-01-01T00:00:00.000Z')
-  await context.close()
+  await guardedBrowser?.close()
   setServerTime(baseTime + 60_000)
   await openBrowser()
   await page.evaluate(() => window.tasks.initialize())
@@ -319,7 +293,7 @@ it('restores metadata without replacing an unsupported generator, and persists a
       query: pointQuery,
     }),
   ).toMatchObject({ ok: false, code: 'INCOMPATIBLE_GENERATOR' })
-  await context.close()
+  await guardedBrowser?.close()
   await openBrowser()
   await page.evaluate(() => window.tasks.initialize())
   expect(await page.evaluate((id) => window.tasks.get(id), backup.id)).toEqual(failed)
@@ -417,7 +391,7 @@ it('reopens an expired forecast without treating its saved submission as a new f
     resolvedMethod: 'deterministic',
     advanced: { uncertaintyQuantification: false },
   })
-  await context.close()
+  await guardedBrowser?.close()
   setServerTime(baseTime + 30 * 86_400_000)
   await openBrowser()
   await page.evaluate(() => window.tasks.initialize())

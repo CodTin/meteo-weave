@@ -2,23 +2,15 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { vi } from 'vitest'
-import { chromium, type BrowserContext, type Page } from '@playwright/test'
+import {
+  launchGuardedPersistentContext,
+  type BrowserContext,
+  type Page,
+} from '../e2e/browser-guard'
 import { createServer } from 'vite'
 import { requestHandler } from '@tanstack/react-start/server'
-import { isRedirect } from '@tanstack/react-router'
-import {
-  loginDemoAccount,
-  endDemoSession,
-  requireDemoAccount,
-} from '@/server/services/demo-session.server'
-import {
-  submitDownscalingTask,
-  getDemoTaskCatalog,
-  readDownscalingTask,
-  restoreDownscalingTask,
-  queryDownscalingTaskResult,
-} from '@/server/services/downscaling-tasks.server'
+import { loginDemoAccount, endDemoSession } from '@/server/services/demo-session.server'
+import { browserTaskTransport, dispatchTaskRequest } from './task-test-transport'
 import type { createTaskService, ResultQuery } from '@/features/downscaling-tasks/service'
 
 declare global {
@@ -55,10 +47,12 @@ export async function createLifecycleEnvironment({ emptyWorkspace = false } = {}
     server: { middlewareMode: true, hmr: false },
   })
   const origin = `http://127.0.0.1:${process.env.E2E_PORT ?? 4186}`
+  let guardedBrowser: Awaited<ReturnType<typeof launchGuardedPersistentContext>> | undefined
   let context: BrowserContext | undefined
   let profile = ''
   let cookie = ''
   let now = Date.parse('2026-10-13T08:00:00Z')
+  let requestClock: (() => number) | undefined
   const holds = new Set<{
     operation: string
     page?: Page
@@ -69,41 +63,7 @@ export async function createLifecycleEnvironment({ emptyWorkspace = false } = {}
   }>()
 
   async function rpc(page: Page, operation: string, data?: unknown) {
-    let value: unknown
-    const response = await requestHandler(() => {
-      const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
-      try {
-        switch (operation) {
-          case 'catalog':
-            value = getDemoTaskCatalog()
-            break
-          case 'account':
-            value = requireDemoAccount()
-            break
-          case 'submit':
-            value = submitDownscalingTask(data)
-            break
-          case 'read':
-            value = readDownscalingTask(data)
-            break
-          case 'restore':
-            value = restoreDownscalingTask(data)
-            break
-          case 'result':
-            value = queryDownscalingTaskResult(data)
-            break
-          default:
-            throw new Error('Unknown transport operation')
-        }
-        return Response.json(value)
-      } catch (error) {
-        if (isRedirect(error)) return error
-        throw error
-      } finally {
-        clock.mockRestore()
-      }
-    })(new Request(`${origin}/tasks`, { method: 'POST', headers: { cookie } }), {})
-    if (response.status === 307) throw new Error('AUTHENTICATION_REQUIRED')
+    const value = await dispatchTaskRequest(operation, data, { cookie, now: requestClock ?? now })
     const held = [...holds].find(
       (entry) =>
         entry.operation === operation &&
@@ -131,10 +91,7 @@ export async function createLifecycleEnvironment({ emptyWorkspace = false } = {}
         window.lifecycleMounted = false
         const queryClient = createQueryClient()
         window.lifecycleDiscard = () => discardWorkspaceQueries(queryClient)
-        window.lifecycleTasks = createTaskService({ queryClient, transport: Object.fromEntries(
-          ['account', 'catalog', 'submit', 'read', 'restore', 'result'].map(operation =>
-            [operation, data => window.lifecycleRpc(operation, data)])
-        ) })
+        window.lifecycleTasks = createTaskService({ queryClient, transport: ${browserTaskTransport('lifecycleRpc')} })
         if (initialize) {
           await window.lifecycleTasks.initialize()
           // Explicit fixture preparation uses the real public delete/list paths, never a seed bypass.
@@ -155,7 +112,8 @@ export async function createLifecycleEnvironment({ emptyWorkspace = false } = {}
 
   async function open({ initialize = true } = {}) {
     profile ||= await mkdtemp(join(tmpdir(), 'meteo-task-lifecycle-'))
-    context = await chromium.launchPersistentContext(profile, { headless: true })
+    guardedBrowser = await launchGuardedPersistentContext(profile)
+    context = guardedBrowser.context
     await context.exposeBinding('lifecycleRpc', ({ page }, operation: string, data?: unknown) =>
       rpc(page, operation, data),
     )
@@ -182,7 +140,7 @@ export async function createLifecycleEnvironment({ emptyWorkspace = false } = {}
       return mount(await context.newPage(), initialize)
     },
     async reopen() {
-      await context?.close()
+      await guardedBrowser?.close()
       return open()
     },
     async signIn(account: string) {
@@ -197,6 +155,9 @@ export async function createLifecycleEnvironment({ emptyWorkspace = false } = {}
         {},
       )
       cookie = ''
+    },
+    setClock(clock: () => number) {
+      requestClock = clock
     },
     advance(milliseconds: number) {
       now += milliseconds
@@ -217,12 +178,17 @@ export async function createLifecycleEnvironment({ emptyWorkspace = false } = {}
     async reset() {
       for (const held of holds) held.release()
       holds.clear()
-      await context?.close()
-      context = undefined
-      if (profile) await rm(profile, { recursive: true, force: true })
-      profile = ''
-      cookie = ''
-      now = Date.parse('2026-10-13T08:00:00Z')
+      try {
+        await guardedBrowser?.close()
+      } finally {
+        guardedBrowser = undefined
+        context = undefined
+        if (profile) await rm(profile, { recursive: true, force: true })
+        profile = ''
+        cookie = ''
+        now = Date.parse('2026-10-13T08:00:00Z')
+        requestClock = undefined
+      }
     },
     async close() {
       await vite.close()

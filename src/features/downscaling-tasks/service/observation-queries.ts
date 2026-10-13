@@ -19,7 +19,7 @@ import {
   weightedStations,
   observationWind,
 } from './observation-values'
-import { coveredHours } from './temperature-aggregation'
+import { coveredHours, dailyTemperatureSummary, accumulationCoverage } from './temporal-summary'
 import {
   observationReference,
   nearestStation,
@@ -159,16 +159,7 @@ export function queryObservations(
       }
       return {
         value: sumQuanta / 10_000,
-        accumulation: {
-          start: new Date(hours[0]!).toISOString(),
-          end: new Date(hours[hours.length - 1]! + 3_600_000).toISOString(),
-          requestedStart: time,
-          requestedEnd: new Date(start + duration * 3_600_000).toISOString(),
-          bounds: '[start,end)' as const,
-          sampledHours: hours.length,
-          expectedHours: duration,
-          complete: hours.length === duration,
-        },
+        accumulation: accumulationCoverage(start, duration, hours),
       }
     })
     if ('ok' in values) return values
@@ -187,29 +178,18 @@ export function queryObservations(
       const hours = coveredHours(task, start, 24)
       if (!hours.length)
         return unavailable('MISSING_DATA', 'No hourly reference temperatures cover this UTC day.')
-      let sumQuanta = 0
-      let minimum = Infinity
-      for (const hour of hours) {
-        const value = weightedStations(support, (station) =>
+      const values = hours.map((hour) =>
+        weightedStations(support, (station) =>
           stationTemperature(reference, station, new Date(hour).toISOString()),
+        ),
+      )
+      return (
+        dailyTemperatureSummary(start, values) ??
+        unavailable(
+          'MISSING_DATA',
+          'A required hourly reference temperature is unavailable; a complete day cannot be reconstructed.',
         )
-        sumQuanta += Math.round(value * 10_000)
-        minimum = Math.min(minimum, value)
-      }
-      const mean = Math.round(sumQuanta / hours.length) / 10_000
-      return {
-        value: mean,
-        daily: {
-          mean,
-          minimum,
-          sampledHours: hours.length,
-          expectedHours: 24,
-          completeDay: hours.length === 24,
-          start: time,
-          end: new Date(start + 86_400_000).toISOString(),
-          bounds: '[start,end)' as const,
-        },
-      }
+      )
     })
     if ('ok' in values) return values
     return {

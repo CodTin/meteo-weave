@@ -146,11 +146,12 @@ export function validateTaskRecord(input: unknown): TaskReply {
 
 /** Inputs are schema-normalized records; lifecycle writes must not replace changed metadata. */
 export function sameTaskMetadata(left: DownscalingTask, right: DownscalingTask) {
-  return Object.keys(left).every(
+  return [...new Set([...Object.keys(left), ...Object.keys(right)])].every(
     (key) =>
       key === 'status' ||
       key === 'failureReason' ||
-      JSON.stringify(Reflect.get(left, key)) === JSON.stringify(Reflect.get(right, key)),
+      (Object.hasOwn(left, key) === Object.hasOwn(right, key) &&
+        JSON.stringify(Reflect.get(left, key)) === JSON.stringify(Reflect.get(right, key))),
   )
 }
 

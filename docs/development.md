@@ -142,6 +142,7 @@ Spec03 #4 提供任务服务、账号归属与持久化；Spec05 #6 提供完整
 - 默认传输使用 `src/server/functions/downscaling-tasks.ts` 的类型安全 Server Functions；新增 `getTaskCatalog()` 不接受配置参数，仅由服务器当前会话返回固定案例。非研究账号的**读取**例外要求完整不可变元数据与服务器规范案例相符，不信任客户端 catalog id／标记；`create` 和 `restore` 仍走既有角色准入，不能借助目录提交任意概率配置。身份只来自实际请求上下文。
 - `result(id, query)` 支持 points、time-series、grid、preview 和 export 数据查询，所有路径复用既有按需查询实现与各层的网格／采样约定。观测必须指定 `observationMode: 'stations' | 'interpolated'`，使用独立的 `referenceSeed/referenceVersion`，不受模型来源、分辨率或概率成员选择影响；这是合成台站及其插值，不是真实观测。
 - 概率式降尺度查询可指定 `ensemble: { kind: 'members' | 'mean', memberIds? }`，默认返回均值；成员身份稳定，缺失成员与实际均值分母明确返回，原始与观测层保持共享。温度、风分量／风速风向、MSL 气压、降水的单位／时间统计／累计区间见公开结果契约。历史原生温度快照不冒充日统计；需要日均／日最低温或降水累计时使用显式时间选项。所有查询受公共预算限制，不分配任意全域数组，也不持久化结果网格。
+- 新提交的预测窗口准入与保存时间使用同一个服务器时刻，避免跨整点后刚创建的记录失效；恢复仍按原提交时刻验证。删除后恢复同 id 的元数据时，在途读取双向比较不可变字段（包括省略的参考／案例字段），返回 `RECORD_CHANGED` 而不覆盖新身份。原生网格节点按公开坐标识别，浮点逆算误差不让零权重的缺测邻点污染有效风／降水样本；真正需要的缺测邻点仍返回不可用。
 - 开始、等待、失败和恢复使用既有公开状态与诊断：存储故障抛出 `TaskStorageError`；单条损坏／schema 不兼容保留在 `issues` 中，不重置其他历史；无法重建的版本不会伪造 Completed 可用结果。工作区丢弃会关闭实例并阻止迟到初始化／查询返回，但不删除已保存历史。仍沿用已有会话切换边界，不引入新的生命周期设计。
 - ECMWF／GFS／Fusion 仅为演示配置标签；没有远程资料下载、模型训练或真实推理。公开服务与原生 IndexedDB 的 Vitest 测试覆盖初始化、账号／角色隔离、回滚重试、删除不复活和跨查询一致性；完整业务页面 RPC、地图和导出文件 UI 仍需后续页面验收，不能以服务测试代替。
 
@@ -246,11 +247,11 @@ Vercel 图像优化没有被视为“安装即自动处理图片”：后续确�
 
 ### 自动化与证据
 
-所有浏览器测试通过 `tests/e2e/browser-guard.ts` 的公共入口取得运行时 `test`／`expect`。
-`check:agent` 使用 Bun 的导入解析器拒绝绕过入口的 import、re-export 或 require；类型导入可保留。
+UI 浏览器测试通过 `tests/e2e/browser-guard.ts` 取得运行时 `test`／`expect`；Vitest 的原生任务浏览器通过同文件的 `launchGuardedPersistentContext` 复用错误收集与判定，在关闭前后覆盖初始页面、重开和新增标签页。各原生环境必须调用返回的 `close()`，清理浏览器并断言所有意外诊断。
+`check:agent` 使用 Bun 的导入解析器检查整个 `tests/`，拒绝绕过该入口的 Playwright import、re-export 或 require；类型导入可保留。
 它还检查目录式路由命名，并接入 `check` 和 pre-commit。共有守卫只接受按 URL／类型／状态
 明确登记的预期故障，任何 pageerror（包括水合异常）仍失败。
-`test:browser-guard` 用独立浏览器子进程验证：正常案例通过，意外控制台错误和未捕获异常必须失败。
+`test:browser-guard` 用独立浏览器子进程验证 UI fixture；`tests/unit/task-browser-guard.test.ts` 对原生环境验证正常案例通过、意外控制台错误和未捕获异常必须使清理失败。任务测试只共享认证请求分派与时钟控制，延迟／故障场景保留在各自环境中；不以服务测试冒充完整业务页面验收。
 
 `.github/workflows/verify.yml` 在 push／PR／手动触发时读取项目运行时版本、frozen 安装，
 复用 `agent:verify` → `check:all`；日志、trace 和截图绑定提交上传。预提交保留快速检查，

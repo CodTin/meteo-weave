@@ -1,3 +1,4 @@
+import { windDiagnostics } from './wind-diagnostics'
 import type { ObservationReference, ObservationStation, ObservationSupport } from './contracts'
 
 export const roundObservation = (value: number) => Math.round(value * 10_000) / 10_000
@@ -51,18 +52,7 @@ export function observationWind(
       4 * Math.cos((latitude * Math.PI) / 2) + 2 * Math.sin((hours * Math.PI) / 12) + phase,
     ),
   )
-  const speed = roundObservation(Math.hypot(u10, v10))
-  return {
-    u10,
-    v10,
-    speed,
-    value: speed,
-    fromDirection:
-      speed === 0
-        ? null
-        : roundObservation(((Math.atan2(-u10, -v10) * 180) / Math.PI + 360) % 360) % 360,
-    directionStatus: speed === 0 ? ('calm' as const) : ('available' as const),
-  }
+  return windDiagnostics(u10, v10)
 }
 
 export function stationPressure(

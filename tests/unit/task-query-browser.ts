@@ -2,19 +2,15 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { vi } from 'vitest'
-import { chromium, type BrowserContext, type Page } from '@playwright/test'
+import {
+  launchGuardedPersistentContext,
+  type BrowserContext,
+  type Page,
+} from '../e2e/browser-guard'
 import { createServer } from 'vite'
 import { requestHandler } from '@tanstack/react-start/server'
-import { isRedirect } from '@tanstack/react-router'
-import { loginDemoAccount, requireDemoAccount } from '@/server/services/demo-session.server'
-import {
-  submitDownscalingTask,
-  getDemoTaskCatalog,
-  readDownscalingTask,
-  restoreDownscalingTask,
-  queryDownscalingTaskResult,
-} from '@/server/services/downscaling-tasks.server'
+import { loginDemoAccount } from '@/server/services/demo-session.server'
+import { browserTaskTransport, dispatchTaskRequest } from './task-test-transport'
 import type {
   createTaskService,
   DownscalingTask,
@@ -40,19 +36,28 @@ export const queryConfiguration = {
 export async function startQueryBrowser() {
   const vite = await createServer({
     configFile: false,
+    plugins: [
+      {
+        name: 'query-test-environment',
+        configureServer(server) {
+          server.middlewares.use('/query-test-environment', (_request, response) => {
+            response.statusCode = 200
+            response.setHeader('Content-Type', 'text/html')
+            response.end('<!doctype html><title>Native query test environment</title>')
+          })
+        },
+      },
+    ],
     optimizeDeps: { noDiscovery: true, include: ['@tanstack/react-query'] },
     resolve: { alias: { '@': fileURLToPath(new URL('../../src', import.meta.url)) } },
     // A test-only ephemeral asset server avoids racing the existing suite on E2E_PORT.
     server: { host: '127.0.0.1', port: 0, strictPort: true },
   })
-  vite.middlewares.use('/query-test-environment', (_request, response) => {
-    response.setHeader('Content-Type', 'text/html')
-    response.end('<!doctype html><title>Native query test environment</title>')
-  })
   await vite.listen()
   const address = vite.httpServer!.address()
   if (!address || typeof address === 'string') throw new Error('Expected listening test server')
   const origin = `http://127.0.0.1:${address.port}`
+  let guardedBrowser: Awaited<ReturnType<typeof launchGuardedPersistentContext>> | undefined
   let context: BrowserContext | undefined
   let page: Page
   let profile = ''
@@ -60,41 +65,7 @@ export async function startQueryBrowser() {
   let serverTime = Date.parse('2026-10-13T08:00:00Z')
 
   async function rpc(operation: string, data?: unknown) {
-    let value: unknown
-    const response = await requestHandler(() => {
-      const clock = vi.spyOn(Date, 'now').mockReturnValue(serverTime)
-      try {
-        switch (operation) {
-          case 'catalog':
-            value = getDemoTaskCatalog()
-            break
-          case 'account':
-            value = requireDemoAccount()
-            break
-          case 'submit':
-            value = submitDownscalingTask(data)
-            break
-          case 'read':
-            value = readDownscalingTask(data)
-            break
-          case 'restore':
-            value = restoreDownscalingTask(data)
-            break
-          case 'result':
-            value = queryDownscalingTaskResult(data)
-            break
-          default:
-            throw new Error('Unknown transport operation')
-        }
-        return Response.json(value)
-      } catch (error) {
-        if (isRedirect(error)) return error
-        throw error
-      } finally {
-        clock.mockRestore()
-      }
-    })(new Request('http://demo.test/tasks', { method: 'POST', headers: { cookie } }), {})
-    if (response.status === 307) throw new Error('AUTHENTICATION_REQUIRED')
+    const value = await dispatchTaskRequest(operation, data, { cookie, now: serverTime })
     return value
   }
 
@@ -120,7 +91,8 @@ export async function startQueryBrowser() {
 
   async function open() {
     profile ||= await mkdtemp(join(tmpdir(), 'meteo-query-'))
-    context = await chromium.launchPersistentContext(profile, { headless: true })
+    guardedBrowser = await launchGuardedPersistentContext(profile)
+    context = guardedBrowser.context
     await context.exposeBinding('queryRpc', (_source, operation: string, data?: unknown) =>
       rpc(operation, data),
     )
@@ -133,9 +105,7 @@ export async function startQueryBrowser() {
         import { createQueryClient } from '/src/lib/query/client.ts'
         window.queryTasks = createTaskService({
           queryClient: createQueryClient(),
-          transport: Object.fromEntries(['account', 'catalog', 'submit', 'read', 'restore', 'result'].map(
-            operation => [operation, data => window.queryRpc(operation, data)]
-          )),
+          transport: ${browserTaskTransport('queryRpc')},
         })
       `,
     })
@@ -144,12 +114,16 @@ export async function startQueryBrowser() {
   }
 
   async function reset() {
-    await context?.close()
-    context = undefined
-    if (profile) await rm(profile, { recursive: true, force: true })
-    profile = ''
-    cookie = ''
-    serverTime = Date.parse('2026-10-13T08:00:00Z')
+    try {
+      await guardedBrowser?.close()
+    } finally {
+      guardedBrowser = undefined
+      context = undefined
+      if (profile) await rm(profile, { recursive: true, force: true })
+      profile = ''
+      cookie = ''
+      serverTime = Date.parse('2026-10-13T08:00:00Z')
+    }
   }
 
   return {
@@ -158,6 +132,7 @@ export async function startQueryBrowser() {
     async open() {
       await signIn('researcher')
       await open()
+      return page
     },
     reset,
     async close() {
@@ -165,8 +140,9 @@ export async function startQueryBrowser() {
       await vite.close()
     },
     async reopen() {
-      await context?.close()
+      await guardedBrowser?.close()
       await open()
+      return page
     },
     async seed(configuration: unknown = queryConfiguration) {
       const created = await page.evaluate((input) => window.queryTasks.create(input), configuration)

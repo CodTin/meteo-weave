@@ -2,51 +2,60 @@ import { z } from 'zod'
 import type { DemoAccount } from '@/features/auth/demo-accounts'
 import { getDownscalingCapabilities } from './capabilities'
 
-const configurationInput = z.strictObject({
-  dataSource: z.enum(['ecmwf', 'gfs', 'fusion']),
-  region: z
-    .strictObject({
-      north: z.number().min(-90).max(90),
-      south: z.number().min(-90).max(90),
-      east: z.number().min(-180).max(180),
-      west: z.number().min(-180).max(180),
-    })
-    .refine((region) => region.north > region.south && region.east > region.west),
-  timeRange: z.discriminatedUnion('mode', [
-    z
-      .strictObject({ mode: z.literal('historical'), start: z.iso.date(), end: z.iso.date() })
-      .refine(
-        (range) =>
-          range.start <= range.end && range.start >= '2020-01-01' && range.end <= '2024-12-31',
-      ),
-    z
-      .strictObject({ mode: z.literal('forecast'), start: z.iso.datetime(), end: z.iso.datetime() })
-      .refine((range) => {
-        const hour = 60 * 60 * 1000
-        const currentHour = Math.floor(Date.now() / hour) * hour
-        const start = Date.parse(range.start)
-        const end = Date.parse(range.end)
-        return (
-          start % hour === 0 &&
-          end % hour === 0 &&
-          start <= end &&
-          start >= currentHour &&
-          end <= currentHour + 7 * 24 * hour
-        )
-      }),
-  ]),
-  variable: z.enum(['temperature', 'wind', 'pressure', 'precipitation']),
-  resolution: z.enum(['1km', '3km', '5km']),
-  advanced: z
-    .strictObject({
-      uncertaintyQuantification: z.boolean().default(false),
-      ensembleMembers: z.union([z.literal(5), z.literal(10), z.literal(20)]).optional(),
-    })
-    .optional(),
-  method: z.enum(['recommended', 'deterministic', 'probabilistic']).default('recommended'),
-})
+const configurationInput = (now: number) =>
+  z.strictObject({
+    dataSource: z.enum(['ecmwf', 'gfs', 'fusion']),
+    region: z
+      .strictObject({
+        north: z.number().min(-90).max(90),
+        south: z.number().min(-90).max(90),
+        east: z.number().min(-180).max(180),
+        west: z.number().min(-180).max(180),
+      })
+      .refine((region) => region.north > region.south && region.east > region.west),
+    timeRange: z.discriminatedUnion('mode', [
+      z
+        .strictObject({ mode: z.literal('historical'), start: z.iso.date(), end: z.iso.date() })
+        .refine(
+          (range) =>
+            range.start <= range.end && range.start >= '2020-01-01' && range.end <= '2024-12-31',
+        ),
+      z
+        .strictObject({
+          mode: z.literal('forecast'),
+          start: z.iso.datetime(),
+          end: z.iso.datetime(),
+        })
+        .refine((range) => {
+          const hour = 60 * 60 * 1000
+          const currentHour = Math.floor(now / hour) * hour
+          const start = Date.parse(range.start)
+          const end = Date.parse(range.end)
+          return (
+            start % hour === 0 &&
+            end % hour === 0 &&
+            start <= end &&
+            start >= currentHour &&
+            end <= currentHour + 7 * 24 * hour
+          )
+        }),
+    ]),
+    variable: z.enum(['temperature', 'wind', 'pressure', 'precipitation']),
+    resolution: z.enum(['1km', '3km', '5km']),
+    advanced: z
+      .strictObject({
+        uncertaintyQuantification: z.boolean().default(false),
+        ensembleMembers: z.union([z.literal(5), z.literal(10), z.literal(20)]).optional(),
+      })
+      .optional(),
+    method: z.enum(['recommended', 'deterministic', 'probabilistic']).default('recommended'),
+  })
 
-export function checkDownscalingConfiguration(account: DemoAccount, input: unknown) {
+export function checkDownscalingConfiguration(
+  account: DemoAccount,
+  input: unknown,
+  now = Date.now(),
+) {
   const capabilities = getDownscalingCapabilities(account)
   const requested = z
     .object({ method: z.string().optional(), advanced: z.unknown().optional() })
@@ -71,7 +80,7 @@ export function checkDownscalingConfiguration(account: DemoAccount, input: unkno
     .passthrough()
     .safeParse(input)
   const { role: _role, ownerId: _ownerId, ...configuration } = raw.success ? raw.data : {}
-  const parsed = configurationInput.safeParse(raw.success ? configuration : input)
+  const parsed = configurationInput(now).safeParse(raw.success ? configuration : input)
   if (!parsed.success) {
     return {
       ok: false as const,
@@ -112,7 +121,7 @@ export function checkDownscalingConfiguration(account: DemoAccount, input: unkno
   }
 }
 
-export type DownscalingConfigurationInput = z.input<typeof configurationInput>
+export type DownscalingConfigurationInput = z.input<ReturnType<typeof configurationInput>>
 export type AdmittedDownscalingConfiguration = Extract<
   ReturnType<typeof checkDownscalingConfiguration>,
   { ok: true }

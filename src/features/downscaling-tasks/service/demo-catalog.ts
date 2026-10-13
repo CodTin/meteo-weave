@@ -100,7 +100,5 @@ export function isCanonicalCatalogTask(task: DownscalingTask) {
   const expected = demoCatalogFor(task.ownerId).find((candidate) => candidate.id === task.id)
   if (!expected) return false
   const canonical = validateTaskRecord(expected)
-  return (
-    canonical.ok && sameTaskMetadata(task, canonical.task) && sameTaskMetadata(canonical.task, task)
-  )
+  return canonical.ok && sameTaskMetadata(task, canonical.task)
 }

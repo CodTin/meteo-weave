@@ -1,3 +1,4 @@
+import { windDiagnostics } from './wind-diagnostics'
 import {
   unavailable,
   type DownscalingTask,
@@ -13,7 +14,8 @@ import {
 } from './contracts'
 import { pressureAt, windAt, precipitationAt } from './variable-fields'
 import { temperatureAt } from './temperature-field'
-import { temperatureDay, coveredHours } from './temperature-aggregation'
+import { temperatureDay } from './temperature-aggregation'
+import { coveredHours } from './temporal-summary'
 
 type Selection = Pick<EnsembleMetadata, 'kind' | 'allMemberIds' | 'memberIds'>
 type Query = { points: ResultPoint[]; times: string[]; temporalResolution?: 'hourly' | 'daily' }
@@ -178,20 +180,9 @@ export function queryEnsemble(
         ? means(result.groups, selection, (members, scalar) => {
             const u10 = average(members.map((value) => value.u10))
             const v10 = average(members.map((value) => value.v10))
-            const speed = Math.round(Math.hypot(u10, v10) * 10_000) / 10_000
             return {
               ...scalar,
-              u10,
-              v10,
-              speed,
-              value: speed,
-              fromDirection:
-                speed === 0
-                  ? null
-                  : (Math.round((((Math.atan2(-u10, -v10) * 180) / Math.PI + 360) % 360) * 10_000) /
-                      10_000) %
-                    360,
-              directionStatus: speed === 0 ? ('calm' as const) : ('available' as const),
+              ...windDiagnostics(u10, v10),
               ensembleMean: { ...scalar.ensembleMean, meanMemberSpeed: scalar.value },
             }
           })
