@@ -1,3 +1,5 @@
+import { LockKeyhole } from 'lucide-react'
+import '@/styles/spec02.css'
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Outlet, useRouter } from '@tanstack/react-router'
@@ -74,10 +76,11 @@ export function DemoSessionBoundary() {
     <SessionTransition value={{ endSession, completeLogin }}>
       {leaving ? (
         <main
-          className="mx-auto max-w-lg space-y-6 px-6 py-20"
+          className="spec02-transition mx-auto my-12 w-[calc(100%-2.5rem)] max-w-lg space-y-6 px-6 py-8 sm:my-20"
           aria-labelledby="session-transition-title"
         >
-          <h1 id="session-transition-title" className="text-2xl font-semibold">
+          <LockKeyhole aria-hidden="true" className="size-8 text-ring" />
+          <h1 id="session-transition-title" className="font-display text-3xl font-semibold">
             {leaving === 'logout' ? '正在结束演示会话' : '正在进入演示工作区'}
           </h1>
           {failed ? (

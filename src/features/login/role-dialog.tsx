@@ -19,7 +19,7 @@ export function RoleDialog() {
         <Info aria-hidden="true" />
         查看角色与演示说明
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="spec02-dialog">
         <DialogHeader className="text-left">
           <DialogTitle className="pr-8">角色与演示说明</DialogTitle>
           <DialogDescription>

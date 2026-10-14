@@ -10,7 +10,7 @@ export function LoginPreview({ preselectedAccount }: { preselectedAccount?: Demo
 
   return (
     <Tabs value={tab} onValueChange={setTab}>
-      <TabsList aria-label="登录入口内容" className="mb-4 grid w-full grid-cols-2">
+      <TabsList variant="line" aria-label="登录入口内容" className="mb-5 grid w-full grid-cols-2">
         <TabsTrigger value="login">登录</TabsTrigger>
         <TabsTrigger value="explanation">演示说明</TabsTrigger>
       </TabsList>

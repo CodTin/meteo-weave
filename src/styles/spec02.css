@@ -1,0 +1,312 @@
+/* DESIGN.md: atmospheric depth, editorial typography, precise account identifiers.
+   Scoped to Spec02: preserve shared tokens, AA-tested primary and all other pages. */
+.spec02-access {
+  position: relative;
+  isolation: isolate;
+  margin-inline: auto;
+  max-width: 1200px;
+  padding-block: 1.5rem 2.5rem;
+}
+.spec02-access::before {
+  position: absolute;
+  z-index: -1;
+  inset: -2rem -1rem;
+  content: '';
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at 40% 35%,
+    color-mix(in srgb, var(--storm) 12%, transparent),
+    transparent 65%
+  );
+}
+.spec02-access-grid {
+  display: grid;
+  gap: 2rem;
+  align-items: start;
+}
+.spec02-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.spec02-eyebrow::before {
+  content: '';
+  width: 1.5rem;
+  height: 1px;
+  background: var(--storm);
+}
+.spec02-access-title {
+  margin-block: 1.5rem 1rem;
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+.spec02-access-lead {
+  max-width: 42ch;
+  color: var(--muted-foreground);
+  font-size: 0.9375rem;
+  line-height: 1.85;
+}
+.spec02-directory {
+  margin-top: 2rem;
+}
+.spec02-directory-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.spec02-directory-list {
+  display: grid;
+  gap: 0.625rem;
+}
+.spec02-directory-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.875rem 1rem;
+  background: color-mix(in srgb, var(--slate) 70%, transparent);
+}
+.spec02-account-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid color-mix(in srgb, var(--storm) 35%, var(--border));
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--storm) 10%, var(--midnight));
+  color: var(--ring);
+}
+.spec02-account-mark svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.spec02-password-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+.spec02-password-note code {
+  border: 1px dashed var(--input);
+  border-radius: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+.spec02-panel {
+  border-radius: 0.5rem;
+  border-color: var(--border);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.14);
+}
+.spec02-login-panel {
+  border-top: 2px solid var(--storm);
+  padding-block: 1.5rem;
+  background: var(--slate);
+}
+.spec02-login-panel > [data-slot='card-header'] {
+  gap: 0.75rem;
+}
+.spec02-login-panel > [data-slot='card-content'] {
+  display: grid;
+  gap: 1.5rem;
+}
+.spec02-login-panel [data-slot='card-title'] {
+  font-size: 1.75rem;
+}
+.spec02-login-panel [data-slot='tabs-list'] {
+  border-bottom: 1px solid var(--border);
+}
+.spec02-login-panel [data-slot='tabs-trigger'] {
+  min-height: 2.75rem;
+}
+.spec02-login-panel [data-slot='tabs-trigger'][data-state='active']::after {
+  background: var(--storm);
+}
+.spec02-login-panel [data-slot='input'] {
+  min-height: 3rem;
+  border-radius: 0.25rem;
+  background: var(--midnight);
+  padding-inline: 1rem;
+  font-size: 1rem;
+}
+.spec02-primary-action {
+  border-radius: 0.25rem;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.spec02-primary-action:not(:disabled):hover {
+  box-shadow: 0 0 20px color-mix(in srgb, var(--storm) 24%, transparent);
+}
+.spec02-primary-action:not(:disabled):active {
+  transform: scale(0.99);
+}
+.spec02-feedback {
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--ring);
+  border-radius: 0.25rem;
+  background: var(--midnight);
+}
+.spec02-feedback[data-error='true'] {
+  border-left-color: var(--destructive);
+}
+.spec02-feedback[data-error='true'] > svg {
+  color: var(--destructive);
+}
+.spec02-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--success);
+  white-space: nowrap;
+}
+.spec02-status-tag::before {
+  content: '';
+  width: 0.3125rem;
+  height: 0.3125rem;
+  background: currentColor;
+  border-radius: 50%;
+}
+.spec02-session-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--slate);
+}
+.spec02-session-badge .spec02-account-mark {
+  width: 2rem;
+  height: 2rem;
+}
+.spec02-settings-identity {
+  border-left: 2px solid var(--storm);
+}
+.spec02-setting-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.spec02-dialog {
+  border-radius: 0.75rem;
+  border-top: 2px solid var(--storm);
+  background: var(--slate);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.45);
+}
+.spec02-dialog [data-slot='dialog-title'] {
+  font-size: 1.5rem;
+}
+.spec02-role-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 5rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.875rem;
+  background: var(--midnight);
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.spec02-role-option:hover {
+  border-color: var(--ring);
+}
+.spec02-role-option:has(:checked) {
+  border-color: var(--ring);
+  background: color-mix(in srgb, var(--storm) 12%, var(--midnight));
+  box-shadow: inset 3px 0 var(--storm);
+}
+.spec02-role-option:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.spec02-selection-label {
+  color: var(--ring);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1rem;
+}
+.spec02-method-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background: var(--midnight);
+  padding: 0.25rem 0.75rem;
+}
+.spec02-method-tag[data-recommended='true'] {
+  border-color: color-mix(in srgb, var(--storm) 50%, var(--border));
+  color: var(--ring);
+}
+.spec02-transition {
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--storm);
+  border-radius: 0.5rem;
+  background: var(--slate);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.2);
+}
+@media (min-width: 768px) {
+  .spec02-access {
+    padding-block: 3rem;
+  }
+  .spec02-access-title {
+    font-size: 3rem;
+  }
+}
+@media (min-width: 1024px) {
+  .spec02-access {
+    padding-block: 4rem;
+  }
+  .spec02-access-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 4rem;
+  }
+  .spec02-access-title {
+    max-width: 10ch;
+    font-size: 3.75rem;
+  }
+  .spec02-login-panel {
+    margin-top: 0.25rem;
+    padding-block: 2rem;
+  }
+  .spec02-login-panel > [data-slot='card-header'],
+  .spec02-login-panel > [data-slot='card-content'] {
+    padding-inline: 2rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spec02-primary-action,
+  .spec02-role-option {
+    transition: none;
+    transform: none;
+  }
+}

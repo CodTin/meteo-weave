@@ -1,5 +1,5 @@
 import { Link, useRouteContext } from '@tanstack/react-router'
-import { RoleSwitchDialog } from '@/features/user-settings/role-switch-dialog'
+import { LockKeyhole } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
   Card,
@@ -9,6 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { AccountMark } from '@/features/auth/account-mark'
+import { RoleSwitchDialog } from './role-switch-dialog'
 
 export function SettingsPage() {
   const { account } = useRouteContext({ from: '/_workspace' })
@@ -17,35 +19,44 @@ export function SettingsPage() {
       <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
         这里显示当前演示账号与角色，不收集真实个人信息。切换角色需先退出并重新登录；分析偏好尚未开放。
       </p>
-      <Card>
+      <Card className="spec02-panel">
         <CardHeader>
-          <CardTitle>演示角色与分析偏好</CardTitle>
+          <CardTitle className="text-2xl">演示角色与分析偏好</CardTitle>
           <CardDescription id="settings-status">
             演示身份由统一账号目录解析。角色选择不会直接改变身份；分析偏好暂不支持保存。
           </CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-5 sm:grid-cols-2">
-            <div className="rounded-lg border bg-background p-4">
-              <dt className="text-sm font-medium">用户角色</dt>
-              <dd className="mt-2 text-sm leading-7 text-muted-foreground">
+            <div className="spec02-settings-identity rounded-lg border bg-background p-4">
+              <dt className="spec02-setting-label text-sm font-medium">
+                用户角色
+                {account && <span className="spec02-status-tag">当前会话</span>}
+              </dt>
+              <dd className="mt-3 text-sm leading-7 text-muted-foreground">
                 {account ? (
-                  <>
-                    <span className="block">
-                      {account.name} · {account.id}
-                    </span>
-                    <span>
-                      {account.roleLabel} · {account.roleTitle}
-                    </span>
-                  </>
+                  <div className="flex items-center gap-3">
+                    <AccountMark account={account} />
+                    <div className="min-w-0">
+                      <span className="block text-foreground">
+                        {account.roleLabel}{' '}
+                        <span className="text-xs text-muted-foreground">· {account.roleTitle}</span>
+                      </span>
+                      <span className="block text-xs">
+                        {account.name} · <code className="font-mono">{account.id}</code>
+                      </span>
+                    </div>
+                  </div>
                 ) : (
                   '未登录，请使用公开演示账号登录后查看身份。'
                 )}
               </dd>
             </div>
-            <div className="rounded-lg border bg-background p-4">
-              <dt className="text-sm font-medium">分析偏好</dt>
-              <dd className="mt-2 text-sm leading-7 text-muted-foreground">
+            <div className="rounded-lg border border-dashed bg-background/40 p-4">
+              <dt className="spec02-setting-label text-sm font-medium">
+                分析偏好 <LockKeyhole aria-hidden="true" className="size-4 text-muted-foreground" />
+              </dt>
+              <dd className="mt-3 text-sm leading-7 text-muted-foreground">
                 尚未接入，不保存分析偏好。
               </dd>
             </div>

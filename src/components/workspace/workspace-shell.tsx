@@ -1,3 +1,4 @@
+import { AccountMark } from '@/features/auth/account-mark'
 import { Button } from '@/components/ui/button'
 import { useDemoSessionTransition } from '@/features/auth/session-transition'
 import { useRef } from 'react'
@@ -82,18 +83,21 @@ export function WorkspaceShell() {
               </nav>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <section
-                aria-label="当前演示账号"
-                className="rounded-lg border px-3 py-2 text-xs leading-6"
-              >
+              <section aria-label="当前演示账号" className="spec02-session-badge text-xs leading-5">
                 {account ? (
                   <>
-                    <p>
-                      {account.name} · {account.id}
-                    </p>
-                    <p className="text-muted-foreground">
-                      {account.roleLabel} · {account.roleTitle}
-                    </p>
+                    <span className="hidden sm:inline-flex">
+                      <AccountMark account={account} />
+                    </span>
+                    <div>
+                      <p>
+                        {account.name} · <code className="font-mono">{account.id}</code>
+                      </p>
+                      <p className="flex items-center gap-2 text-muted-foreground">
+                        <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
+                        {account.roleLabel} · {account.roleTitle}
+                      </p>
+                    </div>
                   </>
                 ) : (
                   <p className="text-muted-foreground">未登录 · 工作区预览</p>
