@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Eye, EyeOff, Info } from 'lucide-react'
+import { Eye, EyeOff, Info, ArrowRight, CircleAlert } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { resolveDemoAccount, type DemoAccount } from '@/features/auth/demo-accounts'
@@ -91,7 +91,7 @@ export function LoginForm({ preselectedAccount }: { preselectedAccount?: DemoAcc
       )}
     >
       {selected && (
-        <p className="mb-5 text-sm leading-7 text-muted-foreground">
+        <p className="spec02-feedback mb-5 p-4 text-sm leading-7 text-muted-foreground">
           已为下次登录预选 {selected.name}（{selected.roleLabel}
           ）。仅预选账号，尚未登录；可修改账号，仍需填写公开演示密码验证。
         </p>
@@ -101,11 +101,12 @@ export function LoginForm({ preselectedAccount }: { preselectedAccount?: DemoAcc
         <FormField
           id="login-account"
           label="账号"
-          help="必填。使用上方公开的演示账号标识。"
+          help="必填。使用公开的演示账号标识。"
           error={errors.account?.message}
         >
           <Input
             id="login-account"
+            className="font-mono"
             type="text"
             autoComplete="off"
             autoCapitalize="none"
@@ -148,8 +149,12 @@ export function LoginForm({ preselectedAccount }: { preselectedAccount?: DemoAcc
             </Button>
           </div>
         </FormField>
-        <Button type="submit" className="w-full">
+        <Button
+          type="submit"
+          className="spec02-primary-action min-h-12 w-full active:bg-primary/75"
+        >
           {isSubmitting ? '正在登录…' : '登录演示账号'}
+          <ArrowRight aria-hidden="true" />
         </Button>
       </fieldset>
       {!interactive && (
@@ -159,8 +164,15 @@ export function LoginForm({ preselectedAccount }: { preselectedAccount?: DemoAcc
       )}
       <output aria-live="polite" aria-atomic="true" className="mt-4 block">
         {notice && (
-          <span className="flex gap-3 rounded-md border bg-muted p-4 text-sm leading-7">
-            <Info className="mt-1 size-5 shrink-0 text-ring" aria-hidden="true" />
+          <span
+            data-error={loginFailed}
+            className="spec02-feedback flex gap-3 p-4 text-sm leading-7"
+          >
+            {loginFailed ? (
+              <CircleAlert className="mt-1 size-5 shrink-0" aria-hidden="true" />
+            ) : (
+              <Info className="mt-1 size-5 shrink-0 text-ring" aria-hidden="true" />
+            )}
             <span id="login-feedback">{notice}</span>
           </span>
         )}

@@ -1,3 +1,5 @@
+import { Check, ArrowRightLeft } from 'lucide-react'
+import { AccountMark } from '@/features/auth/account-mark'
 import { useState } from 'react'
 import { useDemoSessionTransition } from '@/features/auth/session-transition'
 import { Button } from '@/components/ui/button'
@@ -24,16 +26,19 @@ export function RoleSwitchDialog({ account }: { account: DemoAccount }) {
       }}
     >
       <DialogTrigger asChild>
-        <Button>切换演示角色</Button>
+        <Button className="spec02-primary-action">
+          <ArrowRightLeft aria-hidden="true" />
+          切换演示角色
+        </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="spec02-dialog">
         <DialogHeader className="text-left">
           <DialogTitle className="pr-8">切换演示角色</DialogTitle>
           <DialogDescription>
             确认后将退出当前会话并清理当前工作区的临时状态。目标账号仅预选，下次仍需使用公开演示密码重新登录；取消不会改变当前身份或工作区。
           </DialogDescription>
         </DialogHeader>
-        <p className="text-sm">
+        <p className="rounded-md border bg-background px-4 py-3 text-sm leading-6">
           当前账号：{account.name} · {account.roleLabel}
         </p>
         <fieldset className="space-y-3">
@@ -45,7 +50,7 @@ export function RoleSwitchDialog({ account }: { account: DemoAccount }) {
                 key={candidate.id}
                 htmlFor={`next-demo-${candidate.id}`}
                 aria-label={`${candidate.roleLabel} · ${candidate.roleTitle} · ${candidate.name} · ${candidate.id}`}
-                className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm leading-7"
+                className="spec02-role-option text-sm leading-6"
               >
                 <input
                   id={`next-demo-${candidate.id}`}
@@ -54,21 +59,39 @@ export function RoleSwitchDialog({ account }: { account: DemoAccount }) {
                   value={candidate.id}
                   checked={target === candidate.id}
                   onChange={() => setTarget(candidate.id)}
-                  className="mt-2 size-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  className="size-4 shrink-0 accent-primary"
                 />
-                <span>
-                  <span className="block font-medium">
-                    {candidate.roleLabel} · {candidate.roleTitle}
+                <AccountMark account={candidate} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 font-medium">
+                    <span>
+                      {candidate.roleLabel}{' '}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        · {candidate.roleTitle}
+                      </span>
+                    </span>
+                    <span className="spec02-selection-label inline-flex min-h-4 min-w-14 items-center gap-1">
+                      {target === candidate.id && (
+                        <>
+                          <Check aria-hidden="true" className="size-3" />
+                          已选择
+                        </>
+                      )}
+                    </span>
                   </span>
-                  <span className="block text-muted-foreground">
-                    {candidate.name} · {candidate.id}
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {candidate.name} · <code className="font-mono">{candidate.id}</code>
                   </span>
                 </span>
               </label>
             ))}
         </fieldset>
-        <DialogFooter>
-          <Button disabled={!target} onClick={() => void endSession(target)}>
+        <DialogFooter className="border-t pt-4">
+          <Button
+            className="spec02-primary-action"
+            disabled={!target}
+            onClick={() => void endSession(target)}
+          >
             退出并重新登录
           </Button>
           <DialogClose asChild>

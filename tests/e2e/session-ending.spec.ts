@@ -226,10 +226,15 @@ test('successful login announces opening the new workspace while its document is
     await route.continue()
   })
   try {
-    await submitDemoLogin(page, 'policy')
-    await expect
-      .poll(() => visibleTransitions)
-      .toContain('visible-session:正在打开工作区…|workspace:false')
+    // A click can await its document navigation. Observe and release that held
+    // document concurrently, instead of waiting for the click to finish first.
+    await Promise.all([
+      submitDemoLogin(page, 'policy'),
+      expect
+        .poll(() => visibleTransitions)
+        .toContain('visible-session:正在打开工作区…|workspace:false')
+        .finally(release),
+    ])
   } finally {
     release()
   }

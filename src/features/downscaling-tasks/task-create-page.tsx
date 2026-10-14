@@ -1,4 +1,5 @@
-import { SlidersHorizontal } from 'lucide-react'
+import { Sparkles, SlidersHorizontal } from 'lucide-react'
+import '@/styles/spec02.css'
 import { Link, useRouteContext } from '@tanstack/react-router'
 import { getDownscalingCapabilities, type DownscalingMethod } from './capabilities'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -21,7 +22,7 @@ export function TaskCreatePage() {
   const { account } = useRouteContext({ from: '/_workspace' })
   const capabilities = getDownscalingCapabilities(account)
   return (
-    <Card className="surface-accent gap-4 py-4">
+    <Card className="spec02-panel gap-2 py-6">
       <CardHeader>
         <div className="status-icon">
           <SlidersHorizontal className="size-5" aria-hidden="true" />
@@ -33,10 +34,15 @@ export function TaskCreatePage() {
       </CardHeader>
       <CardContent>
         <section aria-label="当前角色的配置能力" className="space-y-2 text-sm leading-6">
-          <h3 className="font-medium">{account.roleLabel} · 配置能力</h3>
+          <h3 className="font-display text-lg font-semibold">{account.roleLabel} · 配置能力</h3>
           <ul aria-label="可用降尺度方法" className="flex flex-wrap gap-2">
             {capabilities.methods.map((method) => (
-              <li key={method} className="rounded-md border px-3 py-1">
+              <li
+                key={method}
+                className="spec02-method-tag"
+                data-recommended={method === 'recommended'}
+              >
+                {method === 'recommended' && <Sparkles aria-hidden="true" className="size-3.5" />}
                 {methodLabels[method]}
               </li>
             ))}
