@@ -1,5 +1,3 @@
-import { Sparkles, SlidersHorizontal } from 'lucide-react'
-import '@/styles/spec02.css'
 import { Link, useRouteContext } from '@tanstack/react-router'
 import { getDownscalingCapabilities, type DownscalingMethod } from './capabilities'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -25,11 +23,8 @@ export function TaskCreatePage() {
   return (
     <div className="space-y-6">
       <SpatialRegionSelector />
-      <Card className="spec02-panel gap-2 py-6">
+      <Card className="gap-4 py-4">
         <CardHeader>
-          <div className="status-icon">
-            <SlidersHorizontal className="size-5" aria-hidden="true" />
-          </div>
           <CardTitle>任务配置与计算尚未接入</CardTitle>
           <CardDescription id="task-create-status">
             当前提供角色能力与配置准入规则，不采集参数，不提交、保存或模拟执行任务。配置通过检查不代表任务已创建。
@@ -37,15 +32,10 @@ export function TaskCreatePage() {
         </CardHeader>
         <CardContent>
           <section aria-label="当前角色的配置能力" className="space-y-2 text-sm leading-6">
-            <h3 className="font-display text-lg font-semibold">{account.roleLabel} · 配置能力</h3>
+            <h3 className="font-medium">{account.roleLabel} · 配置能力</h3>
             <ul aria-label="可用降尺度方法" className="flex flex-wrap gap-2">
               {capabilities.methods.map((method) => (
-                <li
-                  key={method}
-                  className="spec02-method-tag"
-                  data-recommended={method === 'recommended'}
-                >
-                  {method === 'recommended' && <Sparkles aria-hidden="true" className="size-3.5" />}
+                <li key={method} className="rounded-md border px-3 py-1">
                   {methodLabels[method]}
                 </li>
               ))}
@@ -73,7 +63,7 @@ export function TaskCreatePage() {
             </p>
           </section>
         </CardContent>
-        <CardFooter className="flex-wrap border-t pt-6">
+        <CardFooter className="flex-wrap">
           <Button disabled aria-describedby="task-create-status">
             提交降尺度任务
           </Button>

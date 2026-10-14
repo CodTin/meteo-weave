@@ -9,6 +9,7 @@ import {
   type BoundingBox,
   type ValidationErrors,
 } from './validation'
+import { MapContainer } from './map-container'
 
 interface CoordinateInputs {
   west: string
@@ -197,6 +198,8 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
             重置
           </Button>
         </div>
+
+        <MapContainer bbox={confirmedRegion} />
 
         {confirmedRegion && dimensions && (
           <output
