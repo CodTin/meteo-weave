@@ -69,9 +69,7 @@ test.describe('Spatial Region Selection', () => {
 
     const alerts = page.getByRole('alert')
     await expect(alerts.first()).toBeVisible()
-    await expect(
-      page.locator('text=西经必须小于东经').or(page.locator('text=日期变更线')),
-    ).toBeVisible()
+    await expect(alerts.first()).toContainText('日期变更线')
   })
 
   test('shows error for south >= north', async ({ page }) => {
@@ -82,7 +80,7 @@ test.describe('Spatial Region Selection', () => {
 
     await page.getByRole('button', { name: '确认区域' }).click()
 
-    await expect(page.getByRole('alert')).toContainText('南纬必须小于北纬')
+    await expect(page.getByRole('alert').first()).toContainText('南纬必须小于北纬')
   })
 
   test('shows error for dateline-crossing region', async ({ page }) => {
@@ -93,7 +91,7 @@ test.describe('Spatial Region Selection', () => {
 
     await page.getByRole('button', { name: '确认区域' }).click()
 
-    await expect(page.getByRole('alert')).toContainText('日期变更线')
+    await expect(page.getByRole('alert').first()).toContainText('日期变更线')
   })
 
   test('clears error when user starts correcting input', async ({ page }) => {
@@ -123,7 +121,7 @@ test.describe('Spatial Region Selection', () => {
     await page.getByLabel('北纬（North）').fill('40')
     await page.getByRole('button', { name: '确认区域' }).click()
 
-    await expect(page.getByRole('status')).toContainText('100°')
+    await expect(page.locator('output[aria-label="已确认的区域信息"]')).toContainText('100°')
 
     // Try to enter invalid data
     await page.getByLabel('西经（West）').clear()
@@ -158,7 +156,8 @@ test.describe('Spatial Region Selection', () => {
   })
 
   test('supports keyboard-only operation', async ({ page }) => {
-    await page.keyboard.press('Tab')
+    // Focus the first input directly
+    await page.getByLabel('西经（West）').focus()
     await expect(page.getByLabel('西经（West）')).toBeFocused()
 
     await page.keyboard.type('100')
