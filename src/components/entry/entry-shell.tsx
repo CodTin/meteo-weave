@@ -1,45 +1,23 @@
+import { BrandMark } from '@/components/brand/brand-mark'
 import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 
 export function EntryShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-svh flex-col">
+    <div className="atmospheric-canvas flex min-h-svh flex-col">
       <a href="#main-content" className="skip-link">
         跳转到主要内容
       </a>
-      <header className="border-b bg-background">
+      <header className="border-b bg-sidebar/80">
         <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between gap-4 px-5 sm:px-8">
           <Link
             to="/"
             aria-label="MeteoWeave · 平台入口"
             className="flex min-w-0 items-center gap-3 rounded-md"
           >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 40 40"
-              className="size-10 shrink-0 text-primary"
-              fill="none"
-            >
-              <rect
-                x="1"
-                y="1"
-                width="38"
-                height="38"
-                rx="10"
-                fill="currentColor"
-                fillOpacity=".12"
-                stroke="currentColor"
-                strokeOpacity=".4"
-              />
-              <path
-                d="M8 15c5-9 9 9 14 0s7-1 10-1M8 22c5-9 9 9 14 0s7-1 10-1M8 29c5-9 9 9 14 0s7-1 10-1"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-            </svg>
+            <BrandMark />
             <span>
-              <span className="block font-display text-2xl font-semibold leading-tight tracking-tight">
+              <span className="block font-display text-2xl font-bold leading-tight tracking-tight">
                 MeteoWeave
               </span>
               <span className="block text-xs tracking-widest text-muted-foreground">
@@ -47,15 +25,13 @@ export function EntryShell({ children }: { children: ReactNode }) {
               </span>
             </span>
           </Link>
-          <span className="rounded-full border px-3 py-1 font-mono text-xs text-muted-foreground">
-            DEMO
-          </span>
+          <span className="status-label text-muted-foreground">DEMO</span>
         </div>
       </header>
       <main
         id="main-content"
         tabIndex={-1}
-        className="mx-auto w-full max-w-6xl flex-1 px-5 py-10 sm:px-8 sm:py-12"
+        className="mx-auto w-full max-w-6xl flex-1 px-5 py-10 sm:px-8 sm:py-14"
       >
         {children}
       </main>

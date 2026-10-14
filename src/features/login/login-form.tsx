@@ -98,7 +98,7 @@ export function LoginForm() {
             </Button>
           </div>
         </FormField>
-        <Button type="submit" className="w-full active:bg-primary/75">
+        <Button type="submit" className="w-full">
           检查登录表单
         </Button>
       </fieldset>

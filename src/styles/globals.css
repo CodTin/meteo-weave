@@ -76,7 +76,13 @@
 
 :root {
   color-scheme: dark;
-  --radius: 0.625rem;
+  --radius: 0.5rem;
+  --void: #0a0e14;
+  --silver: #b8c5d6;
+  --snow: #f8fafc;
+  --ease-smooth: cubic-bezier(0.33, 1, 0.68, 1);
+  --surface-shadow: 0 8px 24px rgb(0 0 0 / 15%), inset 0 1px 0 rgb(248 250 252 / 3%);
+  --glow-storm: 0 0 24px rgb(123 97 255 / 18%);
   --midnight: #151b26;
   --slate: #1e2835;
   --storm: #7b61ff;
@@ -94,7 +100,7 @@
   --secondary: #2a3441;
   --secondary-foreground: var(--foreground);
   --muted: #2a3441;
-  --muted-foreground: #a7b6c9;
+  --muted-foreground: var(--silver);
   --accent: #2a3441;
   --accent-foreground: #f8fafc;
   --success: var(--aurora);
@@ -134,6 +140,10 @@
     outline: 2px solid var(--ring);
     outline-offset: 4px;
   }
+  button:not(:disabled),
+  [role='tab']:not(:disabled) {
+    cursor: pointer;
+  }
   .font-mono,
   time,
   data {
@@ -157,5 +167,89 @@
 @layer components {
   .skip-link {
     @apply fixed top-3 left-3 z-50 -translate-y-24 rounded-md bg-primary px-4 py-3 text-sm text-primary-foreground focus:translate-y-0;
+  }
+}
+
+/* DESIGN.md: atmospheric depth, editorial headings and restrained instrument details.
+   These are UI surfaces, never continuous meteorological color scales. */
+@layer components {
+  .atmospheric-canvas {
+    background:
+      radial-gradient(ellipse at 95% 0, rgb(123 97 255 / 8%), transparent 42%), var(--background);
+  }
+  .surface-card {
+    box-shadow: var(--surface-shadow);
+  }
+  .surface-accent {
+    border-top-color: var(--storm);
+    box-shadow:
+      var(--surface-shadow),
+      0 -1px 0 rgb(123 97 255 / 25%);
+  }
+  .surface-error {
+    border-top-color: var(--ember);
+  }
+  .eyebrow {
+    @apply flex items-center gap-2 font-mono text-xs font-medium tracking-[0.12em] text-muted-foreground;
+  }
+  .page-heading {
+    font-size: clamp(2rem, 3.4vw, 3rem);
+    line-height: 1.25;
+    @apply font-display font-bold tracking-tight text-foreground;
+  }
+  .status-label {
+    @apply inline-flex items-center gap-2 rounded-sm border px-2.5 py-1 font-mono text-xs leading-5;
+  }
+  .status-icon {
+    @apply mb-2 flex size-12 items-center justify-center rounded-lg border bg-background text-ring;
+  }
+  .technical-panel {
+    background: linear-gradient(150deg, rgb(184 197 214 / 4%), transparent 60%), var(--void);
+    @apply overflow-hidden rounded-lg border;
+  }
+  .workflow-step {
+    @apply relative rounded-lg border bg-background p-5;
+    border-top-color: color-mix(in srgb, var(--storm) 45%, var(--border));
+  }
+  .workflow-step-number {
+    @apply font-mono text-2xl font-medium leading-none text-ring;
+  }
+  .action-button {
+    transition:
+      background-color 180ms var(--ease-smooth),
+      border-color 180ms var(--ease-smooth),
+      box-shadow 180ms var(--ease-smooth),
+      transform 180ms var(--ease-smooth);
+  }
+  .action-button:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .action-primary:not(:disabled):hover {
+    background-color: #5d42d0;
+    box-shadow: var(--glow-storm);
+  }
+  .workspace-link {
+    transition:
+      background-color 180ms var(--ease-smooth),
+      border-color 180ms var(--ease-smooth);
+  }
+  .workspace-link[aria-current='page'] {
+    background: linear-gradient(90deg, rgb(123 97 255 / 18%), rgb(123 97 255 / 5%));
+    box-shadow: inset 2px 0 var(--storm);
+  }
+  .login-context {
+    @apply relative hidden min-w-0 flex-col justify-between gap-10 border-r pr-10 lg:flex;
+  }
+  [data-slot='dialog-content'] {
+    border-top-color: var(--storm);
+    box-shadow:
+      0 24px 80px rgb(0 0 0 / 50%),
+      0 0 48px rgb(123 97 255 / 8%);
+  }
+  [data-slot='dialog-overlay'] {
+    backdrop-filter: blur(5px);
+  }
+  [data-slot='tabs-trigger'][data-state='active'] {
+    box-shadow: inset 0 -2px var(--storm);
   }
 }

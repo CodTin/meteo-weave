@@ -1,3 +1,4 @@
+import { SlidersHorizontal } from 'lucide-react'
 import { Link } from '@tanstack/react-router'
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -15,8 +16,11 @@ export function TaskCreatePage() {
       <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
         配置一次降尺度计算请求：从数据源到时空范围、气象变量、降尺度方法与目标分辨率。
       </p>
-      <Card>
+      <Card className="surface-accent">
         <CardHeader>
+          <div className="status-icon">
+            <SlidersHorizontal className="size-5" aria-hidden="true" />
+          </div>
           <CardTitle>任务配置与计算尚未接入</CardTitle>
           <CardDescription id="task-create-status">
             当前仅说明配置流程，不采集参数，也不会提交、保存或模拟执行降尺度任务。
@@ -29,15 +33,15 @@ export function TaskCreatePage() {
               ['02', '定义降尺度配置', '选择降尺度方法与目标分辨率。'],
               ['03', '提交与分析', '服务接入后提交任务，查看任务状态与结果分析。'],
             ].map(([step, title, description]) => (
-              <li key={step} className="rounded-lg border bg-background p-4">
-                <span className="font-mono text-xs text-muted-foreground">{step}</span>
+              <li key={step} className="workflow-step">
+                <span className="workflow-step-number">{step}</span>
                 <h3 className="mt-3 text-sm font-medium">{title}</h3>
                 <p className="mt-2 text-sm leading-7 text-muted-foreground">{description}</p>
               </li>
             ))}
           </ol>
         </CardContent>
-        <CardFooter className="flex-wrap">
+        <CardFooter className="flex-wrap border-t pt-6">
           <Button disabled aria-describedby="task-create-status">
             提交降尺度任务
           </Button>
