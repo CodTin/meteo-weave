@@ -3,8 +3,8 @@ import { requireDemoAccount } from '@/server/services/demo-session.server'
 import { checkDownscalingConfiguration } from '@/features/downscaling-tasks/configuration-admission'
 
 // Admission only: no task, persistence, execution or result is created here.
-export function admitDownscalingConfiguration(input: unknown) {
+export function admitDownscalingConfiguration(input: unknown, now?: number) {
   const account = requireDemoAccount('/tasks/new')
-  const result = checkDownscalingConfiguration(account, input)
+  const result = checkDownscalingConfiguration(account, input, now)
   return result.ok ? { ...result, ownerId: account.id } : result
 }

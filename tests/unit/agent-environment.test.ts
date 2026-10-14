@@ -380,3 +380,24 @@ test('ownership refuses committing a pre-staged user draft even if its bytes and
   expect(checked.stdout).toContain('committed outside ownership')
   expect(readFileSync(join(root, 'file.txt'), 'utf8')).toBe('user staged draft\n')
 })
+
+test.each([
+  'import { chromium as browser } from "@playwright/test";',
+  'export { chromium } from "playwright";',
+  'const { chromium } = require("playwright-core");',
+])('the mechanical guard also rejects unguarded native unit-browser imports: %s', (source) => {
+  const { root } = repository()
+  mkdirSync(join(root, 'tests/unit'), { recursive: true })
+  const fixture = join(root, 'tests/unit/native-browser.ts')
+  writeFileSync(fixture, source)
+  const check = () =>
+    spawnSync(bun, [checker, '--root', root], { encoding: 'utf8', env: fixtureEnv })
+  const red = check()
+  expect(red.status).toBe(1)
+  expect(red.stderr).toContain('browser-guard')
+  writeFileSync(
+    fixture,
+    'import type { Page } from "@playwright/test"; import { launchGuardedPersistentContext } from "../e2e/browser-guard";',
+  )
+  expect(check().status).toBe(0)
+})
