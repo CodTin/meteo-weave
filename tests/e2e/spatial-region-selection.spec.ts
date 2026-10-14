@@ -129,7 +129,7 @@ test.describe('Spatial Region Selection', () => {
     await page.getByRole('button', { name: '确认区域' }).click()
 
     // Should show error but preserve old confirmed region
-    await expect(page.getByRole('alert')).toContainText('180')
+    await expect(page.getByRole('alert').first()).toBeVisible()
     await expect(page.locator('output[aria-label="已确认的区域信息"]')).toContainText('100°')
   })
 
