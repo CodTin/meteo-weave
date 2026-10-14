@@ -3,15 +3,16 @@ import { useDemoSessionTransition } from '@/features/auth/session-transition'
 import { useRef } from 'react'
 import { WorkspaceMenu } from '@/components/workspace/workspace-menu'
 import { Link, Outlet, useLocation, useRouterState, useRouteContext } from '@tanstack/react-router'
-import { Layers } from 'lucide-react'
+import { BrandMark } from '@/components/brand/brand-mark'
 import { WorkspaceNavigation, getWorkspaceTitle } from '@/components/workspace/workspace-navigation'
 
-// Reserve each page's content at the same breakpoints as its cards/table.
+// Reserve the actual preview content footprint at the cards/table breakpoints.
+// Keep the public main/footer geometry tests when changing typography or illustration size.
 const contentFootprints: Record<string, string> = {
-  '/dashboard': 'min-h-[29rem] sm:min-h-[28rem]',
-  '/tasks/new': 'min-h-[49rem] md:min-h-[28rem]',
-  '/tasks': 'min-h-[44rem] sm:min-h-[33rem] xl:min-h-[29rem]',
-  '/settings': 'min-h-[38rem] sm:min-h-[31rem] md:min-h-[28rem]',
+  '/dashboard': 'min-h-[50rem] xl:min-h-[34rem]',
+  '/tasks/new': 'min-h-[57rem] md:min-h-[34rem]',
+  '/tasks': 'min-h-[47rem] sm:min-h-[35rem] xl:min-h-[30rem]',
+  '/settings': 'min-h-[44rem] sm:min-h-[33rem] md:min-h-[30rem]',
 }
 
 export function WorkspaceShell() {
@@ -23,7 +24,7 @@ export function WorkspaceShell() {
   const title = getWorkspaceTitle(pathname) ?? '工作区'
 
   return (
-    <div className="min-h-svh">
+    <div className="atmospheric-canvas min-h-svh">
       <a
         href="#main-content"
         className="skip-link"
@@ -47,11 +48,11 @@ export function WorkspaceShell() {
           aria-label="MeteoWeave · 平台入口"
           className="flex items-center gap-3 rounded-md"
         >
-          <Layers className="size-7 text-ring" aria-hidden="true" />
-          <span className="font-display text-2xl font-semibold">MeteoWeave</span>
+          <BrandMark className="size-8" />
+          <span className="font-display text-2xl font-bold tracking-tight">MeteoWeave</span>
         </Link>
         <div>
-          <p className="mb-4 px-3 text-xs tracking-widest text-muted-foreground">工作区 / DEMO</p>
+          <p className="eyebrow mb-4 px-3">工作区 / DEMO</p>
           <WorkspaceNavigation />
         </div>
         <p className="mt-auto border-t pt-5 text-xs leading-6 text-muted-foreground">
@@ -61,7 +62,7 @@ export function WorkspaceShell() {
         </p>
       </aside>
       <div className="min-w-0 lg:pl-64">
-        <header className="border-b bg-background px-5 py-5 sm:px-8">
+        <header className="sticky top-0 z-20 border-b bg-sidebar/95 px-5 py-5 backdrop-blur-sm sm:px-8">
           <div className="mx-auto flex max-w-6xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <WorkspaceMenu contentRef={contentRef} />
@@ -111,15 +112,10 @@ export function WorkspaceShell() {
           aria-labelledby="workspace-title"
           aria-busy={status === 'pending'}
           tabIndex={-1}
-          className="mx-auto w-full min-w-0 max-w-6xl px-5 py-8 sm:px-8 sm:py-10"
+          className="mx-auto w-full min-w-0 max-w-6xl scroll-mt-64 px-5 py-8 sm:px-8 sm:py-10 lg:scroll-mt-28"
         >
-          <p className="mb-3 font-mono text-xs tracking-widest text-muted-foreground">
-            METEOWEAVE / WORKSPACE
-          </p>
-          <h1
-            id="workspace-title"
-            className="mb-7 break-words font-display text-3xl font-semibold tracking-tight sm:text-4xl"
-          >
+          <p className="eyebrow mb-4">METEOWEAVE / WORKSPACE</p>
+          <h1 id="workspace-title" className="page-heading mb-8 break-words border-b pb-6">
             {title}
           </h1>
           {/* Keep the footer stable across pending, error and successful page content. */}

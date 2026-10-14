@@ -2,9 +2,9 @@ import { demoAccounts } from '@/features/auth/demo-accounts'
 
 export function RoleDescriptions() {
   return (
-    <dl className="space-y-4 text-sm leading-7">
+    <dl className="divide-y text-sm leading-7">
       {demoAccounts.map((account) => (
-        <div key={account.id}>
+        <div key={account.id} className="py-4 first:pt-0 last:pb-0">
           <dt className="font-medium text-foreground">
             {account.roleLabel}（{account.roleTitle}）
           </dt>

@@ -8,7 +8,7 @@ export function WorkspacePending() {
   const title = getWorkspaceTitle(pathname) ?? '页面'
 
   return (
-    <Card>
+    <Card className="surface-accent">
       <CardContent>
         <output aria-label="页面加载状态" aria-live="polite" aria-atomic="true" className="block">
           <span className="flex items-center gap-3 font-display text-xl font-semibold">
@@ -22,7 +22,7 @@ export function WorkspacePending() {
         <div aria-hidden="true" className="mt-8 space-y-5 motion-safe:animate-pulse">
           <div className="h-4 w-2/3 rounded bg-muted" />
           <div className="h-4 w-1/2 rounded bg-muted" />
-          <div className="grid grid-cols-3 gap-3 rounded-lg border p-5">
+          <div className="grid grid-cols-3 gap-3 rounded-sm border bg-background p-5">
             <div className="h-32 rounded bg-muted" />
             <div className="h-32 rounded bg-muted" />
             <div className="h-32 rounded bg-muted" />

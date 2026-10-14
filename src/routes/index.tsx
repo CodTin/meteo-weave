@@ -29,31 +29,29 @@ export const Route = createFileRoute('/')({
 function EntryPage() {
   return (
     <EntryShell>
-      <div className="mb-8">
-        <p className="mb-3 flex items-center gap-2 text-xs font-medium tracking-widest text-muted-foreground">
+      <div className="mb-10 border-b pb-8">
+        <p className="eyebrow mb-4">
           <Layers className="size-4" aria-hidden="true" /> 平台入口{' '}
           <span aria-hidden="true">/</span> <span className="font-mono">WORKSPACE</span>
         </p>
-        <h1 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">
-          气象降尺度工作台
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
+        <h1 className="page-heading">气象降尺度工作台</h1>
+        <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
           从原始预报到局地细节，了解气象数据的降尺度与分析流程。
         </p>
       </div>
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <Card>
+        <Card className="surface-accent">
           <CardHeader>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs font-medium tracking-widest text-muted-foreground">
                 开始使用
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-1 text-xs text-success">
+              <span className="status-label border-success/25 bg-success/5 text-success">
                 <CheckCircle2 className="size-3.5" aria-hidden="true" />
                 入口已就绪
               </span>
             </div>
-            <CardTitle className="text-2xl">探索精细化气象分析</CardTitle>
+            <CardTitle className="text-2xl sm:text-3xl">探索精细化气象分析</CardTitle>
             <CardDescription>
               工作区需要登录。请使用公开的 Demo 账号进入界面预览；不会执行计算。
             </CardDescription>
@@ -61,7 +59,7 @@ function EntryPage() {
           <CardContent>
             <ResolutionPreview />
           </CardContent>
-          <CardFooter className="flex-col items-stretch sm:flex-row sm:flex-wrap sm:items-center">
+          <CardFooter className="flex-col items-stretch border-t pt-6 sm:flex-row sm:flex-wrap sm:items-center">
             <Link to="/login" className={buttonVariants({ size: 'lg' })}>
               前往登录 <ArrowRight aria-hidden="true" />
             </Link>
@@ -73,7 +71,7 @@ function EntryPage() {
             </a>
           </CardFooter>
         </Card>
-        <Card id="demo-scope" className="scroll-mt-6">
+        <Card id="demo-scope" className="scroll-mt-6 bg-sidebar/65">
           <CardHeader>
             <span className="mb-2 text-xs font-medium tracking-widest text-muted-foreground">
               当前环境
@@ -112,7 +110,7 @@ function EntryPage() {
           </CardContent>
         </Card>
       </div>
-      <section aria-labelledby="workflow-title" className="mt-8 border-t pt-6">
+      <section aria-labelledby="workflow-title" className="mt-10 border-t pt-6">
         <h2 id="workflow-title" className="flex items-center gap-2 text-sm font-medium">
           <RouteIcon className="size-4 text-muted-foreground" aria-hidden="true" />
           后续分析流程{' '}
@@ -124,8 +122,8 @@ function EntryPage() {
             ['02', '对比精细化结果', '对照原始数据、降尺度数据与观测数据'],
             ['03', '评估与导出', '查看精度指标，整理分析结果'],
           ].map(([step, title, description]) => (
-            <li key={step} className="flex gap-3">
-              <span className="pt-0.5 font-mono text-xs text-muted-foreground">{step}</span>
+            <li key={step} className="flex gap-4">
+              <span className="font-mono text-2xl leading-none text-ring">{step}</span>
               <div>
                 <h3 className="text-sm">{title}</h3>
                 <p className="mt-1 text-xs leading-6 text-muted-foreground">{description}</p>

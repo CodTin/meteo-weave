@@ -22,9 +22,11 @@ export function WorkspaceError({ error }: ErrorComponentProps) {
   const resourceFailed = isWorkspaceResourceError(error)
 
   return (
-    <Card>
+    <Card className="surface-error">
       <CardHeader role="alert" aria-atomic="true">
-        <AlertTriangle className="size-7 text-destructive" aria-hidden="true" />
+        <div className="status-icon border-destructive/30 text-destructive">
+          <AlertTriangle className="size-5" aria-hidden="true" />
+        </div>
         <CardTitle>{title}暂时无法打开</CardTitle>
         <CardDescription>
           {resourceFailed ? '页面资源未能加载。' : '页面内容未能正常显示。'}
@@ -34,7 +36,7 @@ export function WorkspaceError({ error }: ErrorComponentProps) {
           重新加载会刷新整个页面，不会提交任务或修改设置。也可以通过工作区导航访问其他页面。
         </CardDescription>
       </CardHeader>
-      <CardFooter className="flex-wrap">
+      <CardFooter className="flex-wrap border-t pt-6">
         <Button onClick={() => window.location.reload()}>
           <RotateCcw aria-hidden="true" /> 重新加载当前页
         </Button>

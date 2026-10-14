@@ -1,3 +1,4 @@
+import { SlidersHorizontal } from 'lucide-react'
 import { Link, useRouteContext } from '@tanstack/react-router'
 import { getDownscalingCapabilities, type DownscalingMethod } from './capabilities'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -20,8 +21,11 @@ export function TaskCreatePage() {
   const { account } = useRouteContext({ from: '/_workspace' })
   const capabilities = getDownscalingCapabilities(account)
   return (
-    <Card className="gap-4 py-4">
+    <Card className="surface-accent gap-4 py-4">
       <CardHeader>
+        <div className="status-icon">
+          <SlidersHorizontal className="size-5" aria-hidden="true" />
+        </div>
         <CardTitle>任务配置与计算尚未接入</CardTitle>
         <CardDescription id="task-create-status">
           当前提供角色能力与配置准入规则，不采集参数，不提交、保存或模拟执行任务。配置通过检查不代表任务已创建。
@@ -60,7 +64,7 @@ export function TaskCreatePage() {
           </p>
         </section>
       </CardContent>
-      <CardFooter className="flex-wrap">
+      <CardFooter className="flex-wrap border-t pt-6">
         <Button disabled aria-describedby="task-create-status">
           提交降尺度任务
         </Button>

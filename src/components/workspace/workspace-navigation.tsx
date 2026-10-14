@@ -16,18 +16,21 @@ export function WorkspaceNavigation({ onNavigate }: { onNavigate?: () => void })
   return (
     <nav aria-label="工作区导航">
       <ul className="space-y-2">
-        {workspacePages.map(({ path, title, icon: Icon }) => (
+        {workspacePages.map(({ path, title, icon: Icon }, index) => (
           <li key={path}>
             <Link
               to={path}
               activeOptions={{ exact: true }}
-              activeProps={{ className: 'border-sidebar-primary bg-sidebar-accent font-semibold' }}
+              activeProps={{ className: 'border-sidebar-primary font-semibold text-foreground' }}
               inactiveProps={{ className: 'border-transparent text-muted-foreground' }}
               onClick={onNavigate}
-              className="flex min-h-12 items-center gap-3 rounded-md border-l-4 px-3 py-3 text-sm hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              className="workspace-link flex min-h-12 items-center gap-3 rounded-md border-l-2 px-3 py-3 text-sm hover:bg-sidebar-accent hover:text-sidebar-foreground"
             >
               <Icon className="size-5 shrink-0" aria-hidden="true" />
-              {title}
+              <span>{title}</span>
+              <span aria-hidden="true" className="ml-auto font-mono text-xs text-muted-foreground">
+                0{index + 1}
+              </span>
             </Link>
           </li>
         ))}

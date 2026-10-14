@@ -1,3 +1,4 @@
+import { LockKeyhole } from 'lucide-react'
 import { Link, useRouteContext } from '@tanstack/react-router'
 import { RoleSwitchDialog } from '@/features/user-settings/role-switch-dialog'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -17,8 +18,11 @@ export function SettingsPage() {
       <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
         这里显示当前演示账号与角色，不收集真实个人信息。切换角色需先退出并重新登录；分析偏好尚未开放。
       </p>
-      <Card>
+      <Card className="surface-accent">
         <CardHeader>
+          <div className="status-icon">
+            <LockKeyhole className="size-5" aria-hidden="true" />
+          </div>
           <CardTitle>演示角色与分析偏好</CardTitle>
           <CardDescription id="settings-status">
             演示身份由统一账号目录解析。角色选择不会直接改变身份；分析偏好暂不支持保存。
@@ -26,7 +30,7 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <dl className="grid gap-5 sm:grid-cols-2">
-            <div className="rounded-lg border bg-background p-4">
+            <div className="workflow-step">
               <dt className="text-sm font-medium">用户角色</dt>
               <dd className="mt-2 text-sm leading-7 text-muted-foreground">
                 {account ? (
@@ -43,7 +47,7 @@ export function SettingsPage() {
                 )}
               </dd>
             </div>
-            <div className="rounded-lg border bg-background p-4">
+            <div className="workflow-step">
               <dt className="text-sm font-medium">分析偏好</dt>
               <dd className="mt-2 text-sm leading-7 text-muted-foreground">
                 尚未接入，不保存分析偏好。
@@ -51,7 +55,7 @@ export function SettingsPage() {
             </div>
           </dl>
         </CardContent>
-        <CardFooter className="flex-wrap">
+        <CardFooter className="flex-wrap border-t pt-6">
           {account && <RoleSwitchDialog account={account} />}
           <Button disabled aria-describedby="settings-status">
             保存设置

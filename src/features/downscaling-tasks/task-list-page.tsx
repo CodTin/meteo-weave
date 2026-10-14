@@ -14,7 +14,7 @@ export function TaskListPage() {
           前往创建任务 <ArrowRight aria-hidden="true" />
         </Link>
       </div>
-      <Card>
+      <Card className="surface-accent">
         <CardHeader>
           <CardTitle>降尺度任务</CardTitle>
           <CardDescription id="task-fields-description">
@@ -30,21 +30,21 @@ export function TaskListPage() {
             aria-describedby="task-table-scroll-hint"
             // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users need focus to scroll this table region horizontally.
             tabIndex={0}
-            className="overflow-x-auto rounded-lg border p-1"
+            className="overflow-x-auto rounded-sm border bg-background"
           >
             <table
               aria-describedby="task-fields-description task-service-status"
-              className="w-full min-w-[44rem] border-collapse text-left text-sm"
+              className="w-full min-w-[44rem] border-collapse font-mono text-left text-sm"
             >
               <caption className="sr-only">降尺度任务字段预览</caption>
-              <thead className="border-b bg-muted/50 text-muted-foreground">
+              <thead className="border-b-2 border-b-primary/60 bg-background text-muted-foreground">
                 <tr>
                   {['任务名称', '数据源', '气象变量', '目标分辨率', '任务状态', '创建时间'].map(
                     (field) => (
                       <th
                         key={field}
                         scope="col"
-                        className="px-4 py-4 font-medium whitespace-nowrap"
+                        className="px-4 py-4 text-xs font-semibold tracking-wide whitespace-nowrap"
                       >
                         {field}
                       </th>
@@ -57,11 +57,13 @@ export function TaskListPage() {
           </section>
           <div
             id="task-service-status"
-            className="mt-6 flex flex-col items-start gap-3 rounded-lg border border-dashed p-5 sm:flex-row sm:gap-4"
+            className="mt-6 flex flex-col items-start gap-4 rounded-lg border border-dashed bg-background/60 p-6 sm:flex-row sm:gap-5"
           >
-            <Unplug className="mt-1 size-6 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div className="status-icon shrink-0">
+              <Unplug className="size-5" aria-hidden="true" />
+            </div>
             <div>
-              <h3 className="font-medium">任务服务尚未接入</h3>
+              <h3 className="font-display text-xl font-semibold">任务服务尚未接入</h3>
               <p className="mt-2 text-sm leading-7 text-muted-foreground">
                 尚未查询任务，不代表任务数量为零。这里没有任务记录、已完成统计或计算结果。
               </p>

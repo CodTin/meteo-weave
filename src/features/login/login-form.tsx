@@ -148,7 +148,7 @@ export function LoginForm({ preselectedAccount }: { preselectedAccount?: DemoAcc
             </Button>
           </div>
         </FormField>
-        <Button type="submit" className="w-full active:bg-primary/75">
+        <Button type="submit" className="w-full">
           {isSubmitting ? '正在登录…' : '登录演示账号'}
         </Button>
       </fieldset>
