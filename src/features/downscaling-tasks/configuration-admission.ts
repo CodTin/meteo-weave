@@ -16,11 +16,17 @@ const configurationInput = (now: number) =>
       .refine((region) => region.north > region.south && region.east > region.west),
     timeRange: z.discriminatedUnion('mode', [
       z
-        .strictObject({ mode: z.literal('historical'), start: z.iso.date(), end: z.iso.date() })
-        .refine(
-          (range) =>
-            range.start <= range.end && range.start >= '2020-01-01' && range.end <= '2024-12-31',
-        ),
+        .strictObject({
+          mode: z.literal('historical'),
+          start: z.union([z.iso.date(), z.iso.datetime()]),
+          end: z.union([z.iso.date(), z.iso.datetime()]),
+        })
+        .refine((range) => {
+          // Extract date portion for validation
+          const startDate = range.start.split('T')[0]!
+          const endDate = range.end.split('T')[0]!
+          return startDate <= endDate && startDate >= '2020-01-01' && endDate <= '2024-12-31'
+        }),
       z
         .strictObject({
           mode: z.literal('forecast'),
