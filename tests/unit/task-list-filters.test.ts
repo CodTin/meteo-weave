@@ -416,4 +416,221 @@ describe('Task list pagination', () => {
 
     expect(currentPage).toBe(1)
   })
+
+  it('corrects page to last page when current page exceeds total pages', () => {
+    const tasks = Array.from({ length: 25 }, (_, i) => createTask({ id: `task-${i}` }))
+    const pageSize = 20
+    const totalPages = Math.ceil(tasks.length / pageSize) // 2 pages
+
+    // Simulate being on page 3 when only 2 pages exist (e.g., after deletion)
+    let currentPage = 3
+    const correctedPage = currentPage > totalPages && totalPages > 0 ? totalPages : currentPage
+
+    expect(correctedPage).toBe(2)
+  })
+
+  it('keeps page 1 when total pages becomes 0', () => {
+    const tasks: DownscalingTask[] = []
+    const pageSize = 20
+    const totalPages = Math.ceil(tasks.length / pageSize) // 0 pages
+
+    let currentPage = 1
+    const correctedPage = currentPage > totalPages && totalPages > 0 ? totalPages : currentPage
+
+    expect(correctedPage).toBe(1)
+  })
+})
+
+describe('Analysis time range overlap filtering', () => {
+  it('filters tasks where analysis time overlaps with filter range', () => {
+    const tasks = [
+      createTask({
+        id: '1',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-31' },
+        } as any,
+      }),
+      createTask({
+        id: '2',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-02-01', end: '2024-02-28' },
+        } as any,
+      }),
+      createTask({
+        id: '3',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-01-15', end: '2024-02-15' },
+        } as any,
+      }),
+    ]
+
+    // Filter for tasks with analysis time overlapping 2024-01-20 to 2024-02-10
+    // Task 1: Jan 1-31 overlaps (Jan 20-31 is in both ranges)
+    // Task 2: Feb 1-28 overlaps (Feb 1-10 is in both ranges)
+    // Task 3: Jan 15 - Feb 15 overlaps (fully contains filter range)
+    const filterStart = '2024-01-20'
+    const filterEnd = '2024-02-10'
+
+    const filtered = tasks.filter((task) => {
+      const timeRange = task.configuration.timeRange
+      if (timeRange.mode !== 'historical') return false
+
+      // Two ranges overlap if: start1 <= end2 AND start2 <= end1
+      return timeRange.start <= filterEnd && filterStart <= timeRange.end
+    })
+
+    expect(filtered).toHaveLength(3)
+    expect(filtered.map((t) => t.id)).toEqual(['1', '2', '3'])
+  })
+
+  it('includes tasks that fully contain the filter range', () => {
+    const tasks = [
+      createTask({
+        id: '1',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-12-31' },
+        } as any,
+      }),
+    ]
+
+    const filterStart = '2024-06-01'
+    const filterEnd = '2024-06-30'
+
+    const filtered = tasks.filter((task) => {
+      const timeRange = task.configuration.timeRange
+      if (timeRange.mode !== 'historical') return false
+      return timeRange.start <= filterEnd && filterStart <= timeRange.end
+    })
+
+    expect(filtered).toHaveLength(1)
+  })
+
+  it('includes tasks that are fully contained within the filter range', () => {
+    const tasks = [
+      createTask({
+        id: '1',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-06-10', end: '2024-06-20' },
+        } as any,
+      }),
+    ]
+
+    const filterStart = '2024-06-01'
+    const filterEnd = '2024-06-30'
+
+    const filtered = tasks.filter((task) => {
+      const timeRange = task.configuration.timeRange
+      if (timeRange.mode !== 'historical') return false
+      return timeRange.start <= filterEnd && filterStart <= timeRange.end
+    })
+
+    expect(filtered).toHaveLength(1)
+  })
+
+  it('excludes tasks with no overlap', () => {
+    const tasks = [
+      createTask({
+        id: '1',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-31' },
+        } as any,
+      }),
+      createTask({
+        id: '2',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-03-01', end: '2024-03-31' },
+        } as any,
+      }),
+    ]
+
+    const filterStart = '2024-02-01'
+    const filterEnd = '2024-02-28'
+
+    const filtered = tasks.filter((task) => {
+      const timeRange = task.configuration.timeRange
+      if (timeRange.mode !== 'historical') return false
+      return timeRange.start <= filterEnd && filterStart <= timeRange.end
+    })
+
+    expect(filtered).toHaveLength(0)
+  })
+
+  it('handles edge case where ranges touch at boundary', () => {
+    const tasks = [
+      createTask({
+        id: '1',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-31' },
+        } as any,
+      }),
+    ]
+
+    // Filter range starts exactly where task ends
+    const filterStart = '2024-01-31'
+    const filterEnd = '2024-02-28'
+
+    const filtered = tasks.filter((task) => {
+      const timeRange = task.configuration.timeRange
+      if (timeRange.mode !== 'historical') return false
+      return timeRange.start <= filterEnd && filterStart <= timeRange.end
+    })
+
+    expect(filtered).toHaveLength(1)
+  })
+
+  it('excludes forecast mode tasks when filtering by time range', () => {
+    const tasks = [
+      createTask({
+        id: '1',
+        configuration: {
+          timeRange: {
+            mode: 'forecast',
+            start: '2024-01-15T00:00:00Z',
+            end: '2024-01-20T00:00:00Z',
+          },
+        } as any,
+      }),
+      createTask({
+        id: '2',
+        configuration: {
+          timeRange: { mode: 'historical', start: '2024-01-15', end: '2024-01-20' },
+        } as any,
+      }),
+    ]
+
+    const filterStart = '2024-01-15'
+    const filterEnd = '2024-01-20'
+
+    // Only filter historical mode tasks
+    const filtered = tasks.filter((task) => {
+      const timeRange = task.configuration.timeRange
+      if (timeRange.mode !== 'historical') return false
+      return timeRange.start <= filterEnd && filterStart <= timeRange.end
+    })
+
+    expect(filtered).toHaveLength(1)
+    expect(filtered[0]!.id).toBe('2')
+  })
+
+  it('returns all tasks when no time range filter is applied', () => {
+    const tasks = [
+      createTask({
+        id: '1',
+        configuration: {
+          timeRange: { mode: 'historical' as const, start: '2024-01-01', end: '2024-01-31' },
+        } as any,
+      }),
+      createTask({
+        id: '2',
+        configuration: {
+          timeRange: { mode: 'historical' as const, start: '2024-06-01', end: '2024-06-30' },
+        } as any,
+      }),
+    ]
+
+    // No filter applied - return all tasks
+    const filtered = tasks
+
+    expect(filtered).toHaveLength(2)
+  })
 })
