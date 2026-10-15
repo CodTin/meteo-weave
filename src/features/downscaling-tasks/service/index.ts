@@ -276,6 +276,45 @@ export function createTaskService({
         },
       })
     },
+    /** Retry a failed task by creating a new task with the same configuration. */
+    async retry(failedTaskId: string, input: unknown): Promise<TaskReply> {
+      const db = ready()
+      const check = currentWorkspace()
+
+      // Verify the original task exists and is failed
+      const originalTask = await this.get(failedTaskId)
+      check()
+      if (!originalTask.ok) return originalTask
+      if (originalTask.task.status !== 'Failed') {
+        return unavailable('NOT_FAILED', 'Can only retry failed tasks.')
+      }
+
+      // Create new task with retry relationship
+      const response = await transport.submit(input)
+      check()
+      if (!response.ok) return response
+
+      // Add retry relationship to new task
+      const newTask = {
+        ...response.task,
+        retriedFrom: failedTaskId,
+      }
+
+      await db.add(newTask)
+      check()
+
+      // Update original task to track this retry
+      const updatedOriginal = {
+        ...originalTask.task,
+        retriedBy: [...(originalTask.task.retriedBy || []), newTask.id],
+      }
+      await db.saveState(updatedOriginal)
+      check()
+
+      await queryClient.invalidateQueries({ queryKey: reads })
+      check()
+      return { ok: true, task: newTask }
+    },
     close,
   }
 }
