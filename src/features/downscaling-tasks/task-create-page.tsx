@@ -3,7 +3,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { getDownscalingCapabilities } from './capabilities'
+import { getDownscalingCapabilities, type DownscalingMethod } from './capabilities'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -15,6 +15,9 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { FormField } from '@/components/ui/form-field'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Checkbox } from '@/components/ui/checkbox'
 import { SpatialRegionSelector } from '@/features/spatial-region/spatial-region-selector'
 import type { BoundingBox } from '@/features/spatial-region/validation'
 import { createTaskService } from './service'
@@ -23,6 +26,9 @@ import { useQueryClient } from '@tanstack/react-query'
 const taskFormSchema = z.object({
   name: z.string().trim().min(1, '任务名称不能为空'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '请输入有效日期'),
+  method: z.enum(['recommended', 'deterministic', 'probabilistic']),
+  uncertaintyQuantification: z.boolean(),
+  ensembleMembers: z.enum(['5', '10', '20']).optional(),
 })
 
 type TaskFormData = z.infer<typeof taskFormSchema>
@@ -41,16 +47,44 @@ export function TaskCreatePage() {
     handleSubmit,
     formState: { errors },
     getValues,
+    watch,
+    setValue,
   } = useForm<TaskFormData>({
     resolver: zodResolver(taskFormSchema),
     defaultValues: {
       name: '',
       date: '',
+      method: 'recommended',
+      uncertaintyQuantification: false,
+      ensembleMembers: '10',
     },
   })
 
+  // oxlint-disable-next-line react/incompatible-library -- watch from react-hook-form is intentionally not memoized for live updates
+  const selectedMethod = watch('method')
+  // oxlint-disable-next-line react/incompatible-library -- watch from react-hook-form is intentionally not memoized for live updates
+  const uncertaintyQuantification = watch('uncertaintyQuantification')
+
   const handleRegionConfirmed = (bbox: BoundingBox) => {
     setConfirmedRegion(bbox)
+  }
+
+  const handleMethodChange = (method: DownscalingMethod) => {
+    setValue('method', method)
+    // Clear incompatible settings when switching methods
+    if (method === 'deterministic') {
+      setValue('uncertaintyQuantification', false)
+      setValue('ensembleMembers', '10')
+    }
+  }
+
+  const handleUncertaintyChange = (checked: boolean | 'indeterminate') => {
+    const isChecked = checked === true
+    setValue('uncertaintyQuantification', isChecked)
+    if (!isChecked && selectedMethod === 'recommended') {
+      // When disabling uncertainty on recommended, clear ensemble members
+      setValue('ensembleMembers', '10')
+    }
   }
 
   const onSubmit = async (data: TaskFormData) => {
@@ -66,7 +100,8 @@ export function TaskCreatePage() {
       const taskService = createTaskService({ queryClient })
       await taskService.initialize()
 
-      const result = await taskService.create({
+      // Build configuration based on method and advanced settings
+      const config: any = {
         name: data.name,
         dataSource: 'fusion',
         variable: 'temperature',
@@ -77,8 +112,22 @@ export function TaskCreatePage() {
           end: data.date,
         },
         resolution: '3km',
-        method: 'recommended',
-      })
+        method: data.method,
+      }
+
+      // Add advanced parameters if applicable
+      if (
+        capabilities.allowsAdvanced &&
+        (data.method === 'probabilistic' ||
+          (data.method === 'recommended' && data.uncertaintyQuantification))
+      ) {
+        config.advanced = {
+          uncertaintyQuantification: data.uncertaintyQuantification,
+          ensembleMembers: data.ensembleMembers ? Number(data.ensembleMembers) : undefined,
+        }
+      }
+
+      const result = await taskService.create(config)
 
       if (!result.ok) {
         setSubmitError(result.error)
@@ -137,6 +186,84 @@ export function TaskCreatePage() {
               />
             </FormField>
 
+            {capabilities.allowsAdvanced && (
+              <FormField
+                id="task-method"
+                label="降尺度方法"
+                help="选择降尺度计算方法。推荐方法由系统智能选择；确定性方法速度快结果稳定；概率式方法表达不确定性。"
+              >
+                <RadioGroup value={selectedMethod} onValueChange={handleMethodChange}>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="recommended" id="method-recommended" />
+                    <Label htmlFor="method-recommended">推荐方法</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="deterministic" id="method-deterministic" />
+                    <Label htmlFor="method-deterministic">确定性方法</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="probabilistic" id="method-probabilistic" />
+                    <Label htmlFor="method-probabilistic">概率式方法</Label>
+                  </div>
+                </RadioGroup>
+              </FormField>
+            )}
+
+            {capabilities.allowsAdvanced &&
+              (selectedMethod === 'probabilistic' || selectedMethod === 'recommended') && (
+                <div className="space-y-4 rounded-md border p-4">
+                  <h3 className="font-medium text-sm">高级参数</h3>
+
+                  {selectedMethod === 'recommended' && (
+                    <div className="flex items-start space-x-2">
+                      <Checkbox
+                        id="uncertainty-quantification"
+                        checked={uncertaintyQuantification}
+                        onCheckedChange={handleUncertaintyChange}
+                      />
+                      <div className="grid gap-1.5 leading-none">
+                        <Label
+                          htmlFor="uncertainty-quantification"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          启用不确定性量化
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          开启后推荐方法将解析为概率式输出，提供不确定性信息
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {(selectedMethod === 'probabilistic' ||
+                    (selectedMethod === 'recommended' && uncertaintyQuantification)) && (
+                    <FormField
+                      id="ensemble-members"
+                      label="概率集合成员数"
+                      help="模型集成的概率集合成员数量。更多成员提供更丰富的不确定性表达。"
+                    >
+                      <RadioGroup
+                        value={watch('ensembleMembers')}
+                        onValueChange={(value) => setValue('ensembleMembers', value as any)}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="5" id="members-5" />
+                          <Label htmlFor="members-5">5 个成员</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="10" id="members-10" />
+                          <Label htmlFor="members-10">10 个成员（默认）</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="20" id="members-20" />
+                          <Label htmlFor="members-20">20 个成员</Label>
+                        </div>
+                      </RadioGroup>
+                    </FormField>
+                  )}
+                </div>
+              )}
+
             <div className="rounded-md border p-4 text-sm">
               <h3 className="mb-2 font-medium">当前配置</h3>
               <dl className="space-y-1 text-muted-foreground">
@@ -154,8 +281,22 @@ export function TaskCreatePage() {
                 </div>
                 <div>
                   <dt className="inline">降尺度方法：</dt>
-                  <dd className="inline">推荐方法（Recommended）</dd>
+                  <dd className="inline">
+                    {selectedMethod === 'recommended' && '推荐方法'}
+                    {selectedMethod === 'deterministic' && '确定性方法'}
+                    {selectedMethod === 'probabilistic' && '概率式方法'}
+                    {selectedMethod === 'recommended' &&
+                      uncertaintyQuantification &&
+                      ' (启用不确定性量化)'}
+                  </dd>
                 </div>
+                {(selectedMethod === 'probabilistic' ||
+                  (selectedMethod === 'recommended' && uncertaintyQuantification)) && (
+                  <div>
+                    <dt className="inline">集合成员数：</dt>
+                    <dd className="inline">{watch('ensembleMembers')} 个</dd>
+                  </div>
+                )}
                 <div>
                   <dt className="inline">时区：</dt>
                   <dd className="inline">Asia/Shanghai (UTC+8)</dd>
@@ -205,20 +346,28 @@ export function TaskCreatePage() {
           <CardTitle>{account.roleLabel} · 配置能力</CardTitle>
         </CardHeader>
         <CardContent>
-          <section aria-label="当前角色的配置能力" className="space-y-2 text-sm leading-6">
-            <p>
-              当前固定配置：Fusion 数据源、Temperature 变量、3km
-              分辨率、推荐方法。后续版本将支持更多配置选项。
-            </p>
+          <section aria-label="当前角色的配置能力" className="space-y-4 text-sm leading-6">
+            <div>
+              <h3 className="font-medium mb-2">可用降尺度方法</h3>
+              <ul className="list-disc list-inside space-y-1" aria-label="可用降尺度方法">
+                {capabilities.methods.includes('recommended') && <li>推荐方法</li>}
+                {capabilities.methods.includes('deterministic') && <li>确定性方法</li>}
+                {capabilities.methods.includes('probabilistic') && <li>概率式方法</li>}
+              </ul>
+            </div>
+
             {capabilities.allowsAdvanced ? (
               <div className="space-y-2 text-muted-foreground">
-                <p>
-                  研究人员可在后续版本使用高级参数：推荐方法开启不确定性量化时请求概率输出；显式确定性方法不能同时请求不确定性量化。
-                </p>
+                <p>研究人员可使用所有方法和高级参数：</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>推荐方法可开启不确定性量化以获得概率输出</li>
+                  <li>概率式方法支持 5/10/20 个集合成员配置</li>
+                  <li>确定性方法不支持不确定性量化或集合参数</li>
+                </ul>
               </div>
             ) : (
               <p className="text-muted-foreground">
-                仅使用推荐方法，不可覆盖研究专属方法或高级参数；直接提交越权配置也会被拒绝。
+                当前角色固定使用推荐方法，不可覆盖研究专属方法或高级参数。直接提交越权配置会被服务器拒绝。
               </p>
             )}
           </section>
