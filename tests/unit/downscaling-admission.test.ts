@@ -380,3 +380,308 @@ it('keeps researcher uncertainty intent and custom ensemble size on Recommended 
     },
   })
 })
+
+describe('Spec 05 Ticket 02: historical date-only Asia/Shanghai timezone conversion', () => {
+  it('converts date-only historical range to half-open UTC interval from Asia/Shanghai midnight', async () => {
+    const cookie = await loginCookie('researcher')
+    const input = {
+      ...common,
+      name: '单日气温任务',
+      timeRange: { mode: 'historical', start: '2024-06-15', end: '2024-06-15' },
+    }
+    const response = await admit(input, cookie)
+    const result = await response.json()
+
+    // 2024-06-15 00:00 Asia/Shanghai (UTC+8) = 2024-06-14 16:00 UTC
+    // End should be 2024-06-16 00:00 Asia/Shanghai = 2024-06-15 16:00 UTC (half-open)
+    expect(result).toMatchObject({
+      ok: true,
+      name: '单日气温任务',
+      configuration: {
+        timeRange: {
+          mode: 'historical',
+          start: '2024-06-14T16:00:00.000Z',
+          end: '2024-06-15T16:00:00.000Z',
+        },
+      },
+    })
+  })
+
+  it('converts multi-day date-only range with correct half-open end boundary', async () => {
+    const cookie = await loginCookie('policy')
+    const input = {
+      ...common,
+      name: '多日气温分析',
+      timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-03' },
+    }
+    const result = await (await admit(input, cookie)).json()
+
+    // Start: 2024-01-01 00:00 Shanghai = 2023-12-31 16:00 UTC
+    // End: 2024-01-04 00:00 Shanghai = 2024-01-03 16:00 UTC (exclusive)
+    expect(result).toMatchObject({
+      ok: true,
+      name: '多日气温分析',
+      configuration: {
+        timeRange: {
+          mode: 'historical',
+          start: '2023-12-31T16:00:00.000Z',
+          end: '2024-01-03T16:00:00.000Z',
+        },
+      },
+    })
+  })
+
+  it('handles leap day 2024-02-29 correctly in Asia/Shanghai timezone', async () => {
+    const cookie = await loginCookie('agriculture')
+    const input = {
+      ...common,
+      name: '闰日任务',
+      timeRange: { mode: 'historical', start: '2024-02-29', end: '2024-02-29' },
+    }
+    const result = await (await admit(input, cookie)).json()
+
+    // 2024-02-29 00:00 Shanghai = 2024-02-28 16:00 UTC
+    // End: 2024-03-01 00:00 Shanghai = 2024-02-29 16:00 UTC
+    expect(result).toMatchObject({
+      ok: true,
+      configuration: {
+        timeRange: {
+          mode: 'historical',
+          start: '2024-02-28T16:00:00.000Z',
+          end: '2024-02-29T16:00:00.000Z',
+        },
+      },
+    })
+  })
+
+  it('handles cross-year boundary 2023-12-31 to 2024-01-02 without duplicating samples', async () => {
+    const cookie = await loginCookie('researcher')
+    const input = {
+      ...common,
+      name: '跨年任务',
+      timeRange: { mode: 'historical', start: '2023-12-31', end: '2024-01-02' },
+    }
+    const result = await (await admit(input, cookie)).json()
+
+    // Start: 2023-12-31 00:00 Shanghai = 2023-12-30 16:00 UTC
+    // End: 2024-01-03 00:00 Shanghai = 2024-01-02 16:00 UTC
+    expect(result).toMatchObject({
+      ok: true,
+      configuration: {
+        timeRange: {
+          mode: 'historical',
+          start: '2023-12-30T16:00:00.000Z',
+          end: '2024-01-02T16:00:00.000Z',
+        },
+      },
+    })
+  })
+
+  it('validates historical boundary dates: exactly 2020-01-01 and 2024-12-31', async () => {
+    const cookie = await loginCookie('policy')
+
+    // Lower boundary
+    const earliest = await (
+      await admit(
+        {
+          ...common,
+          name: '最早日期',
+          timeRange: { mode: 'historical', start: '2020-01-01', end: '2020-01-01' },
+        },
+        cookie,
+      )
+    ).json()
+    expect(earliest).toMatchObject({
+      ok: true,
+      configuration: {
+        timeRange: {
+          start: '2019-12-31T16:00:00.000Z',
+          end: '2020-01-01T16:00:00.000Z',
+        },
+      },
+    })
+
+    // Upper boundary
+    const latest = await (
+      await admit(
+        {
+          ...common,
+          name: '最晚日期',
+          timeRange: { mode: 'historical', start: '2024-12-31', end: '2024-12-31' },
+        },
+        cookie,
+      )
+    ).json()
+    expect(latest).toMatchObject({
+      ok: true,
+      configuration: {
+        timeRange: {
+          start: '2024-12-30T16:00:00.000Z',
+          end: '2024-12-31T16:00:00.000Z',
+        },
+      },
+    })
+
+    // Before lower boundary
+    expect(
+      await (
+        await admit(
+          {
+            ...common,
+            name: '超出下限',
+            timeRange: { mode: 'historical', start: '2019-12-31', end: '2020-01-01' },
+          },
+          cookie,
+        )
+      ).json(),
+    ).toMatchObject({
+      ok: false,
+      code: 'INVALID_CONFIGURATION',
+    })
+
+    // After upper boundary
+    expect(
+      await (
+        await admit(
+          {
+            ...common,
+            name: '超出上限',
+            timeRange: { mode: 'historical', start: '2024-12-31', end: '2025-01-01' },
+          },
+          cookie,
+        )
+      ).json(),
+    ).toMatchObject({
+      ok: false,
+      code: 'INVALID_CONFIGURATION',
+    })
+  })
+
+  it('does not convert already-timestamped historical ranges (backward compatibility)', async () => {
+    const cookie = await loginCookie('researcher')
+    const input = {
+      ...common,
+      timeRange: {
+        mode: 'historical',
+        start: '2024-01-01T00:00:00.000Z',
+        end: '2024-01-03T00:00:00.000Z',
+      },
+    }
+    const result = await (await admit(input, cookie)).json()
+
+    // Already has 'T', should pass through unchanged
+    expect(result).toMatchObject({
+      ok: true,
+      configuration: {
+        timeRange: {
+          mode: 'historical',
+          start: '2024-01-01T00:00:00.000Z',
+          end: '2024-01-03T00:00:00.000Z',
+        },
+      },
+    })
+  })
+})
+
+describe('Spec 05 Ticket 02: task name handling', () => {
+  it('preserves user-provided task name exactly', async () => {
+    const cookie = await loginCookie('researcher')
+    const input = {
+      ...common,
+      name: '我的自定义任务名称',
+      timeRange: { mode: 'historical', start: '2024-06-15', end: '2024-06-15' },
+    }
+    const result = await (await admit(input, cookie)).json()
+    expect(result).toMatchObject({
+      ok: true,
+      name: '我的自定义任务名称',
+    })
+  })
+
+  it('generates default name from variable and date for single-day historical task', async () => {
+    const cookie = await loginCookie('policy')
+    const input = {
+      ...common,
+      name: '',
+      variable: 'temperature',
+      timeRange: { mode: 'historical', start: '2024-06-15', end: '2024-06-15' },
+    }
+    const result = await (await admit(input, cookie)).json()
+    expect(result).toMatchObject({
+      ok: true,
+      name: '气温 · 2024-06-15',
+    })
+  })
+
+  it('generates default name with region for multi-day range', async () => {
+    const cookie = await loginCookie('agriculture')
+    const input = {
+      ...common,
+      name: '   ',
+      variable: 'wind',
+      region: { north: 40, south: 30, east: 120, west: 110 },
+      timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-05' },
+    }
+    const result = await (await admit(input, cookie)).json()
+    expect(result).toMatchObject({
+      ok: true,
+      name: '风场 · 110-120E, 30-40N',
+    })
+  })
+
+  it('generates default names for all four variables', async () => {
+    const cookie = await loginCookie('researcher')
+    for (const [variable, expected] of [
+      ['temperature', '气温'],
+      ['wind', '风场'],
+      ['pressure', '气压'],
+      ['precipitation', '降水'],
+    ] as const) {
+      const input = {
+        ...common,
+        name: '',
+        variable,
+        timeRange: { mode: 'historical', start: '2024-06-15', end: '2024-06-15' },
+      }
+      const result = await (await admit(input, cookie)).json()
+      expect(result.name).toBe(`${expected} · 2024-06-15`)
+    }
+  })
+
+  it('trims whitespace from user-provided names', async () => {
+    const cookie = await loginCookie('policy')
+    const input = {
+      ...common,
+      name: '  测试任务  ',
+      timeRange: { mode: 'historical', start: '2024-06-15', end: '2024-06-15' },
+    }
+    const result = await (await admit(input, cookie)).json()
+    expect(result).toMatchObject({
+      ok: true,
+      name: '测试任务',
+    })
+  })
+
+  it('rejects empty name after trimming when no default can be generated (legacy mode)', async () => {
+    const cookie = await loginCookie('researcher')
+    // Legacy mode: no name field provided at all
+    const input = {
+      dataSource: 'fusion',
+      region: { north: 40, south: 30, east: 120, west: 110 },
+      timeRange: {
+        mode: 'historical',
+        start: '2024-01-01T00:00:00.000Z',
+        end: '2024-01-03T00:00:00.000Z',
+      },
+      variable: 'temperature',
+      resolution: '3km',
+    }
+    const result = await (await admit(input, cookie)).json()
+    // Legacy mode should not have name field
+    expect(result).toMatchObject({
+      ok: true,
+      configuration: expect.any(Object),
+    })
+    expect(result).not.toHaveProperty('name')
+  })
+})
