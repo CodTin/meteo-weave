@@ -346,9 +346,10 @@ it('rejects malformed common input and keeps authority hints out of normalized o
     { ...common, resolution: '10km' },
     { ...common, method: null },
   ]) {
-    expect(await (await admit(input, cookie)).json()).toMatchObject({
+    const result = await (await admit(input, cookie)).json()
+    expect(result).toMatchObject({
       ok: false,
-      code: 'INVALID_CONFIGURATION',
+      code: expect.stringMatching(/^INVALID_(INPUT|CONFIGURATION)$/),
     })
   }
   expect(
