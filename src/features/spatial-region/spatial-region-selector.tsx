@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { MapPin, RotateCcw } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { MapPin, RotateCcw, Square, X } from 'lucide-react'
 import {
   validateBoundingBox,
   calculateRegionDimensions,
@@ -31,6 +32,8 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
   })
   const [confirmedRegion, setConfirmedRegion] = useState<BoundingBox | null>(null)
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({})
+  const [drawingMode, setDrawingMode] = useState(false)
+  const [drawError, setDrawError] = useState<string | null>(null)
 
   const handleInputChange = (field: keyof CoordinateInputs, value: string) => {
     setInputs((prev) => ({ ...prev, [field]: value }))
@@ -71,6 +74,42 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
     setInputs({ west: '', south: '', east: '', north: '' })
     setConfirmedRegion(null)
     setValidationErrors({})
+    setDrawError(null)
+    setDrawingMode(false)
+  }
+
+  const handleRectangleDrawn = (bbox: BoundingBox) => {
+    // Validate the drawn rectangle
+    const result = validateBoundingBox(bbox)
+
+    if (!result.valid) {
+      // Invalid rectangle - show error but don't overwrite existing region
+      const errorMessages = Object.values(result.errors).filter(Boolean)
+      setDrawError(errorMessages.join('；'))
+      return
+    }
+
+    // Valid rectangle - update inputs and confirmed region
+    setDrawError(null)
+    setInputs({
+      west: bbox.west.toString(),
+      south: bbox.south.toString(),
+      east: bbox.east.toString(),
+      north: bbox.north.toString(),
+    })
+    setConfirmedRegion(result.bbox)
+    setValidationErrors({})
+    onRegionConfirmed?.(result.bbox)
+  }
+
+  const handleStartDrawing = () => {
+    setDrawingMode(true)
+    setDrawError(null)
+  }
+
+  const handleCancelDrawing = () => {
+    setDrawingMode(false)
+    setDrawError(null)
   }
 
   const canConfirm =
@@ -199,7 +238,52 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
           </Button>
         </div>
 
-        <MapContainer bbox={confirmedRegion} />
+        {drawError && (
+          <Alert variant="destructive">
+            <AlertDescription>无效框选：{drawError}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium">地图预览</h3>
+            {!drawingMode ? (
+              <Button
+                onClick={handleStartDrawing}
+                variant="outline"
+                size="sm"
+                data-testid="start-drawing-button"
+              >
+                <Square className="mr-2 size-4" aria-hidden="true" />
+                框选区域
+              </Button>
+            ) : (
+              <Button
+                onClick={handleCancelDrawing}
+                variant="outline"
+                size="sm"
+                data-testid="cancel-drawing-button"
+              >
+                <X className="mr-2 size-4" aria-hidden="true" />
+                取消框选
+              </Button>
+            )}
+          </div>
+          {drawingMode && (
+            <Alert>
+              <AlertDescription>
+                在地图上拖动鼠标绘制矩形区域。完成后将自动更新坐标。按 ESC 键可取消。
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        <MapContainer
+          bbox={confirmedRegion}
+          onRectangleDrawn={handleRectangleDrawn}
+          drawingMode={drawingMode}
+          onDrawingModeChange={setDrawingMode}
+        />
 
         {confirmedRegion && dimensions && (
           <output

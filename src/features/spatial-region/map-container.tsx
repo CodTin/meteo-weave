@@ -3,9 +3,17 @@ import type { BoundingBox } from './validation'
 
 interface MapContainerProps {
   bbox: BoundingBox | null
+  onRectangleDrawn?: (bbox: BoundingBox) => void
+  drawingMode?: boolean
+  onDrawingModeChange?: (enabled: boolean) => void
 }
 
-export function MapContainer({ bbox }: MapContainerProps) {
+export function MapContainer({
+  bbox,
+  onRectangleDrawn,
+  drawingMode,
+  onDrawingModeChange,
+}: MapContainerProps) {
   const [isClient, setIsClient] = useState(false)
   const [MapComponent, setMapComponent] = useState<any>(null)
 
@@ -27,5 +35,12 @@ export function MapContainer({ bbox }: MapContainerProps) {
     )
   }
 
-  return <MapComponent bbox={bbox} />
+  return (
+    <MapComponent
+      bbox={bbox}
+      onRectangleDrawn={onRectangleDrawn}
+      drawingMode={drawingMode}
+      onDrawingModeChange={onDrawingModeChange}
+    />
+  )
 }

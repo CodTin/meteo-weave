@@ -5,9 +5,17 @@ const TerrainMap = lazy(() => import('./terrain-map').then((mod) => ({ default: 
 
 interface TerrainMapClientProps {
   bbox: BoundingBox | null
+  onRectangleDrawn?: (bbox: BoundingBox) => void
+  drawingMode?: boolean
+  onDrawingModeChange?: (enabled: boolean) => void
 }
 
-export function TerrainMapClient({ bbox }: TerrainMapClientProps) {
+export function TerrainMapClient({
+  bbox,
+  onRectangleDrawn,
+  drawingMode,
+  onDrawingModeChange,
+}: TerrainMapClientProps) {
   const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN
 
   return (
@@ -18,7 +26,13 @@ export function TerrainMapClient({ bbox }: TerrainMapClientProps) {
         </div>
       }
     >
-      <TerrainMap bbox={bbox} mapboxToken={mapboxToken} />
+      <TerrainMap
+        bbox={bbox}
+        mapboxToken={mapboxToken}
+        onRectangleDrawn={onRectangleDrawn}
+        drawingMode={drawingMode}
+        onDrawingModeChange={onDrawingModeChange}
+      />
     </Suspense>
   )
 }

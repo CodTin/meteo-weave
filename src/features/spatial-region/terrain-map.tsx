@@ -1,18 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import Map, { Layer, Source } from 'react-map-gl/mapbox'
 import type { MapRef } from 'react-map-gl/mapbox'
+import MapboxDraw from '@mapbox/mapbox-gl-draw'
+import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import type { BoundingBox } from './validation'
+import DrawRectangle from './draw-rectangle-mode'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 interface TerrainMapProps {
   bbox: BoundingBox | null
   mapboxToken?: string
+  onRectangleDrawn?: (bbox: BoundingBox) => void
+  drawingMode?: boolean
+  onDrawingModeChange?: (enabled: boolean) => void
 }
 
-export function TerrainMap({ bbox, mapboxToken }: TerrainMapProps) {
+export function TerrainMap({
+  bbox,
+  mapboxToken,
+  onRectangleDrawn,
+  drawingMode = false,
+  onDrawingModeChange,
+}: TerrainMapProps) {
   const [mapError, setMapError] = useState<string | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const mapRef = useRef<MapRef>(null)
+  const drawRef = useRef<MapboxDraw | null>(null)
 
   // Calculate map center and bounds from bbox
   const viewState = bbox
@@ -26,6 +39,89 @@ export function TerrainMap({ bbox, mapboxToken }: TerrainMapProps) {
         latitude: 0,
         zoom: 1,
       }
+
+  // Initialize MapboxDraw when map loads
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current) return
+
+    const map = mapRef.current.getMap()
+
+    // Initialize draw control if not already done
+    if (!drawRef.current) {
+      const draw = new MapboxDraw({
+        displayControlsDefault: false,
+        modes: {
+          ...MapboxDraw.modes,
+          draw_rectangle: DrawRectangle,
+        },
+      })
+
+      map.addControl(draw)
+      drawRef.current = draw
+
+      // Handle rectangle creation
+      map.on('draw.create', (e: any) => {
+        if (e.features && e.features.length > 0) {
+          const feature = e.features[0]
+          const coords = feature.geometry.coordinates[0]
+
+          // Extract bounds from rectangle coordinates
+          const lngs = coords.map((c: number[]) => c[0])
+          const lats = coords.map((c: number[]) => c[1])
+
+          const west = Math.min(...lngs)
+          const east = Math.max(...lngs)
+          const south = Math.min(...lats)
+          const north = Math.max(...lats)
+
+          const drawnBbox: BoundingBox = { west, south, east, north }
+
+          // Clear the drawn feature
+          draw.deleteAll()
+
+          // Exit drawing mode
+          if (onDrawingModeChange) {
+            onDrawingModeChange(false)
+          }
+
+          // Notify parent component
+          if (onRectangleDrawn) {
+            onRectangleDrawn(drawnBbox)
+          }
+        }
+      })
+    }
+
+    return () => {
+      // Cleanup on unmount
+      if (drawRef.current && map) {
+        try {
+          map.removeControl(drawRef.current)
+          drawRef.current = null
+        } catch {
+          // Control might already be removed
+        }
+      }
+    }
+  }, [isLoaded, onRectangleDrawn, onDrawingModeChange])
+
+  // Handle drawing mode changes
+  useEffect(() => {
+    if (!drawRef.current || !isLoaded) return
+
+    if (drawingMode) {
+      // Enter rectangle drawing mode
+      drawRef.current.changeMode('draw_rectangle')
+    } else {
+      // Exit to simple select mode
+      try {
+        drawRef.current.changeMode('simple_select')
+        drawRef.current.deleteAll()
+      } catch {
+        // Mode change might fail if already in simple_select
+      }
+    }
+  }, [drawingMode, isLoaded])
 
   useEffect(() => {
     if (bbox && mapRef.current && isLoaded) {
