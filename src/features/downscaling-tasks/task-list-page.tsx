@@ -13,6 +13,8 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  LayoutGrid,
+  Table,
 } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Button } from '@/components/ui/button'
@@ -38,6 +40,7 @@ import {
 } from '@/components/ui/select'
 import { useTaskList } from './hooks/use-task-list'
 import { useTaskActions } from './hooks/use-task-actions'
+import { TaskCard } from './components/task-card'
 import type { DownscalingTask } from './service'
 
 const dataSourceLabels = {
@@ -190,6 +193,8 @@ export function TaskListPage() {
     totalPages,
   } = useTaskList()
 
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table')
+
   const hasActiveFilters =
     filters.nameSearch.trim() !== '' || filters.variable || filters.status || filters.method
 
@@ -237,6 +242,30 @@ export function TaskListPage() {
             <>
               {/* Filter Controls */}
               <div className="mb-6 space-y-4">
+                {/* View Toggle */}
+                <div className="flex items-center gap-2" role="group" aria-label="视图切换">
+                  <Button
+                    variant={viewMode === 'table' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('table')}
+                    aria-pressed={viewMode === 'table'}
+                    aria-label="表格视图"
+                  >
+                    <Table className="mr-1 size-4" aria-hidden="true" />
+                    表格视图
+                  </Button>
+                  <Button
+                    variant={viewMode === 'card' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('card')}
+                    aria-pressed={viewMode === 'card'}
+                    aria-label="卡片视图"
+                  >
+                    <LayoutGrid className="mr-1 size-4" aria-hidden="true" />
+                    卡片视图
+                  </Button>
+                </div>
+
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {/* Name Search */}
                   <div className="space-y-2">
@@ -368,78 +397,101 @@ export function TaskListPage() {
                 </div>
               ) : (
                 <>
-                  <p
-                    id="task-table-scroll-hint"
-                    className="mb-3 text-xs leading-6 text-muted-foreground"
-                  >
-                    窄屏可在表格区域横向滚动，查看全部字段。
-                    {hasActiveFilters ? (
-                      <>
-                        显示 {filteredCount} / {totalCount} 个任务
-                      </>
-                    ) : (
-                      <>共 {totalCount} 个任务</>
-                    )}
-                  </p>
-                  <section
-                    aria-label="降尺度任务表格"
-                    aria-describedby="task-table-scroll-hint"
-                    // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users need focus to scroll this table region horizontally.
-                    tabIndex={0}
-                    className="overflow-x-auto rounded-sm border bg-background"
-                  >
-                    <table
-                      aria-describedby="task-fields-description"
-                      className="w-full min-w-[80rem] border-collapse text-left text-sm"
-                    >
-                      <caption className="sr-only">降尺度任务列表</caption>
-                      <thead className="border-b-2 border-b-primary/60 bg-background text-muted-foreground">
-                        <tr>
-                          {[
-                            { label: '任务名称', field: 'name' as const },
-                            { label: '数据源', field: null },
-                            { label: '气象变量', field: null },
-                            { label: '经纬范围', field: null },
-                            { label: '分析时间', field: null },
-                            { label: '实际方法', field: null },
-                            { label: '分辨率', field: null },
-                            { label: '创建时间', field: 'createdAt' as const },
-                            { label: '状态', field: 'status' as const },
-                            { label: '操作', field: null },
-                          ].map(({ label, field }) => (
-                            <th
-                              key={label}
-                              scope="col"
-                              className="px-4 py-4 text-xs font-semibold tracking-wide whitespace-nowrap"
-                            >
-                              {field ? (
-                                <button
-                                  onClick={() => updateSort(field)}
-                                  className="flex items-center gap-1 hover:text-foreground"
-                                  aria-label={`按${label}排序`}
+                  {viewMode === 'table' ? (
+                    <>
+                      <p
+                        id="task-table-scroll-hint"
+                        className="mb-3 text-xs leading-6 text-muted-foreground"
+                      >
+                        窄屏可在表格区域横向滚动，查看全部字段。
+                        {hasActiveFilters ? (
+                          <>
+                            显示 {filteredCount} / {totalCount} 个任务
+                          </>
+                        ) : (
+                          <>共 {totalCount} 个任务</>
+                        )}
+                      </p>
+                      <section
+                        aria-label="降尺度任务表格"
+                        aria-describedby="task-table-scroll-hint"
+                        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users need focus to scroll this table region horizontally.
+                        tabIndex={0}
+                        className="overflow-x-auto rounded-sm border bg-background"
+                      >
+                        <table
+                          aria-describedby="task-fields-description"
+                          className="w-full min-w-[80rem] border-collapse text-left text-sm"
+                        >
+                          <caption className="sr-only">降尺度任务列表</caption>
+                          <thead className="border-b-2 border-b-primary/60 bg-background text-muted-foreground">
+                            <tr>
+                              {[
+                                { label: '任务名称', field: 'name' as const },
+                                { label: '数据源', field: null },
+                                { label: '气象变量', field: null },
+                                { label: '经纬范围', field: null },
+                                { label: '分析时间', field: null },
+                                { label: '实际方法', field: null },
+                                { label: '分辨率', field: null },
+                                { label: '创建时间', field: 'createdAt' as const },
+                                { label: '状态', field: 'status' as const },
+                                { label: '操作', field: null },
+                              ].map(({ label, field }) => (
+                                <th
+                                  key={label}
+                                  scope="col"
+                                  className="px-4 py-4 text-xs font-semibold tracking-wide whitespace-nowrap"
                                 >
-                                  {label}
-                                  <ArrowUpDown className="size-3" />
-                                  {sortConfig.field === field && (
-                                    <span className="sr-only">
-                                      {sortConfig.direction === 'asc' ? '升序' : '降序'}
-                                    </span>
+                                  {field ? (
+                                    <button
+                                      onClick={() => updateSort(field)}
+                                      className="flex items-center gap-1 hover:text-foreground"
+                                      aria-label={`按${label}排序`}
+                                    >
+                                      {label}
+                                      <ArrowUpDown className="size-3" />
+                                      {sortConfig.field === field && (
+                                        <span className="sr-only">
+                                          {sortConfig.direction === 'asc' ? '升序' : '降序'}
+                                        </span>
+                                      )}
+                                    </button>
+                                  ) : (
+                                    label
                                   )}
-                                </button>
-                              ) : (
-                                label
-                              )}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tasks.map((task) => (
+                              <TaskRow key={task.id} task={task} />
+                            ))}
+                          </tbody>
+                        </table>
+                      </section>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mb-3 text-xs leading-6 text-muted-foreground">
+                        {hasActiveFilters ? (
+                          <>
+                            显示 {filteredCount} / {totalCount} 个任务
+                          </>
+                        ) : (
+                          <>共 {totalCount} 个任务</>
+                        )}
+                      </p>
+                      <div role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {tasks.map((task) => (
-                          <TaskRow key={task.id} task={task} />
+                          <div key={task.id} role="listitem">
+                            <TaskCard task={task} />
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </section>
+                      </div>
+                    </>
+                  )}
 
                   {/* Pagination */}
                   {totalPages > 1 && (
