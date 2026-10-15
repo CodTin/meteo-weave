@@ -14,24 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useDashboardData } from './hooks/use-dashboard-data'
 import { useTaskActions } from '@/features/downscaling-tasks/hooks/use-task-actions'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service'
-
-const variableLabels = {
-  temperature: '气温',
-  wind: '风速',
-  pressure: '气压',
-  precipitation: '降水',
-} as const
-
-function formatDate(isoString: string) {
-  return new Date(isoString).toLocaleString('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+import { variableLabels, formatDate } from '@/features/downscaling-tasks/utils/formatters'
 
 function TaskStatusBadge({ task }: { task: DownscalingTask }) {
   if (task.status === 'Completed') {

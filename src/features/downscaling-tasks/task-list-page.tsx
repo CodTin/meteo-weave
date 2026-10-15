@@ -42,35 +42,7 @@ import { useTaskList } from './hooks/use-task-list'
 import { useTaskActions } from './hooks/use-task-actions'
 import { TaskCard } from './components/task-card'
 import type { DownscalingTask } from './service'
-
-const dataSourceLabels = {
-  ecmwf: 'ECMWF',
-  gfs: 'GFS',
-  fusion: 'Fusion',
-} as const
-
-const variableLabels = {
-  temperature: '气温',
-  wind: '风速',
-  pressure: '气压',
-  precipitation: '降水',
-} as const
-
-const methodLabels = {
-  deterministic: '确定性',
-  probabilistic: '概率式',
-} as const
-
-function formatDate(isoString: string) {
-  return new Date(isoString).toLocaleString('zh-CN', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+import { dataSourceLabels, variableLabels, methodLabels, formatDate } from './utils/formatters'
 
 function TaskRow({ task }: { task: DownscalingTask }) {
   const { viewTask, deleteTask } = useTaskActions()
