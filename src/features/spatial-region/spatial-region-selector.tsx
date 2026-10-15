@@ -11,6 +11,8 @@ import {
   type ValidationErrors,
 } from './validation'
 import { MapContainer } from './map-container'
+import { PlaceSearch } from './place-search'
+import type { Place } from './places'
 
 interface CoordinateInputs {
   west: string
@@ -34,6 +36,7 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({})
   const [drawingMode, setDrawingMode] = useState(false)
   const [drawError, setDrawError] = useState<string | null>(null)
+  const [selectedPlaceName, setSelectedPlaceName] = useState<string | null>(null)
 
   const handleInputChange = (field: keyof CoordinateInputs, value: string) => {
     setInputs((prev) => ({ ...prev, [field]: value }))
@@ -45,6 +48,8 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
         return next
       })
     }
+    // Clear selected place when user manually edits coordinates
+    setSelectedPlaceName(null)
   }
 
   const handleConfirm = () => {
@@ -76,6 +81,7 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
     setValidationErrors({})
     setDrawError(null)
     setDrawingMode(false)
+    setSelectedPlaceName(null)
   }
 
   const handleRectangleDrawn = (bbox: BoundingBox) => {
@@ -99,7 +105,24 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
     })
     setConfirmedRegion(result.bbox)
     setValidationErrors({})
+    setSelectedPlaceName(null) // Clear place name when drawing
     onRegionConfirmed?.(result.bbox)
+  }
+
+  const handlePlaceSelected = (bbox: BoundingBox, place: Place) => {
+    // Update inputs with place bbox
+    setInputs({
+      west: bbox.west.toString(),
+      south: bbox.south.toString(),
+      east: bbox.east.toString(),
+      north: bbox.north.toString(),
+    })
+    // Set confirmed region immediately
+    setConfirmedRegion(bbox)
+    setValidationErrors({})
+    setDrawError(null)
+    setSelectedPlaceName(place.name)
+    onRegionConfirmed?.(bbox)
   }
 
   const handleStartDrawing = () => {
@@ -132,6 +155,17 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <PlaceSearch onPlaceSelected={handlePlaceSelected} disabled={drawingMode} />
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center" aria-hidden="true">
+            <div className="w-full border-t"></div>
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">或手动输入坐标</span>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <label htmlFor="west-input" className="text-sm font-medium">
@@ -291,6 +325,11 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
             aria-label="已确认的区域信息"
           >
             <h3 className="font-medium">已确认区域</h3>
+            {selectedPlaceName && (
+              <p className="text-sm text-muted-foreground">
+                已选地点：{selectedPlaceName}
+              </p>
+            )}
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <div>
                 <dt className="text-muted-foreground">西经</dt>
