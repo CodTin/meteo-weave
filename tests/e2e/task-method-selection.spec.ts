@@ -68,7 +68,9 @@ test.describe('Task method selection and role restrictions', () => {
     await expect(methodList.getByRole('listitem')).toHaveText(['推荐方法'])
   })
 
-  test('researcher can select deterministic method without advanced parameters', async ({ page }) => {
+  test('researcher can select deterministic method without advanced parameters', async ({
+    page,
+  }) => {
     await page.goto('/login')
     await submitDemoLogin(page, 'researcher')
     await page.goto('/tasks/new')

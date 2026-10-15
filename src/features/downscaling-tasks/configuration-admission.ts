@@ -1,6 +1,8 @@
 import { z } from 'zod'
+import { fromZonedTime } from 'date-fns-tz'
 import type { DemoAccount } from '@/features/auth/demo-accounts'
 import { getDownscalingCapabilities } from './capabilities'
+import { generateDefaultTaskName } from './task-naming'
 
 const configurationInput = (now: number) =>
   z.strictObject({
@@ -61,38 +63,18 @@ const configurationInput = (now: number) =>
 /**
  * Convert a date string in YYYY-MM-DD format from Asia/Shanghai timezone to UTC timestamp.
  * Returns the start of that day in UTC (inclusive).
+ *
+ * Uses proper timezone handling via date-fns-tz to account for any historical
+ * or future DST changes in Asia/Shanghai timezone.
  */
 function shanghaiDateToUTC(dateStr: string): string {
-  // Asia/Shanghai is UTC+8
-  // For a date like "2024-06-15", we want 2024-06-15 00:00:00 in Shanghai time
-  // which is 2024-06-14 16:00:00 UTC
+  // Parse the date string and interpret it as midnight in Asia/Shanghai timezone
   const [year, month, day] = dateStr.split('-').map(Number)
-  const shanghaiMidnight = Date.UTC(year!, month! - 1, day!, 0, 0, 0, 0) - 8 * 60 * 60 * 1000
-  return new Date(shanghaiMidnight).toISOString()
-}
+  const localDate = new Date(year!, month! - 1, day!, 0, 0, 0, 0)
 
-/**
- * Generate a default task name from configuration.
- */
-function generateDefaultName(config: {
-  variable: string
-  region: { west: number; east: number; south: number; north: number }
-  timeRange: { mode: string; start: string; end: string }
-}): string {
-  const variableNames = {
-    temperature: '气温',
-    wind: '风场',
-    pressure: '气压',
-    precipitation: '降水',
-  }
-  const varName = variableNames[config.variable as keyof typeof variableNames] || config.variable
-
-  if (config.timeRange.mode === 'historical' && config.timeRange.start === config.timeRange.end) {
-    // Single day
-    return `${varName} · ${config.timeRange.start}`
-  }
-
-  return `${varName} · ${config.region.west}-${config.region.east}E, ${config.region.south}-${config.region.north}N`
+  // Convert from Asia/Shanghai to UTC using proper timezone library
+  const utcDate = fromZonedTime(localDate, 'Asia/Shanghai')
+  return utcDate.toISOString()
 }
 
 export function checkDownscalingConfiguration(
@@ -136,7 +118,7 @@ export function checkDownscalingConfiguration(
     }
   }
 
-  const { role: _role, ownerId: _ownerId, name, ...configuration } = raw.data
+  const { role: _role, ownerId: _ownerId, name, ...inputConfiguration } = raw.data
 
   // Check if this is a Spec 05 request (has name field)
   const isSpec05 = name !== undefined
@@ -146,7 +128,7 @@ export function checkDownscalingConfiguration(
 
   // First parse to check configuration validity and potentially generate default name
   const parsed = configurationInput(now).safeParse({
-    ...configuration,
+    ...inputConfiguration,
     name: isSpec05 ? finalName || 'temp' : 'legacy',
   })
   if (!parsed.success) {
@@ -159,7 +141,7 @@ export function checkDownscalingConfiguration(
 
   // Generate default name if not provided or empty (only for Spec 05)
   if (isSpec05 && !finalName) {
-    finalName = generateDefaultName({
+    finalName = generateDefaultTaskName({
       variable: parsed.data.variable,
       region: parsed.data.region,
       timeRange: parsed.data.timeRange,
@@ -168,7 +150,7 @@ export function checkDownscalingConfiguration(
 
   // Now validate with the final name
   const finalParsed = configurationInput(now).safeParse({
-    ...configuration,
+    ...inputConfiguration,
     name: isSpec05 ? finalName : 'legacy',
   })
   if (!finalParsed.success) {
@@ -219,47 +201,39 @@ export function checkDownscalingConfiguration(
     timeRange: convertedTimeRange,
   }
 
-  if (
+  // Determine resolved method and advanced parameters
+  const resolvedMethod =
     finalParsed.data.method === 'probabilistic' ||
     finalParsed.data.advanced?.uncertaintyQuantification
-  ) {
-    // Only return name for Spec 05 requests
-    return isSpec05
+      ? ('probabilistic' as const)
+      : ('deterministic' as const)
+
+  const configuration =
+    resolvedMethod === 'probabilistic'
       ? {
-          ok: true as const,
-          name: finalName,
-          configuration: {
-            ...baseConfig,
-            resolvedMethod: 'probabilistic' as const,
-            advanced: {
-              uncertaintyQuantification:
-                finalParsed.data.advanced?.uncertaintyQuantification ?? false,
-              ensembleMembers: finalParsed.data.advanced?.ensembleMembers ?? 10,
-            },
+          ...baseConfig,
+          resolvedMethod,
+          advanced: {
+            uncertaintyQuantification:
+              finalParsed.data.advanced?.uncertaintyQuantification ?? false,
+            ensembleMembers: finalParsed.data.advanced?.ensembleMembers ?? 10,
           },
         }
       : {
-          ok: true as const,
-          configuration: {
-            ...baseConfig,
-            resolvedMethod: 'probabilistic' as const,
-            advanced: {
-              uncertaintyQuantification:
-                finalParsed.data.advanced?.uncertaintyQuantification ?? false,
-              ensembleMembers: finalParsed.data.advanced?.ensembleMembers ?? 10,
-            },
-          },
+          ...baseConfig,
+          resolvedMethod,
         }
-  }
+
+  // Return with or without name based on Spec 05 detection
   return isSpec05
     ? {
         ok: true as const,
         name: finalName,
-        configuration: { ...baseConfig, resolvedMethod: 'deterministic' as const },
+        configuration,
       }
     : {
         ok: true as const,
-        configuration: { ...baseConfig, resolvedMethod: 'deterministic' as const },
+        configuration,
       }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, useRouteContext } from '@tanstack/react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -64,7 +64,6 @@ export function TaskCreatePage() {
   const [confirmedRegion, setConfirmedRegion] = useState<BoundingBox | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [userEditedName, setUserEditedName] = useState(false)
 
   const {
     register,
@@ -97,31 +96,6 @@ export function TaskCreatePage() {
   const watchedDataSource = watch('dataSource')
   const watchedResolution = watch('resolution')
 
-  // Generate default name suggestion when parameters change, but don't overwrite user input
-  useEffect(() => {
-    if (userEditedName) return
-
-    if (watchedStartDate && watchedEndDate) {
-      const variableNames = {
-        temperature: '气温',
-        wind: '风场',
-        pressure: '气压',
-        precipitation: '降水',
-      }
-      const varName = variableNames[watchedVariable]
-
-      if (watchedStartDate === watchedEndDate) {
-        setValue('name', `${varName} · ${watchedStartDate}`, { shouldValidate: false })
-      } else if (confirmedRegion) {
-        setValue(
-          'name',
-          `${varName} · ${confirmedRegion.west}-${confirmedRegion.east}E, ${confirmedRegion.south}-${confirmedRegion.north}N`,
-          { shouldValidate: false },
-        )
-      }
-    }
-  }, [watchedVariable, watchedStartDate, watchedEndDate, confirmedRegion, userEditedName, setValue])
-
   const handleRegionConfirmed = (bbox: BoundingBox) => {
     setConfirmedRegion(bbox)
   }
@@ -142,10 +116,6 @@ export function TaskCreatePage() {
       // When disabling uncertainty on recommended, clear ensemble members
       setValue('ensembleMembers', '10')
     }
-  }
-
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setUserEditedName(e.target.value.trim().length > 0)
   }
 
   const onSubmit = async (data: TaskFormData) => {
@@ -238,10 +208,6 @@ export function TaskCreatePage() {
               <Input
                 id="task-name"
                 {...register('name')}
-                onChange={(e) => {
-                  register('name').onChange(e)
-                  handleNameChange(e)
-                }}
                 placeholder="例如：2024年6月气温分析（可留空自动生成）"
                 aria-describedby="task-name-help"
                 aria-invalid={!!errors.name}
@@ -442,24 +408,27 @@ export function TaskCreatePage() {
                   <dt className="font-medium text-muted-foreground">目标分辨率</dt>
                   <dd>{resolutionLabels[watchedResolution]}</dd>
                 </div>
-                <div>
-                  <dt className="font-medium text-muted-foreground">降尺度方法</dt>
-                  <dd>
-                    {selectedMethod === 'recommended' && '推荐方法'}
-                    {selectedMethod === 'deterministic' && '确定性方法'}
-                    {selectedMethod === 'probabilistic' && '概率式方法'}
-                    {selectedMethod === 'recommended' &&
-                      uncertaintyQuantification &&
-                      ' (启用不确定性量化)'}
-                  </dd>
-                </div>
-                {(selectedMethod === 'probabilistic' ||
-                  (selectedMethod === 'recommended' && uncertaintyQuantification)) && (
+                {capabilities.allowsAdvanced && (
                   <div>
-                    <dt className="font-medium text-muted-foreground">集合成员数</dt>
-                    <dd>{watch('ensembleMembers')} 个</dd>
+                    <dt className="font-medium text-muted-foreground">降尺度方法</dt>
+                    <dd>
+                      {selectedMethod === 'recommended' && '推荐方法'}
+                      {selectedMethod === 'deterministic' && '确定性方法'}
+                      {selectedMethod === 'probabilistic' && '概率式方法'}
+                      {selectedMethod === 'recommended' &&
+                        uncertaintyQuantification &&
+                        ' (启用不确定性量化)'}
+                    </dd>
                   </div>
                 )}
+                {capabilities.allowsAdvanced &&
+                  (selectedMethod === 'probabilistic' ||
+                    (selectedMethod === 'recommended' && uncertaintyQuantification)) && (
+                    <div>
+                      <dt className="font-medium text-muted-foreground">集合成员数</dt>
+                      <dd>{watch('ensembleMembers')} 个</dd>
+                    </div>
+                  )}
                 <div>
                   <dt className="font-medium text-muted-foreground">时区</dt>
                   <dd>Asia/Shanghai (UTC+8)</dd>
@@ -476,7 +445,7 @@ export function TaskCreatePage() {
                         {watchedStartDate} 至 {watchedEndDate}{' '}
                         {watchedStartDate === watchedEndDate ? '（单日）' : `（${dayCount}天）`}
                         <span className="ml-2 text-xs text-muted-foreground">
-                          显示结束日期包含当天；保存范围为半开区间 [start, nextDay) UTC
+                          半开区间 [start, end)：结束日期不含当天数据
                         </span>
                       </dd>
                     </div>
