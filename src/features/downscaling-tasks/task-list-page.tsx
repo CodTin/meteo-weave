@@ -76,10 +76,16 @@ function TaskRow({ task }: { task: DownscalingTask }) {
   const { viewTask, deleteTask } = useTaskActions()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
+    if (isDeleting) return
+
     setDeleteError(null)
+    setIsDeleting(true)
     const result = await deleteTask(task.id)
+    setIsDeleting(false)
+
     if (result.ok) {
       setShowDeleteDialog(false)
     } else {
@@ -145,9 +151,14 @@ function TaskRow({ task }: { task: DownscalingTask }) {
               variant="ghost"
               size="sm"
               onClick={() => setShowDeleteDialog(true)}
+              disabled={isDeleting}
               aria-label={`删除任务 ${task.name}`}
             >
-              <Trash2 className="size-4" aria-hidden="true" />
+              {isDeleting ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 className="size-4" aria-hidden="true" />
+              )}
             </Button>
           </div>
         </td>
@@ -167,8 +178,17 @@ function TaskRow({ task }: { task: DownscalingTask }) {
             </div>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>删除</AlertDialogAction>
+            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                  删除中...
+                </>
+              ) : (
+                '删除'
+              )}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -243,7 +263,8 @@ export function TaskListPage() {
               {/* Filter Controls */}
               <div className="mb-6 space-y-4">
                 {/* View Toggle */}
-                <div className="flex items-center gap-2" role="group" aria-label="视图切换">
+                <fieldset className="flex items-center gap-2">
+                  <legend className="sr-only">视图切换</legend>
                   <Button
                     variant={viewMode === 'table' ? 'default' : 'outline'}
                     size="sm"
@@ -264,7 +285,7 @@ export function TaskListPage() {
                     <LayoutGrid className="mr-1 size-4" aria-hidden="true" />
                     卡片视图
                   </Button>
-                </div>
+                </fieldset>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {/* Name Search */}
@@ -483,13 +504,13 @@ export function TaskListPage() {
                           <>共 {totalCount} 个任务</>
                         )}
                       </p>
-                      <div role="list" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {tasks.map((task) => (
-                          <div key={task.id} role="listitem">
+                          <li key={task.id} className="list-none">
                             <TaskCard task={task} />
-                          </div>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     </>
                   )}
 

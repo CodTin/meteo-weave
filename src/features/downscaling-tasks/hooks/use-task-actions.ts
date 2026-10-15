@@ -24,6 +24,14 @@ export function useTaskActions() {
 
   const deleteTask = useCallback(
     async (taskId: string) => {
+      // Prevent duplicate operations
+      if (isDeleting) {
+        return {
+          ok: false as const,
+          error: '正在删除中，请稍候',
+        }
+      }
+
       setIsDeleting(true)
       try {
         const taskService = createTaskService({ queryClient })
@@ -47,7 +55,7 @@ export function useTaskActions() {
         setIsDeleting(false)
       }
     },
-    [queryClient],
+    [queryClient, isDeleting],
   )
 
   return {

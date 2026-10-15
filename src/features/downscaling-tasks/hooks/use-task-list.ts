@@ -130,9 +130,13 @@ export function useTaskList() {
   }, [state, filters, sortConfig])
 
   const totalPages = Math.ceil(filteredAndSortedTasks.length / pageSize)
+
+  // Correct page if out of bounds (derived, not in effect to avoid setState during render)
+  const correctedPage = currentPage > totalPages && totalPages > 0 ? totalPages : currentPage
+
   const paginatedTasks = filteredAndSortedTasks.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
+    (correctedPage - 1) * pageSize,
+    correctedPage * pageSize,
   )
 
   const updateFilters = (newFilters: Partial<TaskFilters>) => {
@@ -164,7 +168,7 @@ export function useTaskList() {
     clearFilters,
     sortConfig,
     updateSort,
-    currentPage,
+    currentPage: correctedPage,
     setCurrentPage,
     totalPages,
     pageSize,
