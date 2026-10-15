@@ -51,10 +51,16 @@ export function TaskCard({ task }: TaskCardProps) {
   const { viewTask, deleteTask } = useTaskActions()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
+    if (isDeleting) return
+
     setDeleteError(null)
+    setIsDeleting(true)
     const result = await deleteTask(task.id)
+    setIsDeleting(false)
+
     if (result.ok) {
       setShowDeleteDialog(false)
     } else {
@@ -97,7 +103,9 @@ export function TaskCard({ task }: TaskCardProps) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <div className="flex items-center gap-1.5">
               <span className="text-muted-foreground">变量:</span>
-              <span className="font-medium">{variableLabels[config.variable] || config.variable}</span>
+              <span className="font-medium">
+                {variableLabels[config.variable] || config.variable}
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="text-muted-foreground">方法:</span>
@@ -134,9 +142,7 @@ export function TaskCard({ task }: TaskCardProps) {
           </div>
 
           {/* Created Time */}
-          <div className="text-xs text-muted-foreground">
-            创建于 {formatDate(task.createdAt)}
-          </div>
+          <div className="text-xs text-muted-foreground">创建于 {formatDate(task.createdAt)}</div>
 
           {/* Actions */}
           <div className="flex items-center gap-2 pt-2 border-t">
@@ -154,9 +160,14 @@ export function TaskCard({ task }: TaskCardProps) {
               variant="outline"
               size="sm"
               onClick={() => setShowDeleteDialog(true)}
+              disabled={isDeleting}
               aria-label={`删除任务 ${task.name}`}
             >
-              <Trash2 className="size-4" aria-hidden="true" />
+              {isDeleting ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 className="size-4" aria-hidden="true" />
+              )}
             </Button>
           </div>
         </div>
@@ -176,8 +187,17 @@ export function TaskCard({ task }: TaskCardProps) {
             </div>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>删除</AlertDialogAction>
+            <AlertDialogCancel disabled={isDeleting}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
+                  删除中...
+                </>
+              ) : (
+                '删除'
+              )}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

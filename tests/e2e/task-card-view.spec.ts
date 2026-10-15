@@ -153,7 +153,10 @@ test.describe('Task card view', () => {
     const firstCardTitle = await page.locator('[role="listitem"] h3').first().textContent()
 
     // Click view button on first card
-    const viewButton = page.locator('[role="listitem"]').first().getByRole('button', { name: /查看/ })
+    const viewButton = page
+      .locator('[role="listitem"]')
+      .first()
+      .getByRole('button', { name: /查看/ })
     await viewButton.click()
 
     // Should navigate to task result page
@@ -207,9 +210,11 @@ test.describe('Task card view', () => {
       // Card should have task name and view button
       await expect(page.locator('[role="listitem"] h3').first()).toBeVisible()
       await expect(
-        page.locator('[role="listitem"]').first().getByRole('button', { name: /查看/ }),
+        page
+          .locator('[role="listitem"]')
+          .first()
+          .getByRole('button', { name: /查看/ }),
       ).toBeVisible()
     })
   }
 })
-
