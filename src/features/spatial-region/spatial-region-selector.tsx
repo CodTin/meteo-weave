@@ -326,9 +326,7 @@ export function SpatialRegionSelector({ onRegionConfirmed }: SpatialRegionSelect
           >
             <h3 className="font-medium">已确认区域</h3>
             {selectedPlaceName && (
-              <p className="text-sm text-muted-foreground">
-                已选地点：{selectedPlaceName}
-              </p>
+              <p className="text-sm text-muted-foreground">已选地点：{selectedPlaceName}</p>
             )}
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <div>

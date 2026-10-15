@@ -45,6 +45,10 @@ export type DownscalingTask = {
   referenceSeed?: number
   referenceVersion?: string
   catalog?: DemoCatalogCase
+  /** When present, indicates this task is a retry of a previously failed task. */
+  retriedFrom?: string
+  /** When present, this failed task has been retried with these new task IDs. */
+  retriedBy?: string[]
 }
 
 export type Unavailable = { ok: false; code: string; error: string }

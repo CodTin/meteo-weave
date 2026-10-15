@@ -93,11 +93,7 @@ export function PlaceSearch({ onPlaceSelected, disabled = false }: PlaceSearchPr
       </Alert>
 
       {showResults && hasResults && (
-        <div
-          id={resultsId}
-          aria-label="搜索结果"
-          className="rounded-lg border bg-card shadow-sm"
-        >
+        <div id={resultsId} aria-label="搜索结果" className="rounded-lg border bg-card shadow-sm">
           <div className="max-h-[300px] overflow-y-auto">
             {results.map((place) => (
               <button
@@ -110,7 +106,9 @@ export function PlaceSearch({ onPlaceSelected, disabled = false }: PlaceSearchPr
                 data-testid={`place-option-${place.id}`}
               >
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 text-muted-foreground">{getCategoryIcon(place.category)}</div>
+                  <div className="mt-0.5 text-muted-foreground">
+                    {getCategoryIcon(place.category)}
+                  </div>
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{place.name}</span>
