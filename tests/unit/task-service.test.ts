@@ -165,6 +165,119 @@ it('submits, saves, reads and lists a named task for the authenticated account',
   expect(await page.evaluate(() => window.tasks.list())).toMatchObject({ tasks: [created.task] })
 }, 30_000)
 
+it('requires task name, trims whitespace, and saves user-edited name', async () => {
+  setServerTime(baseTime)
+  await signIn('researcher')
+  await openBrowser()
+  await page.evaluate(() => window.tasks.initialize())
+
+  // Empty name should generate default (pass empty string to trigger Spec 05 path)
+  const withoutName = await page.evaluate(async (input) => {
+    return window.tasks.create({ ...input, name: '' })
+  }, config)
+  expect(withoutName).toMatchObject({ ok: true })
+  if (!withoutName.ok) throw new Error('Expected task')
+  expect(withoutName.task.name).toBeTruthy()
+  expect(withoutName.task.name).toContain('气温')
+
+  const withWhitespace = await page.evaluate(async (input) => {
+    return window.tasks.create({ ...input, name: '  My Task  ' })
+  }, config)
+  expect(withWhitespace).toMatchObject({ ok: true })
+  if (!withWhitespace.ok) throw new Error('Expected task')
+  expect(withWhitespace.task.name).toBe('My Task')
+
+  const withEmptyName = await page.evaluate(async (input) => {
+    return window.tasks.create({ ...input, name: '   ' })
+  }, config)
+  expect(withEmptyName).toMatchObject({ ok: true })
+  if (!withEmptyName.ok) throw new Error('Expected task')
+  // Empty string after trim should generate default
+  expect(withEmptyName.task.name).toBeTruthy()
+  expect(withEmptyName.task.name).toContain('气温')
+}, 30_000)
+
+it('generates default name from variable and time for single-day historical task', async () => {
+  setServerTime(baseTime)
+  await signIn('researcher')
+  await openBrowser()
+  await page.evaluate(() => window.tasks.initialize())
+
+  const singleDay = {
+    ...config,
+    timeRange: { mode: 'historical', start: '2024-06-15', end: '2024-06-15' },
+  }
+  const created = await page.evaluate(async (input) => {
+    return window.tasks.create({ ...input, name: '' })
+  }, singleDay)
+  expect(created).toMatchObject({ ok: true })
+  if (!created.ok) throw new Error('Expected task')
+  expect(created.task.name).toMatch(/气温/)
+  expect(created.task.name).toMatch(/2024-06-15/)
+}, 30_000)
+
+it('accepts single-day historical date within 2020-01-01 to 2024-12-31 bounds', async () => {
+  setServerTime(baseTime)
+  await signIn('researcher')
+  await openBrowser()
+  await page.evaluate(() => window.tasks.initialize())
+
+  const validDates = ['2020-01-01', '2022-06-15', '2024-12-31']
+  for (const date of validDates) {
+    const created = await page.evaluate(
+      async ({ config, date }) => {
+        return window.tasks.create({
+          ...config,
+          name: `Test ${date}`,
+          timeRange: { mode: 'historical', start: date, end: date },
+        })
+      },
+      { config, date },
+    )
+    expect(created).toMatchObject({ ok: true })
+  }
+
+  const invalidDates = ['2019-12-31', '2025-01-01']
+  for (const date of invalidDates) {
+    const created = await page.evaluate(
+      async ({ config, date }) => {
+        return window.tasks.create({
+          ...config,
+          name: `Test ${date}`,
+          timeRange: { mode: 'historical', start: date, end: date },
+        })
+      },
+      { config, date },
+    )
+    expect(created).toMatchObject({ ok: false, code: 'INVALID_CONFIGURATION' })
+  }
+}, 30_000)
+
+it('converts single historical day from Asia/Shanghai to UTC with half-open interval', async () => {
+  setServerTime(baseTime)
+  await signIn('researcher')
+  await openBrowser()
+  await page.evaluate(() => window.tasks.initialize())
+
+  const created = await page.evaluate(async (input) => {
+    return window.tasks.create({
+      ...input,
+      name: 'Shanghai Time Test',
+      timeRange: { mode: 'historical', start: '2024-06-15', end: '2024-06-15' },
+    })
+  }, config)
+  expect(created).toMatchObject({ ok: true })
+  if (!created.ok) throw new Error('Expected task')
+
+  // 2024-06-15 in Asia/Shanghai (UTC+8) starts at 2024-06-14T16:00:00Z
+  // Half-open interval [start, end) means end is exclusive
+  expect(created.task.configuration.timeRange).toMatchObject({
+    mode: 'historical',
+    start: '2024-06-14T16:00:00.000Z',
+    end: '2024-06-15T16:00:00.000Z',
+  })
+}, 30_000)
+
 const pointQuery = {
   kind: 'points',
   layer: 'downscaled',

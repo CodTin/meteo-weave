@@ -19,6 +19,7 @@ const region = z
 
 // Storage validation is deliberately independent of today's forecast admission window.
 const baseConfiguration = z.strictObject({
+  name: z.string().min(1).max(200).optional(),
   dataSource: z.enum(['ecmwf', 'gfs', 'fusion']),
   variable: z.enum(['temperature', 'wind', 'pressure', 'precipitation']),
   resolution: z.enum(['1km', '3km', '5km']),
@@ -26,7 +27,11 @@ const baseConfiguration = z.strictObject({
   region,
   timeRange: z.discriminatedUnion('mode', [
     z
-      .strictObject({ mode: z.literal('historical'), start: z.iso.date(), end: z.iso.date() })
+      .strictObject({
+        mode: z.literal('historical'),
+        start: z.union([z.iso.date(), z.iso.datetime()]),
+        end: z.union([z.iso.date(), z.iso.datetime()]),
+      })
       .refine(
         (value) =>
           value.start <= value.end && value.start >= '2020-01-01' && value.end <= '2024-12-31',

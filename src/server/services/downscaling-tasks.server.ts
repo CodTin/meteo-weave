@@ -42,12 +42,19 @@ export function submitDownscalingTask(input: unknown): TaskReply {
   })
   if (unavailableResult) return unavailableResult
   const id = crypto.randomUUID()
+
+  // Generate name: use admission.name for Spec 05, fallback to old format for backward compatibility
+  const taskName =
+    'name' in admission && admission.name
+      ? admission.name
+      : `Synthetic Demo · ${{ temperature: 'Temperature', wind: 'Wind', pressure: 'MSL Pressure', precipitation: 'Precipitation' }[admission.configuration.variable]} · ${id}`
+
   return {
     ok: true,
     task: {
       schemaVersion: TASK_SCHEMA_VERSION,
       id,
-      name: `Synthetic Demo · ${{ temperature: 'Temperature', wind: 'Wind', pressure: 'MSL Pressure', precipitation: 'Precipitation' }[admission.configuration.variable]} · ${id}`,
+      name: taskName,
       ownerId: admission.ownerId,
       configuration: admission.configuration,
       createdAt: new Date(now).toISOString(),
