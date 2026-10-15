@@ -188,7 +188,12 @@ export function TaskListPage() {
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table')
 
   const hasActiveFilters =
-    filters.nameSearch.trim() !== '' || filters.variable || filters.status || filters.method
+    filters.nameSearch.trim() !== '' ||
+    filters.variable ||
+    filters.status ||
+    filters.method ||
+    filters.timeRangeStart ||
+    filters.timeRangeEnd
 
   return (
     <div className="space-y-6">
@@ -259,7 +264,7 @@ export function TaskListPage() {
                   </Button>
                 </fieldset>
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                   {/* Name Search */}
                   <div className="space-y-2">
                     <Label htmlFor="name-search">任务名称搜索</Label>
@@ -345,6 +350,41 @@ export function TaskListPage() {
                         <SelectItem value="probabilistic">概率式</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+
+                {/* Time Range Filter - Second Row */}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="time-range-start">分析时间范围（起始）</Label>
+                    <Input
+                      id="time-range-start"
+                      type="date"
+                      value={filters.timeRangeStart || ''}
+                      onChange={(e) =>
+                        updateFilters({
+                          timeRangeStart: e.target.value || undefined,
+                        })
+                      }
+                      min="2020-01-01"
+                      max="2024-12-31"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="time-range-end">分析时间范围（结束）</Label>
+                    <Input
+                      id="time-range-end"
+                      type="date"
+                      value={filters.timeRangeEnd || ''}
+                      onChange={(e) =>
+                        updateFilters({
+                          timeRangeEnd: e.target.value || undefined,
+                        })
+                      }
+                      min="2020-01-01"
+                      max="2024-12-31"
+                    />
                   </div>
                 </div>
 

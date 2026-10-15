@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { createTaskService, type DownscalingTask } from '../service'
 import type { TaskRecordIssue } from '../service'
@@ -13,6 +13,8 @@ export type TaskFilters = {
   variable?: string
   status?: DownscalingTask['status']
   method?: 'deterministic' | 'probabilistic'
+  timeRangeStart?: string
+  timeRangeEnd?: string
 }
 
 export type SortConfig = {
@@ -95,6 +97,18 @@ export function useTaskList() {
       result = result.filter((task) => task.configuration.resolvedMethod === filters.method)
     }
 
+    // Apply time range overlap filter (only for historical mode tasks)
+    if (filters.timeRangeStart && filters.timeRangeEnd) {
+      const filterStart = filters.timeRangeStart
+      const filterEnd = filters.timeRangeEnd
+      result = result.filter((task) => {
+        const timeRange = task.configuration.timeRange
+        if (timeRange.mode !== 'historical') return false
+        // Two ranges overlap if: start1 <= end2 AND start2 <= end1
+        return timeRange.start <= filterEnd && filterStart <= timeRange.end
+      })
+    }
+
     // Apply sorting
     const sorted = [...result].sort((a, b) => {
       let comparison = 0
@@ -131,12 +145,24 @@ export function useTaskList() {
 
   const totalPages = Math.ceil(filteredAndSortedTasks.length / pageSize)
 
-  // Correct page if out of bounds (derived, not in effect to avoid setState during render)
-  const correctedPage = currentPage > totalPages && totalPages > 0 ? totalPages : currentPage
+  // Track previous filtered count to detect deletions
+  const prevFilteredCountRef = useRef(filteredAndSortedTasks.length)
+
+  useEffect(() => {
+    const prevCount = prevFilteredCountRef.current
+    const currentCount = filteredAndSortedTasks.length
+
+    // If the list shrunk and current page is now out of bounds, correct it
+    if (currentCount < prevCount && currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages)
+    }
+
+    prevFilteredCountRef.current = currentCount
+  }, [filteredAndSortedTasks.length, currentPage, totalPages])
 
   const paginatedTasks = filteredAndSortedTasks.slice(
-    (correctedPage - 1) * pageSize,
-    correctedPage * pageSize,
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
   )
 
   const updateFilters = (newFilters: Partial<TaskFilters>) => {
@@ -168,7 +194,7 @@ export function useTaskList() {
     clearFilters,
     sortConfig,
     updateSort,
-    currentPage: correctedPage,
+    currentPage,
     setCurrentPage,
     totalPages,
     pageSize,
