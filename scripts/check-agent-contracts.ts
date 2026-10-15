@@ -60,10 +60,21 @@ for (const file of files(join(root, 'src/routes')).filter((file) => /\.[jt]sx?$/
       `${relative(root, file)}: use directory-based routes, not dotted flat route names.`,
     )
 }
+// Ban manual UTC offset arithmetic for named timezones - use date-fns-tz or Temporal instead
+for (const file of files(join(root, 'src')).filter((file) => /\.[cm]?[jt]sx?$/.test(file))) {
+  const source = readFileSync(file, 'utf8')
+  const tzOffsetPattern = /Date\.UTC\([^)]+\)\s*[-+]\s*\d+\s*\*\s*60\s*\*\s*60\s*\*\s*1000/
+  if (tzOffsetPattern.test(source)) {
+    const line = source.slice(0, source.search(tzOffsetPattern)).split('\n').length
+    failures.push(
+      `${relative(root, file)}:${line}: timezone-handling: use date-fns-tz fromZonedTime() or Temporal for timezone conversion, not manual offset arithmetic which ignores DST.`,
+    )
+  }
+}
 if (failures.length) {
   console.error(failures.join('\n'))
   process.exitCode = 1
 } else
   console.log(
-    'Agent contracts passed: guarded browser tests, parsed SSR HTML and directory-based routes.',
+    'Agent contracts passed: guarded browser tests, parsed SSR HTML, directory-based routes and proper timezone handling.',
   )

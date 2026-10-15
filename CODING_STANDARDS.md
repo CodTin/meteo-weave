@@ -21,6 +21,9 @@ the guardrail is missing, bypassed or wrong.
   of maintaining competing inventories. Preserve historical records as historical.
 - **Scientific scope:** UI placeholders, synthetic data, role permissions and computation claims
   must match the actual public behavior. Respect `GLOSSARY.md` and the originating spec.
+- **Spec fidelity:** Implement what the spec describes, not what seems useful. Live updates,
+  generic components, and convenience features beyond spec scope should be proposed in spec
+  comments before implementation. When uncertain, implement the minimal literal reading first.
 
 - **Semantic assertions:** Distinguish requirements from incidental representation. A safe
   return URL should preserve origin, pathname, query values and hash; `%20` versus `+` is not

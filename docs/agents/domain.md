@@ -27,3 +27,11 @@ Record genuine vocabulary gaps for the `domain-modeling` workflow.
 
 When a proposal contradicts an existing ADR, identify the ADR explicitly
 and explain why the decision should be reconsidered.
+
+## Data boundaries
+
+- **Client**: User input collection, display formatting, client-side validation preview
+- **Server**: Authoritative validation, timezone conversion (uses server `now`), persistence
+
+Timezone conversion happens server-side to avoid client clock drift creating invalid records.
+See `configuration-admission.ts` (admission rules) and `downscaling-tasks.server.ts` (persistence).

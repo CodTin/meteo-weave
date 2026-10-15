@@ -40,6 +40,13 @@ approved worker SHA/scope, then merges into the current integration tip and veri
 combined tree. Never expand the worker allowlist to hide imported changes. Protection records live alongside
 checkpoints in the Git common directory and cannot be silently overwritten.
 
+Workers merge to integration sequentially. Concurrent workers branch from the same integration
+commit; the merger resolves conflicts by rebasing onto current tip before verification.
+
+Workers may bypass pre-commit hooks with `--no-verify` for intermediate commits during iteration.
+Integration merges to main and final deliveries never bypass hooks. Fix flaky tests rather than
+routing around them; a bypassed hook is a deferred CI failure.
+
 For review, use a clean detached worktree at the exact review commit. A dirty checkout's result
 is not evidence for its clean HEAD: `agent:verify` binds evidence to both HEAD and content.
 
@@ -119,6 +126,17 @@ assertions; do not substitute CSS-class snapshots or trim controls to make them 
 Chromium is the required CI gate. Run `.github/workflows/browser-compatibility.yml` manually
 for WebKit or Firefox; it reports failures and uploads evidence, without silently skipping them
 or claiming historical smoke results validate current flows.
+
+## Rate limit recovery
+
+When an agent hits an API rate limit:
+
+1. The checkpoint records the hit with `--status blocked --next "Rate limit at <step>"`
+2. Check the agent's worktree for uncommitted work
+3. If work is valid and tests pass, commit it; otherwise preserve and investigate
+4. Never re-dispatch the same agent without confirming its state first
+
+Rate limits are a hard stop, not a retry signal. Manual inspection required before resuming.
 
 ## Delivery
 

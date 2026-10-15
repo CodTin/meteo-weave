@@ -32,6 +32,11 @@ domain changes, read `docs/agents/domain.md`.
 Before implementation, toolchain setup or resuming interrupted work, read
 `docs/agents/workflow.md` and run `bun run agent:doctor`.
 
+### Rate limits
+
+Agent runs consume API quota. Before launching parallel subagents, read
+`docs/agents/workflow.md` section on rate limit recovery.
+
 ### Routes and SSR
 
 Before changing route organization, sessions, workspace lifecycle, client startup or SSR,
