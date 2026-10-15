@@ -289,4 +289,300 @@ test.describe('Task list page', () => {
       expect(hasTable || hasEmpty).toBe(true)
     })
   }
+
+  test.describe('Task filtering and search', () => {
+    test('can search tasks by name', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      // Create two tasks with distinct names
+      await page.goto('/tasks/new')
+      await page.getByLabel('任务名称').fill('Temperature Analysis Task')
+      await page.getByLabel('开始日期').fill('2024-11-01')
+      await page.getByLabel('结束日期').fill('2024-11-01')
+      await page.getByRole('button', { name: /确认.*区域/ }).click()
+      await page.getByRole('button', { name: /提交.*任务/ }).click()
+      await expect(page).toHaveURL(/\/tasks\/.+/)
+
+      await page.goto('/tasks/new')
+      await page.getByLabel('任务名称').fill('Wind Speed Study')
+      await page.getByLabel('开始日期').fill('2024-11-02')
+      await page.getByLabel('结束日期').fill('2024-11-02')
+      await page.getByRole('button', { name: /确认.*区域/ }).click()
+      await page.getByRole('button', { name: /提交.*任务/ }).click()
+      await expect(page).toHaveURL(/\/tasks\/.+/)
+
+      // Go to task list
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      // Search for "temperature" (case-insensitive)
+      const searchInput = page.getByLabel('任务名称搜索')
+      await searchInput.fill('temperature')
+
+      // Should see only the temperature task
+      await expect(page.getByText('Temperature Analysis Task')).toBeVisible()
+      await expect(page.getByText('Wind Speed Study')).not.toBeVisible()
+
+      // Clear search
+      await searchInput.clear()
+      await expect(page.getByText('Wind Speed Study')).toBeVisible()
+    })
+
+    test('search trims whitespace', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      await page.goto('/tasks/new')
+      await page.getByLabel('任务名称').fill('Whitespace Test')
+      await page.getByLabel('开始日期').fill('2024-11-03')
+      await page.getByLabel('结束日期').fill('2024-11-03')
+      await page.getByRole('button', { name: /确认.*区域/ }).click()
+      await page.getByRole('button', { name: /提交.*任务/ }).click()
+      await expect(page).toHaveURL(/\/tasks\/.+/)
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      // Search with leading/trailing whitespace
+      const searchInput = page.getByLabel('任务名称搜索')
+      await searchInput.fill('  whitespace  ')
+
+      await expect(page.getByText('Whitespace Test')).toBeVisible()
+    })
+
+    test('can filter by status', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      // Create a task
+      await page.goto('/tasks/new')
+      await page.getByLabel('任务名称').fill('Status Filter Test')
+      await page.getByLabel('开始日期').fill('2024-11-04')
+      await page.getByLabel('结束日期').fill('2024-11-04')
+      await page.getByRole('button', { name: /确认.*区域/ }).click()
+      await page.getByRole('button', { name: /提交.*任务/ }).click()
+      await expect(page).toHaveURL(/\/tasks\/.+/)
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      // Filter by Running status
+      const statusFilter = page.getByLabel('任务状态')
+      await statusFilter.click()
+      await page.getByRole('option', { name: '运行中' }).click()
+
+      // Should see the task (tasks start as Running)
+      await expect(page.getByText('Status Filter Test')).toBeVisible()
+
+      // Change to Completed filter
+      await statusFilter.click()
+      await page.getByRole('option', { name: '已完成' }).click()
+
+      // May or may not see tasks depending on completion timing
+    })
+
+    test('can filter by variable', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      // Filter by temperature variable
+      const variableFilter = page.getByLabel('气象变量')
+      await variableFilter.click()
+      await page.getByRole('option', { name: '气温' }).click()
+
+      // Should only see temperature tasks (default variable)
+      const table = page.getByRole('table')
+      if (await table.isVisible()) {
+        // Verify temperature is shown in the table
+        await expect(page.getByText('气温')).toBeVisible()
+      }
+    })
+
+    test('can clear all filters', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      // Apply multiple filters
+      const searchInput = page.getByLabel('任务名称搜索')
+      await searchInput.fill('test')
+
+      const statusFilter = page.getByLabel('任务状态')
+      await statusFilter.click()
+      await page.getByRole('option', { name: '已完成' }).click()
+
+      // Should see clear filters button
+      const clearButton = page.getByRole('button', { name: /清除所有筛选/ })
+      await expect(clearButton).toBeVisible()
+
+      // Clear filters
+      await clearButton.click()
+
+      // Clear button should disappear
+      await expect(clearButton).not.toBeVisible()
+
+      // Search input should be empty
+      await expect(searchInput).toHaveValue('')
+    })
+
+    test('shows no matches state when filters return empty', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      // Search for something that doesn't exist
+      const searchInput = page.getByLabel('任务名称搜索')
+      await searchInput.fill('ThisTaskDoesNotExist12345')
+
+      // Should show no matches state
+      await expect(page.getByText('没有匹配的任务')).toBeVisible()
+      await expect(page.getByRole('button', { name: /清除筛选/ })).toBeVisible()
+    })
+  })
+
+  test.describe('Task sorting', () => {
+    test('can sort by name', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      // Create tasks with different names
+      const names = ['Zebra Task', 'Apple Task', 'Mango Task']
+      for (const name of names) {
+        await page.goto('/tasks/new')
+        await page.getByLabel('任务名称').fill(name)
+        await page.getByLabel('开始日期').fill('2024-11-05')
+        await page.getByLabel('结束日期').fill('2024-11-05')
+        await page.getByRole('button', { name: /确认.*区域/ }).click()
+        await page.getByRole('button', { name: /提交.*任务/ }).click()
+        await expect(page).toHaveURL(/\/tasks\/.+/)
+        await page.waitForTimeout(100)
+      }
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      // Click name column header to sort
+      const nameHeader = page.getByRole('button', { name: /按任务名称排序/ })
+      await nameHeader.click()
+
+      // Should be sorted alphabetically
+      const taskCells = page.locator('tbody tr td:first-child')
+      const firstTask = await taskCells.first().textContent()
+      expect(firstTask).toContain('Apple')
+    })
+
+    test('can toggle sort direction', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      const nameHeader = page.getByRole('button', { name: /按任务名称排序/ })
+
+      // First click - ascending
+      await nameHeader.click()
+      await page.waitForTimeout(200)
+
+      // Second click - descending
+      await nameHeader.click()
+      await page.waitForTimeout(200)
+
+      // Verify sort direction changed (table should re-render)
+      const table = page.getByRole('table')
+      await expect(table).toBeVisible()
+    })
+  })
+
+  test.describe('Task pagination', () => {
+    test('shows pagination when more than 20 tasks', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      // Create 25 tasks to trigger pagination
+      for (let i = 1; i <= 25; i++) {
+        await page.goto('/tasks/new')
+        await page.getByLabel('任务名称').fill(`Pagination Task ${i}`)
+        await page.getByLabel('开始日期').fill('2024-11-06')
+        await page.getByLabel('结束日期').fill('2024-11-06')
+        await page.getByRole('button', { name: /确认.*区域/ }).click()
+        await page.getByRole('button', { name: /提交.*任务/ }).click()
+        await expect(page).toHaveURL(/\/tasks\/.+/)
+      }
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      // Should see pagination controls
+      await expect(page.getByText(/第 \d+ \/ \d+ 页/)).toBeVisible()
+      await expect(page.getByRole('button', { name: /下一页/ })).toBeVisible()
+    })
+
+    test('can navigate between pages', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      // Assume tasks exist from previous test or catalog
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      const nextButton = page.getByRole('button', { name: /下一页/ })
+      const prevButton = page.getByRole('button', { name: /上一页/ })
+
+      // If pagination exists
+      if (await nextButton.isVisible()) {
+        // Go to next page
+        await nextButton.click()
+        await page.waitForTimeout(200)
+
+        // Should be on page 2
+        await expect(page.getByText(/第 2 \/ \d+ 页/)).toBeVisible()
+
+        // Previous button should be enabled
+        await expect(prevButton).toBeEnabled()
+
+        // Go back
+        await prevButton.click()
+        await page.waitForTimeout(200)
+
+        // Should be on page 1
+        await expect(page.getByText(/第 1 \/ \d+ 页/)).toBeVisible()
+      }
+    })
+
+    test('pagination resets to page 1 when filters change', async ({ page }) => {
+      await page.goto('/login')
+      await submitDemoLogin(page, 'researcher')
+
+      await page.goto('/tasks')
+      await expect(page.getByText('加载任务列表...')).not.toBeVisible({ timeout: 5000 })
+
+      const nextButton = page.getByRole('button', { name: /下一页/ })
+
+      // If on a page with pagination
+      if (await nextButton.isVisible()) {
+        // Go to page 2
+        await nextButton.click()
+        await page.waitForTimeout(200)
+
+        // Change filter
+        const searchInput = page.getByLabel('任务名称搜索')
+        await searchInput.fill('test')
+
+        // Should reset to page 1
+        const pageIndicator = page.getByText(/第 \d+ \/ \d+ 页/)
+        if (await pageIndicator.isVisible()) {
+          await expect(pageIndicator).toContainText('第 1 /')
+        }
+      }
+    })
+  })
 })

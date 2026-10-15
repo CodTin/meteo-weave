@@ -1,6 +1,19 @@
 import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, Eye, Loader2, AlertCircle, CheckCircle2, XCircle, Trash2 } from 'lucide-react'
+import {
+  ArrowRight,
+  Eye,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  Trash2,
+  Search,
+  X,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +27,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useTaskList } from './hooks/use-task-list'
 import { useTaskActions } from './hooks/use-task-actions'
 import type { DownscalingTask } from './service'
@@ -152,7 +174,24 @@ function TaskRow({ task }: { task: DownscalingTask }) {
 }
 
 export function TaskListPage() {
-  const listState = useTaskList()
+  const {
+    state,
+    tasks,
+    filteredCount,
+    totalCount,
+    issues,
+    filters,
+    updateFilters,
+    clearFilters,
+    sortConfig,
+    updateSort,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+  } = useTaskList()
+
+  const hasActiveFilters =
+    filters.nameSearch.trim() !== '' || filters.variable || filters.status || filters.method
 
   return (
     <div className="space-y-6">
@@ -173,7 +212,7 @@ export function TaskListPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {listState.status === 'loading' && (
+          {state.status === 'loading' && (
             <div className="flex min-h-[20rem] items-center justify-center">
               <div className="text-center">
                 <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
@@ -182,11 +221,11 @@ export function TaskListPage() {
             </div>
           )}
 
-          {listState.status === 'error' && (
+          {state.status === 'error' && (
             <div className="flex min-h-[20rem] items-center justify-center">
               <div className="text-center">
                 <AlertCircle className="mx-auto mb-4 size-8 text-destructive" />
-                <p className="text-sm text-muted-foreground">{listState.error}</p>
+                <p className="text-sm text-muted-foreground">{state.error}</p>
                 <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
                   重新加载
                 </Button>
@@ -194,9 +233,114 @@ export function TaskListPage() {
             </div>
           )}
 
-          {listState.status === 'success' && (
+          {state.status === 'success' && (
             <>
-              {listState.tasks.length === 0 ? (
+              {/* Filter Controls */}
+              <div className="mb-6 space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {/* Name Search */}
+                  <div className="space-y-2">
+                    <Label htmlFor="name-search">任务名称搜索</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="name-search"
+                        type="text"
+                        placeholder="搜索任务名称..."
+                        value={filters.nameSearch}
+                        onChange={(e) => updateFilters({ nameSearch: e.target.value })}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Variable Filter */}
+                  <div className="space-y-2">
+                    <Label htmlFor="variable-filter">气象变量</Label>
+                    <Select
+                      value={filters.variable || 'all'}
+                      onValueChange={(value: string) =>
+                        updateFilters({ variable: value === 'all' ? undefined : value })
+                      }
+                    >
+                      <SelectTrigger id="variable-filter">
+                        <SelectValue placeholder="全部变量" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部变量</SelectItem>
+                        <SelectItem value="temperature">气温</SelectItem>
+                        <SelectItem value="wind">风速</SelectItem>
+                        <SelectItem value="pressure">气压</SelectItem>
+                        <SelectItem value="precipitation">降水</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Status Filter */}
+                  <div className="space-y-2">
+                    <Label htmlFor="status-filter">任务状态</Label>
+                    <Select
+                      value={filters.status || 'all'}
+                      onValueChange={(value: string) =>
+                        updateFilters({
+                          status:
+                            value === 'all' ? undefined : (value as DownscalingTask['status']),
+                        })
+                      }
+                    >
+                      <SelectTrigger id="status-filter">
+                        <SelectValue placeholder="全部状态" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部状态</SelectItem>
+                        <SelectItem value="Running">运行中</SelectItem>
+                        <SelectItem value="Completed">已完成</SelectItem>
+                        <SelectItem value="Failed">失败</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Method Filter */}
+                  <div className="space-y-2">
+                    <Label htmlFor="method-filter">实际降尺度方法</Label>
+                    <Select
+                      value={filters.method || 'all'}
+                      onValueChange={(value: string) =>
+                        updateFilters({
+                          method:
+                            value === 'all'
+                              ? undefined
+                              : (value as 'deterministic' | 'probabilistic'),
+                        })
+                      }
+                    >
+                      <SelectTrigger id="method-filter">
+                        <SelectValue placeholder="全部方法" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部方法</SelectItem>
+                        <SelectItem value="deterministic">确定性</SelectItem>
+                        <SelectItem value="probabilistic">概率式</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                {hasActiveFilters && (
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      <X className="mr-1 size-4" />
+                      清除所有筛选
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      显示 {filteredCount} / {totalCount} 个任务
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {totalCount === 0 ? (
                 <div className="flex min-h-[20rem] items-center justify-center">
                   <div className="text-center">
                     <AlertCircle className="mx-auto mb-4 size-8 text-muted-foreground" />
@@ -209,13 +353,33 @@ export function TaskListPage() {
                     </Link>
                   </div>
                 </div>
+              ) : filteredCount === 0 ? (
+                <div className="flex min-h-[20rem] items-center justify-center">
+                  <div className="text-center">
+                    <AlertCircle className="mx-auto mb-4 size-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">没有匹配的任务</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      尝试调整筛选条件或清除所有筛选
+                    </p>
+                    <Button variant="outline" className="mt-4" onClick={clearFilters}>
+                      清除筛选
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <>
                   <p
                     id="task-table-scroll-hint"
                     className="mb-3 text-xs leading-6 text-muted-foreground"
                   >
-                    窄屏可在表格区域横向滚动，查看全部字段。共 {listState.tasks.length} 个任务。
+                    窄屏可在表格区域横向滚动，查看全部字段。
+                    {hasActiveFilters ? (
+                      <>
+                        显示 {filteredCount} / {totalCount} 个任务
+                      </>
+                    ) : (
+                      <>共 {totalCount} 个任务</>
+                    )}
                   </p>
                   <section
                     aria-label="降尺度任务表格"
@@ -232,44 +396,85 @@ export function TaskListPage() {
                       <thead className="border-b-2 border-b-primary/60 bg-background text-muted-foreground">
                         <tr>
                           {[
-                            '任务名称',
-                            '数据源',
-                            '气象变量',
-                            '经纬范围',
-                            '分析时间',
-                            '实际方法',
-                            '分辨率',
-                            '创建时间',
-                            '状态',
-                            '操作',
-                          ].map((field) => (
+                            { label: '任务名称', field: 'name' as const },
+                            { label: '数据源', field: null },
+                            { label: '气象变量', field: null },
+                            { label: '经纬范围', field: null },
+                            { label: '分析时间', field: null },
+                            { label: '实际方法', field: null },
+                            { label: '分辨率', field: null },
+                            { label: '创建时间', field: 'createdAt' as const },
+                            { label: '状态', field: 'status' as const },
+                            { label: '操作', field: null },
+                          ].map(({ label, field }) => (
                             <th
-                              key={field}
+                              key={label}
                               scope="col"
                               className="px-4 py-4 text-xs font-semibold tracking-wide whitespace-nowrap"
                             >
-                              {field}
+                              {field ? (
+                                <button
+                                  onClick={() => updateSort(field)}
+                                  className="flex items-center gap-1 hover:text-foreground"
+                                  aria-label={`按${label}排序`}
+                                >
+                                  {label}
+                                  <ArrowUpDown className="size-3" />
+                                  {sortConfig.field === field && (
+                                    <span className="sr-only">
+                                      {sortConfig.direction === 'asc' ? '升序' : '降序'}
+                                    </span>
+                                  )}
+                                </button>
+                              ) : (
+                                label
+                              )}
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {listState.tasks
-                          .slice()
-                          .sort(
-                            (a, b) =>
-                              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-                          )
-                          .map((task) => (
-                            <TaskRow key={task.id} task={task} />
-                          ))}
+                        {tasks.map((task) => (
+                          <TaskRow key={task.id} task={task} />
+                        ))}
                       </tbody>
                     </table>
                   </section>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="mt-4 flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        第 {currentPage} / {totalPages} 页
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                          aria-label="上一页"
+                        >
+                          <ChevronLeft className="size-4" />
+                          上一页
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={currentPage === totalPages}
+                          aria-label="下一页"
+                        >
+                          下一页
+                          <ChevronRight className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
 
-              {listState.issues.length > 0 && (
+              {issues.length > 0 && (
                 <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="size-5 text-amber-600 dark:text-amber-500" />
@@ -278,7 +483,7 @@ export function TaskListPage() {
                         部分任务无法读取
                       </h4>
                       <p className="mt-1 text-xs text-amber-800 dark:text-amber-200">
-                        {listState.issues.length} 个任务记录存在问题，已从列表中排除。
+                        {issues.length} 个任务记录存在问题，已从列表中排除。
                       </p>
                     </div>
                   </div>
