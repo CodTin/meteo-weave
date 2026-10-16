@@ -3,7 +3,16 @@ import { createTaskService } from '@/features/downscaling-tasks/service'
 import { QueryClient } from '@tanstack/react-query'
 import { alignAccuracySamples } from '@/features/result-analysis/service/accuracy-samples'
 import { calculateAccuracyMetrics } from '@/features/result-analysis/service/accuracy-metrics'
-import type { ResultValue } from '@/features/downscaling-tasks/service/contracts'
+import {
+  getVariableUnit,
+  extractWindSpeed,
+  validateAccumulationCoverage,
+} from '@/features/result-analysis/service/variable-accuracy'
+import type {
+  ResultValue,
+  WindValue,
+  Accumulation,
+} from '@/features/downscaling-tasks/service/contracts'
 
 type AccuracyData =
   | {
@@ -31,19 +40,34 @@ type AccuracyResponse = {
   data: AccuracyData
 }
 
-function getUnit(variable: string): string {
-  switch (variable) {
-    case 'temperature':
-      return '°C'
-    case 'wind':
-      return 'm/s'
-    case 'pressure':
-      return 'hPa'
-    case 'precipitation':
-      return 'mm'
-    default:
-      return ''
+/**
+ * Extracts the comparable value from a result value based on the variable type.
+ * For wind: uses derived speed from U10/V10, not direction
+ * For precipitation: validates accumulation coverage
+ * For temperature and pressure: uses value directly
+ * Preserves valid zeros for all variables
+ */
+function extractComparableValue(resultValue: ResultValue, variable: string): number {
+  if (variable === 'wind') {
+    // Wind: evaluate by speed derived from U10/V10
+    const windValue = resultValue as WindValue
+    return extractWindSpeed(windValue)
   }
+
+  if (variable === 'precipitation') {
+    // Precipitation: check accumulation coverage
+    const precipValue = resultValue as ResultValue & { accumulation?: Accumulation }
+    if (precipValue.accumulation) {
+      const validation = validateAccumulationCoverage(precipValue.accumulation)
+      if (!validation.valid) {
+        return NaN // Exclude incomparable samples
+      }
+    }
+    return resultValue.value
+  }
+
+  // Temperature and pressure: use value directly
+  return resultValue.value
 }
 
 export async function getAccuracyAssessmentData(taskId: string): Promise<AccuracyResponse> {
@@ -139,10 +163,12 @@ export async function getAccuracyAssessmentData(taskId: string): Promise<Accurac
       }
     }
 
-    // Extract station-based samples
+    // Extract station-based samples with variable-specific value extraction
     const getStationId = (obs: NonNullable<ResultValue['observation']>): string => {
       return obs.mode === 'stations' ? obs.station.id : 'interpolated'
     }
+
+    const variable = task.configuration.variable
 
     const originalSamples = originalResult.values
       .filter((v): v is ResultValue & { observation: NonNullable<ResultValue['observation']> } =>
@@ -151,8 +177,9 @@ export async function getAccuracyAssessmentData(taskId: string): Promise<Accurac
       .map((v) => ({
         stationId: getStationId(v.observation!),
         time: v.time,
-        value: v.value,
+        value: extractComparableValue(v, variable),
       }))
+      .filter((s) => Number.isFinite(s.value)) // Exclude invalid values
 
     const downscaledSamples = downscaledResult.values
       .filter((v): v is ResultValue & { observation: NonNullable<ResultValue['observation']> } =>
@@ -161,15 +188,18 @@ export async function getAccuracyAssessmentData(taskId: string): Promise<Accurac
       .map((v) => ({
         stationId: getStationId(v.observation!),
         time: v.time,
-        value: v.value,
+        value: extractComparableValue(v, variable),
       }))
+      .filter((s) => Number.isFinite(s.value))
 
-    const observationSamples = observationResult.values.map((v) => ({
-      stationId:
-        v.observation && v.observation.mode === 'stations' ? v.observation.station.id : 'unknown',
-      time: v.time,
-      value: v.value,
-    }))
+    const observationSamples = observationResult.values
+      .map((v) => ({
+        stationId:
+          v.observation && v.observation.mode === 'stations' ? v.observation.station.id : 'unknown',
+        time: v.time,
+        value: extractComparableValue(v, variable),
+      }))
+      .filter((s) => Number.isFinite(s.value))
 
     // Align samples
     const aligned = alignAccuracySamples(originalSamples, downscaledSamples, observationSamples)
@@ -220,7 +250,7 @@ export async function getAccuracyAssessmentData(taskId: string): Promise<Accurac
         },
         method: {
           matching: 'station-within-25km',
-          unit: getUnit(task.configuration.variable),
+          unit: getVariableUnit(task.configuration.variable),
         },
       },
     }
