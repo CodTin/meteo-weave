@@ -6,8 +6,10 @@ import { ArrowLeft } from 'lucide-react'
 import { AnalysisTabs, TabPanel, type AnalysisTab } from './components/analysis-tabs'
 import { MapComparisonPanel } from './components/map-comparison-panel'
 import { WindMapComparisonPanel } from './components/wind-map-comparison-panel'
+import { AccuracyAssessmentPanel } from './components/accuracy-assessment-panel'
 import { TimeSliceSelector } from './components/time-slice-selector'
 import { useTimeSlice } from './hooks/use-time-slice'
+import { useAccuracyAssessment } from './hooks/use-accuracy-assessment'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
 import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
 import { TaskErrorState } from '@/features/downscaling-tasks/components/task-error-state'
@@ -20,6 +22,9 @@ export function ResultAnalysisPage() {
   const [activeTab, setActiveTab] = useState<AnalysisTab>((search as any)?.tab || 'map-comparison')
 
   const { task, loading, error } = useTaskLoader({ taskId })
+
+  // Accuracy assessment data
+  const { data: accuracyData, isLoading: accuracyLoading } = useAccuracyAssessment(taskId)
 
   // Time slice management
   const timeSliceState = useTimeSlice({
@@ -162,17 +167,23 @@ export function ResultAnalysisPage() {
         </TabPanel>
 
         <TabPanel value="accuracy">
-          <Card>
-            <CardHeader>
-              <CardTitle>精度评估</CardTitle>
-              <CardDescription>待交付</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                精度评估功能将在后续版本提供，包括 RMSE、MAE、R² 等统计指标。
-              </p>
-            </CardContent>
-          </Card>
+          {accuracyLoading ? (
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">加载精度评估数据中...</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <AccuracyAssessmentPanel
+              data={
+                accuracyData || {
+                  available: false,
+                  reason: '精度评估数据加载失败',
+                }
+              }
+              variable={variable}
+            />
+          )}
         </TabPanel>
 
         <TabPanel value="time-series">
