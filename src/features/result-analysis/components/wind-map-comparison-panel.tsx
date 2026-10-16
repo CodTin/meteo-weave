@@ -145,7 +145,7 @@ export function WindMapComparisonPanel({ taskId, region, timeSlice }: WindMapCom
       </Card>
 
       {/* Metadata */}
-      <ComparisonInfoCard taskId={taskId} timeSlice={timeSlice} region={region} />
+      <ComparisonInfoCard taskId={taskId} timeSlice={timeSlice} region={region} variable="wind" />
     </div>
   )
 }

@@ -1,4 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Variable } from '../service/color-scales'
+import type { AccumulationInterval } from '../service/comparison-data'
 
 interface ComparisonInfoCardProps {
   taskId: string
@@ -9,9 +11,17 @@ interface ComparisonInfoCardProps {
     south: number
     north: number
   }
+  variable: Variable
+  accumulationInterval?: AccumulationInterval
 }
 
-export function ComparisonInfoCard({ taskId, timeSlice, region }: ComparisonInfoCardProps) {
+export function ComparisonInfoCard({
+  taskId,
+  timeSlice,
+  region,
+  variable,
+  accumulationInterval,
+}: ComparisonInfoCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -24,7 +34,11 @@ export function ComparisonInfoCard({ taskId, timeSlice, region }: ComparisonInfo
             <dd className="font-mono text-xs">{taskId.slice(0, 8)}...</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Time Slice</dt>
+            <dt className="text-muted-foreground">
+              {variable === 'precipitation' && accumulationInterval
+                ? 'Accumulation End'
+                : 'Time Slice'}
+            </dt>
             <dd className="font-medium">{new Date(timeSlice).toISOString().slice(0, 16)}</dd>
           </div>
           <div>
