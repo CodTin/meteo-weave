@@ -1,103 +1,29 @@
-import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from '@tanstack/react-router'
-import { useQueryClient } from '@tanstack/react-query'
-import { createTaskService, type DownscalingTask } from './service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, CheckCircle2, XCircle, ArrowLeft } from 'lucide-react'
+import { CheckCircle2, XCircle, ArrowLeft, Loader2 } from 'lucide-react'
+import { useTaskLoader } from './hooks/use-task-loader'
+import { TaskLoadingState } from './components/task-loading-state'
+import { TaskErrorState } from './components/task-error-state'
 
 export function TaskResultPage() {
   const { taskId } = useParams({ from: '/_workspace/tasks/$taskId' })
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [task, setTask] = useState<DownscalingTask | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    let mounted = true
-    const taskService = createTaskService({ queryClient })
-
-    const loadTask = async () => {
-      try {
-        await taskService.initialize()
-        const result = await taskService.get(taskId)
-
-        if (!mounted) return
-
-        if (!result.ok) {
-          setError(result.error)
-          setLoading(false)
-          return
-        }
-
-        setTask(result.task)
-
-        // If still running, poll for completion
-        if (result.task.status === 'Running') {
-          const completionTime = Date.parse(result.task.completionAt)
-          const now = Date.now()
-          const remainingTime = completionTime - now
-
-          if (remainingTime > 0) {
-            setTimeout(
-              () => {
-                if (mounted) loadTask()
-              },
-              Math.min(remainingTime + 100, 1000),
-            )
-          } else {
-            // Should be complete now, reload
-            setTimeout(() => {
-              if (mounted) loadTask()
-            }, 100)
-          }
-        }
-
-        setLoading(false)
-      } catch (err) {
-        if (!mounted) return
-        setError(err instanceof Error ? err.message : '加载任务失败')
-        setLoading(false)
-      }
-    }
-
-    loadTask()
-
-    return () => {
-      mounted = false
-      taskService.close()
-    }
-  }, [taskId, queryClient])
+  const { task, loading, error } = useTaskLoader({ taskId, pollIfRunning: true })
 
   if (loading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">加载任务中...</p>
-        </div>
-      </div>
-    )
+    return <TaskLoadingState />
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <XCircle className="size-5 text-destructive" />
-            任务未找到
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-muted-foreground">{error}</p>
-          <Button onClick={() => navigate({ to: '/tasks/new' })}>
-            <ArrowLeft className="mr-2 size-4" />
-            返回创建任务
-          </Button>
-        </CardContent>
-      </Card>
+      <TaskErrorState
+        error={error}
+        actionLabel="返回创建任务"
+        actionIcon={<ArrowLeft className="mr-2 size-4" />}
+        onAction={() => navigate({ to: '/tasks/new' })}
+      />
     )
   }
 

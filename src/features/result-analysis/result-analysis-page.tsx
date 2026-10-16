@@ -1,98 +1,50 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
-import { useQueryClient } from '@tanstack/react-query'
-import { createTaskService, type DownscalingTask } from '@/features/downscaling-tasks/service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Loader2, ArrowLeft, XCircle } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { AnalysisTabs, TabPanel, type AnalysisTab } from './components/analysis-tabs'
+import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
+import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
+import { TaskErrorState } from '@/features/downscaling-tasks/components/task-error-state'
 
 export function ResultAnalysisPage() {
   const { taskId } = useParams({ from: '/_workspace/tasks/$taskId/result' })
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const search = useSearch({ from: '/_workspace/tasks/$taskId/result' })
-  const [task, setTask] = useState<DownscalingTask | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<AnalysisTab>((search as any)?.tab || 'map-comparison')
 
-  useEffect(() => {
-    let mounted = true
-    const taskService = createTaskService({ queryClient })
-
-    const loadTask = async () => {
-      try {
-        await taskService.initialize()
-        const result = await taskService.get(taskId)
-
-        if (!mounted) return
-
-        if (!result.ok) {
-          setError(result.error)
-          setLoading(false)
-          return
-        }
-
-        // Check if task is completed
-        if (result.task.status !== 'Completed') {
-          setError(
-            `任务尚未完成（当前状态：${result.task.status === 'Running' ? '运行中' : '失败'}）`,
-          )
-          setLoading(false)
-          return
-        }
-
-        setTask(result.task)
-        setLoading(false)
-      } catch (err) {
-        if (!mounted) return
-        setError(err instanceof Error ? err.message : '加载任务失败')
-        setLoading(false)
-      }
-    }
-
-    loadTask()
-
-    return () => {
-      mounted = false
-      taskService.close()
-    }
-  }, [taskId, queryClient])
+  const { task, loading, error } = useTaskLoader({ taskId })
 
   if (loading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="mx-auto mb-4 size-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">加载结果分析中...</p>
-        </div>
-      </div>
-    )
+    return <TaskLoadingState message="加载结果分析中..." />
   }
 
   if (error) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <XCircle className="size-5 text-destructive" />
-            任务未找到
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 text-muted-foreground">{error}</p>
-          <Button onClick={() => navigate({ to: '/tasks' })}>
-            <ArrowLeft className="mr-2 size-4" />
-            返回任务列表
-          </Button>
-        </CardContent>
-      </Card>
+      <TaskErrorState
+        error={error}
+        actionLabel="返回任务列表"
+        actionIcon={<ArrowLeft className="mr-2 size-4" />}
+        onAction={() => navigate({ to: '/tasks' })}
+      />
     )
   }
 
   if (!task) {
     return null
+  }
+
+  // Check if task is completed
+  if (task.status !== 'Completed') {
+    return (
+      <TaskErrorState
+        error={`任务尚未完成（当前状态：${task.status === 'Running' ? '运行中' : '失败'}）`}
+        actionLabel="返回任务列表"
+        actionIcon={<ArrowLeft className="mr-2 size-4" />}
+        onAction={() => navigate({ to: '/tasks' })}
+      />
+    )
   }
 
   const handleTabChange = (tab: AnalysisTab) => {
