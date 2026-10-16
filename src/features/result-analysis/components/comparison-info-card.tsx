@@ -9,9 +9,17 @@ interface ComparisonInfoCardProps {
     south: number
     north: number
   }
+  colorScaleStrategy?: string
+  showAccumulationEnd?: boolean
 }
 
-export function ComparisonInfoCard({ taskId, timeSlice, region }: ComparisonInfoCardProps) {
+export function ComparisonInfoCard({
+  taskId,
+  timeSlice,
+  region,
+  colorScaleStrategy = 'Shared absolute (O/D/Obs) · Diverging (Diff)',
+  showAccumulationEnd = false,
+}: ComparisonInfoCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -24,7 +32,9 @@ export function ComparisonInfoCard({ taskId, timeSlice, region }: ComparisonInfo
             <dd className="font-mono text-xs">{taskId.slice(0, 8)}...</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Time Slice</dt>
+            <dt className="text-muted-foreground">
+              {showAccumulationEnd ? 'Accumulation End' : 'Time Slice'}
+            </dt>
             <dd className="font-medium">{new Date(timeSlice).toISOString().slice(0, 16)}</dd>
           </div>
           <div>
@@ -36,7 +46,7 @@ export function ComparisonInfoCard({ taskId, timeSlice, region }: ComparisonInfo
           </div>
           <div>
             <dt className="text-muted-foreground">Color Scale</dt>
-            <dd className="font-medium">Shared absolute (O/D/Obs) · Diverging (Diff)</dd>
+            <dd className="font-medium">{colorScaleStrategy}</dd>
           </div>
         </dl>
       </CardContent>
