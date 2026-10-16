@@ -10,9 +10,10 @@ interface WindMapComparisonPanelProps {
     north: number
   }
   timeSlice: string
+  requestId?: string
 }
 
-export function WindMapComparisonPanel({ taskId, region, timeSlice }: WindMapComparisonPanelProps) {
+export function WindMapComparisonPanel({ taskId, region, timeSlice, requestId: _requestId }: WindMapComparisonPanelProps) {
   return (
     <div className="space-y-4">
       {/* Four-map grid layout */}

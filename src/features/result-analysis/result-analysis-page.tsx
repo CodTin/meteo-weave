@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { AnalysisTabs, TabPanel, type AnalysisTab } from './components/analysis-tabs'
 import { MapComparisonPanel } from './components/map-comparison-panel'
+import { WindMapComparisonPanel } from './components/wind-map-comparison-panel'
+import { TimeSliceSelector } from './components/time-slice-selector'
+import { useTimeSlice } from './hooks/use-time-slice'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
 import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
 import { TaskErrorState } from '@/features/downscaling-tasks/components/task-error-state'
@@ -17,6 +20,14 @@ export function ResultAnalysisPage() {
   const [activeTab, setActiveTab] = useState<AnalysisTab>((search as any)?.tab || 'map-comparison')
 
   const { task, loading, error } = useTaskLoader({ taskId })
+
+  // Time slice management
+  const timeSliceState = useTimeSlice({
+    taskId,
+    timeRange: task?.configuration.timeRange || { start: '', end: '' },
+    initialTime: task?.configuration.timeRange.start,
+    granularity: 'hourly',
+  })
 
   if (loading) {
     return <TaskLoadingState message="加载结果分析中..." />
@@ -69,6 +80,8 @@ export function ResultAnalysisPage() {
     })
   }
 
+  const variable = task.configuration.variable as Variable
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -99,9 +112,7 @@ export function ResultAnalysisPage() {
             </div>
             <div>
               <dt className="text-muted-foreground">变量</dt>
-              <dd className="font-medium">
-                {getVariableLabel(task.configuration.variable as Variable)}
-              </dd>
+              <dd className="font-medium">{getVariableLabel(variable)}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">分辨率</dt>
@@ -117,15 +128,37 @@ export function ResultAnalysisPage() {
         </CardContent>
       </Card>
 
+      {/* Time Slice Selector */}
+      <Card>
+        <CardContent className="pt-6">
+          <TimeSliceSelector
+            timeSlices={timeSliceState.timeSlices}
+            currentTime={timeSliceState.currentTime}
+            onTimeChange={timeSliceState.setTime}
+            timezone="UTC"
+          />
+        </CardContent>
+      </Card>
+
       {/* Analysis Tabs */}
       <AnalysisTabs activeTab={activeTab} onTabChange={handleTabChange}>
         <TabPanel value="map-comparison">
-          <MapComparisonPanel
-            taskId={task.id}
-            variable={task.configuration.variable as Variable}
-            region={task.configuration.region}
-            timeSlice={task.configuration.timeRange.start}
-          />
+          {variable === 'wind' ? (
+            <WindMapComparisonPanel
+              taskId={task.id}
+              region={task.configuration.region}
+              timeSlice={timeSliceState.currentTime}
+              requestId={timeSliceState.requestId}
+            />
+          ) : (
+            <MapComparisonPanel
+              taskId={task.id}
+              variable={variable}
+              region={task.configuration.region}
+              timeSlice={timeSliceState.currentTime}
+              requestId={timeSliceState.requestId}
+            />
+          )}
         </TabPanel>
 
         <TabPanel value="accuracy">

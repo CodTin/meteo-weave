@@ -27,13 +27,14 @@ describe('TimeSliceSelector', () => {
     render(
       <TimeSliceSelector
         timeSlices={mockTimeSlices}
-        currentTime={mockTimeSlices[0].value}
+        currentTime={mockTimeSlices[0]!.value}
         onTimeChange={onTimeChange}
       />,
     )
 
     expect(screen.getByText('Time Slice (UTC)')).toBeInTheDocument()
-    expect(screen.getByRole('combobox')).toBeInTheDocument()
+    const combobox = screen.getByRole('combobox')
+    expect(combobox).toBeInTheDocument()
     expect(screen.getByText('2024-01-01 00:00 UTC')).toBeInTheDocument()
   })
 
@@ -42,21 +43,22 @@ describe('TimeSliceSelector', () => {
     render(
       <TimeSliceSelector
         timeSlices={mockTimeSlices}
-        currentTime={mockTimeSlices[0].value}
+        currentTime={mockTimeSlices[0]!.value}
         onTimeChange={onTimeChange}
         timezone="Asia/Shanghai"
       />,
     )
 
-    expect(screen.getByText('Time Slice (Asia/Shanghai)')).toBeInTheDocument()
+    const label = screen.getByText('Time Slice (Asia/Shanghai)')
+    expect(label).toBeInTheDocument()
   })
 
   it('renders all available time slices', () => {
     const onTimeChange = vi.fn()
-    const { container } = render(
+    render(
       <TimeSliceSelector
         timeSlices={mockTimeSlices}
-        currentTime={mockTimeSlices[0].value}
+        currentTime={mockTimeSlices[0]!.value}
         onTimeChange={onTimeChange}
       />,
     )
@@ -71,7 +73,7 @@ describe('TimeSliceSelector', () => {
     render(
       <TimeSliceSelector
         timeSlices={mockTimeSlices}
-        currentTime={mockTimeSlices[0].value}
+        currentTime={mockTimeSlices[0]!.value}
         onTimeChange={onTimeChange}
         disabled={true}
       />,
@@ -87,7 +89,7 @@ describe('TimeSliceSelector', () => {
     render(
       <TimeSliceSelector
         timeSlices={mockTimeSlices}
-        currentTime={mockTimeSlices[0].value}
+        currentTime={mockTimeSlices[0]!.value}
         onTimeChange={onTimeChange}
       />,
     )

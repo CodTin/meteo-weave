@@ -23,6 +23,7 @@ interface MapComparisonPanelProps {
     north: number
   }
   timeSlice: string
+  requestId?: string
   accumulationInterval?: AccumulationInterval
   intervalsMatch?: boolean
 }
@@ -60,6 +61,7 @@ export function MapComparisonPanel({
   variable,
   region,
   timeSlice,
+  requestId: _requestId,
   accumulationInterval,
   intervalsMatch = true,
 }: MapComparisonPanelProps) {
