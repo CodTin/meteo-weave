@@ -167,10 +167,16 @@ export function TaskResultPage() {
           </div>
 
           {task.status === 'Completed' && (
-            <div className="rounded-md bg-green-50 p-4 dark:bg-green-950/20">
+            <div className="space-y-3 rounded-md bg-green-50 p-4 dark:bg-green-950/20">
               <p className="text-sm text-green-900 dark:text-green-100">
-                任务已完成。完整结果地图、分析 Tab 和数据导出功能将在后续版本提供。
+                任务已完成。可以查看结果分析。
               </p>
+              <Button
+                onClick={() => navigate({ to: '/tasks/$taskId/result', params: { taskId: task.id } })}
+                className="w-full"
+              >
+                查看结果分析
+              </Button>
             </div>
           )}
         </CardContent>
