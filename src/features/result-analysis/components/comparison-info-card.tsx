@@ -1,4 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Variable } from '../service/color-scales'
+import type { AccumulationInterval } from '../service/comparison-data'
 
 interface ComparisonInfoCardProps {
   taskId: string
@@ -10,7 +12,8 @@ interface ComparisonInfoCardProps {
     north: number
   }
   colorScaleStrategy?: string
-  showAccumulationEnd?: boolean
+  variable?: Variable
+  accumulationInterval?: AccumulationInterval
 }
 
 export function ComparisonInfoCard({
@@ -18,7 +21,8 @@ export function ComparisonInfoCard({
   timeSlice,
   region,
   colorScaleStrategy = 'Shared absolute (O/D/Obs) · Diverging (Diff)',
-  showAccumulationEnd = false,
+  variable,
+  accumulationInterval,
 }: ComparisonInfoCardProps) {
   return (
     <Card>
@@ -33,7 +37,9 @@ export function ComparisonInfoCard({
           </div>
           <div>
             <dt className="text-muted-foreground">
-              {showAccumulationEnd ? 'Accumulation End' : 'Time Slice'}
+              {variable === 'precipitation' && accumulationInterval
+                ? 'Accumulation End'
+                : 'Time Slice'}
             </dt>
             <dd className="font-medium">{new Date(timeSlice).toISOString().slice(0, 16)}</dd>
           </div>

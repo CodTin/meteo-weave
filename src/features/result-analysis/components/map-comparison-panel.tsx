@@ -23,6 +23,7 @@ interface MapComparisonPanelProps {
     north: number
   }
   timeSlice: string
+  requestId?: string
   accumulationInterval?: AccumulationInterval
   intervalsMatch?: boolean
 }
@@ -74,6 +75,7 @@ export function MapComparisonPanel({
   variable,
   region,
   timeSlice,
+  requestId: _requestId,
   accumulationInterval,
   intervalsMatch = true,
 }: MapComparisonPanelProps) {
@@ -189,8 +191,8 @@ export function MapComparisonPanel({
         taskId={taskId}
         timeSlice={timeSlice}
         region={region}
-        colorScaleStrategy="Shared absolute (O/D/Obs) · Diverging (Diff)"
-        showAccumulationEnd={variable === 'precipitation' && !!accumulationInterval}
+        variable={variable}
+        accumulationInterval={accumulationInterval}
       />
     </div>
   )
