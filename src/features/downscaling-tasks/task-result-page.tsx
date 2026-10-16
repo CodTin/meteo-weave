@@ -172,7 +172,9 @@ export function TaskResultPage() {
                 任务已完成。可以查看结果分析。
               </p>
               <Button
-                onClick={() => navigate({ to: '/tasks/$taskId/result', params: { taskId: task.id } })}
+                onClick={() =>
+                  navigate({ to: '/tasks/$taskId/result', params: { taskId: task.id } })
+                }
                 className="w-full"
               >
                 查看结果分析
