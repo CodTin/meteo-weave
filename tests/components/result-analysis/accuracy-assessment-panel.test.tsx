@@ -38,7 +38,7 @@ describe('AccuracyAssessmentPanel', () => {
     const data = {
       available: true as const,
       metrics: {
-        original: { rmse: 2.0, mae: 1.8, r2: 0.80 },
+        original: { rmse: 2.0, mae: 1.8, r2: 0.8 },
         downscaled: { rmse: 1.0, mae: 0.9, r2: 0.95 },
       },
       samples: {
@@ -75,7 +75,7 @@ describe('AccuracyAssessmentPanel', () => {
       available: true as const,
       metrics: {
         original: { rmse: 1.0, mae: 0.9, r2: 0.95 },
-        downscaled: { rmse: 2.0, mae: 1.8, r2: 0.80 },
+        downscaled: { rmse: 2.0, mae: 1.8, r2: 0.8 },
       },
       samples: {
         n: 100,

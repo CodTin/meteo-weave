@@ -94,7 +94,10 @@ function MetricCard({
   )
 }
 
-export function AccuracyAssessmentPanel({ data, variable }: AccuracyAssessmentPanelProps) {
+export function AccuracyAssessmentPanel({
+  data,
+  variable: _variable,
+}: AccuracyAssessmentPanelProps) {
   if (!data.available) {
     return (
       <Card>
@@ -126,11 +129,10 @@ export function AccuracyAssessmentPanel({ data, variable }: AccuracyAssessmentPa
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground">
-            <p>评估时段：{samples.timeCoverage.start} 至 {samples.timeCoverage.end}</p>
-            <p className="mt-2">
-              单位：{method.unit} ·
-              模拟评估数据，不代表真实预报能力
+            <p>
+              评估时段：{samples.timeCoverage.start} 至 {samples.timeCoverage.end}
             </p>
+            <p className="mt-2">单位：{method.unit} · 模拟评估数据，不代表真实预报能力</p>
           </div>
         </CardContent>
       </Card>

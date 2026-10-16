@@ -140,13 +140,16 @@ export async function getAccuracyAssessmentData(taskId: string): Promise<Accurac
     }
 
     // Extract station-based samples
+    const getStationId = (obs: NonNullable<ResultValue['observation']>): string => {
+      return obs.mode === 'stations' ? obs.station.id : 'interpolated'
+    }
+
     const originalSamples = originalResult.values
       .filter((v): v is ResultValue & { observation: NonNullable<ResultValue['observation']> } =>
         Boolean(v.observation),
       )
       .map((v) => ({
-        stationId:
-          v.observation.mode === 'stations' ? v.observation.station.id : 'interpolated',
+        stationId: getStationId(v.observation!),
         time: v.time,
         value: v.value,
       }))
@@ -156,8 +159,7 @@ export async function getAccuracyAssessmentData(taskId: string): Promise<Accurac
         Boolean(v.observation),
       )
       .map((v) => ({
-        stationId:
-          v.observation.mode === 'stations' ? v.observation.station.id : 'interpolated',
+        stationId: getStationId(v.observation!),
         time: v.time,
         value: v.value,
       }))

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from './browser-guard'
 
 test.describe('Accuracy Assessment', () => {
   test('displays accuracy metrics for completed task', async ({ page }) => {
@@ -9,7 +9,10 @@ test.describe('Accuracy Assessment', () => {
     await page.waitForSelector('[data-testid="task-card"]', { timeout: 10000 })
 
     // Find a completed task
-    const completedTask = page.locator('[data-testid="task-card"]').filter({ hasText: 'Completed' }).first()
+    const completedTask = page
+      .locator('[data-testid="task-card"]')
+      .filter({ hasText: 'Completed' })
+      .first()
     await expect(completedTask).toBeVisible()
 
     // Click on the completed task to view results
@@ -56,7 +59,10 @@ test.describe('Accuracy Assessment', () => {
     await page.goto('/')
 
     // Find the running task
-    const runningTask = page.locator('[data-testid="task-card"]').filter({ hasText: 'Running' }).first()
+    const runningTask = page
+      .locator('[data-testid="task-card"]')
+      .filter({ hasText: 'Running' })
+      .first()
 
     if (await runningTask.isVisible()) {
       await runningTask.click()
