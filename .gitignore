@@ -20,3 +20,4 @@ reports/
 .serena/
 .claude/
 src/routeTree.gen.ts
+.claude-worktrees/
