@@ -1,0 +1,17 @@
+{
+  "threshold": 0,
+  "reporters": ["console"],
+  "ignore": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/node_modules/**",
+    "**/.output/**",
+    "**/dist/**",
+    "**/build/**"
+  ],
+  "format": ["typescript", "javascript", "tsx", "jsx"],
+  "minLines": 5,
+  "minTokens": 50,
+  "maxLines": 500,
+  "maxSize": "100kb"
+}

@@ -44,8 +44,9 @@ Workers merge to integration sequentially. Concurrent workers branch from the sa
 commit; the merger resolves conflicts by rebasing onto current tip before verification.
 
 Workers may bypass pre-commit hooks with `--no-verify` for intermediate commits during iteration.
-Integration merges to main and final deliveries never bypass hooks. Fix flaky tests rather than
-routing around them; a bypassed hook is a deferred CI failure.
+**Integration merges to main must pass CI.** Never merge with failing tests; fix or skip flaky
+tests explicitly with `test.skip()` and a tracking issue. A bypassed hook or ignored test is a
+deferred CI failure. Verify CI passes on the exact commit before merging to main.
 
 For review, use a clean detached worktree at the exact review commit. A dirty checkout's result
 is not evidence for its clean HEAD: `agent:verify` binds evidence to both HEAD and content.
@@ -98,6 +99,28 @@ and integration validation, not a second copy of implementation history. Prefer 
 wait; do not follow an unchanged timeout with repeated status/log reads. Dispatch the ticket,
 worktree, baseline, ownership scope and protocol/evidence pointers rather than repeating this
 protocol in every prompt. Existing checkpoint fields are the status record; update them on
+
+## Handling Test Failures
+
+**Persistent timeouts**: If tests timeout consistently and are unrelated to your changes:
+
+1. Verify timeouts exist on base branch: `git checkout <base> && bun run test`
+2. Document in handoff: "6 agent-environment tests timeout on base (tracked in #XXX)"
+3. Create tracking issue if none exists
+4. Never skip tests silently - use `test.skip()` with issue reference
+
+**New failures**: Never merge with new test failures. Fix or skip with tracking issue.
+
+## Worker to Integration Merge
+
+Workers commit to their own branch in their worktree. The coordinator merges sequentially:
+
+1. Exit any worktree isolation first - worktree-isolated sessions cannot operate on other worktrees
+2. From main repo (not a worktree): `git checkout <integration-branch> && git merge --no-ff <worker-branch>`
+3. Run verification on merged result: `bun run agent:verify`
+4. Clean up worker worktrees after successful merge: `git worktree remove <path> --force`
+
+Never spawn a merger agent in worktree isolation; merge from main repo or exit worktree first.
 phase completion, a real blocker, or handoff, not on a timer.
 
 ## Browser iteration and visual gates
