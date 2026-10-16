@@ -54,8 +54,8 @@ test.describe('Event Assessment', () => {
 
         // Check for threshold display
         const hasThreshold =
-          (await page.locator('text=/>/).isVisible()) ||
-          (await page.locator('text=/</).isVisible())
+          (await page.getByText('>').first().isVisible()) ||
+          (await page.getByText('<').first().isVisible())
         expect(hasThreshold).toBe(true)
       }
     }
@@ -100,10 +100,10 @@ test.describe('Event Assessment', () => {
 
         // Check for threshold direction indicator
         const hasDirection =
-          (await page.locator('text=/>=/i').isVisible()) ||
-          (await page.locator('text=/>/i').isVisible()) ||
-          (await page.locator('text=/<=/i').isVisible()) ||
-          (await page.locator('text=/</i').isVisible())
+          (await page.locator('text=">="').isVisible()) ||
+          (await page.locator('text=">"').isVisible()) ||
+          (await page.locator('text="<="').isVisible()) ||
+          (await page.locator('text="<"').isVisible())
         expect(hasDirection).toBe(true)
       }
     }
