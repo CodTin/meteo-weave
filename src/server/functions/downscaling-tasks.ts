@@ -10,16 +10,16 @@ import type { DownscalingTask, ResultQuery } from '@/features/downscaling-tasks/
 
 // Keep authentication ahead of runtime business validation, including untrusted saved records.
 export const submitTask = createServerFn({ method: 'POST' })
-  .inputValidator((input: unknown) => input)
+  .validator((input: unknown) => input)
   .handler(({ data }) => submitDownscalingTask(data))
 export const readTask = createServerFn({ method: 'POST' })
-  .inputValidator((input: unknown) => input)
+  .validator((input: unknown) => input)
   .handler(({ data }) => readDownscalingTask(data))
 export const restoreTask = createServerFn({ method: 'POST' })
-  .inputValidator((input: unknown) => input)
+  .validator((input: unknown) => input)
   .handler(({ data }) => restoreDownscalingTask(data))
 export const queryTaskResult = createServerFn({ method: 'POST' })
-  .inputValidator((input: { task: DownscalingTask; query: ResultQuery }) => input)
+  .validator((input: { task: DownscalingTask; query: ResultQuery }) => input)
   .handler(({ data }) => queryDownscalingTaskResult(data))
 
 // No input/configuration channel: the server supplies only its fixed authenticated catalog.
