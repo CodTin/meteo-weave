@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { AnalysisTabs, TabPanel, type AnalysisTab } from './components/analysis-tabs'
+import { MapComparisonPanel } from './components/map-comparison-panel'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
 import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
 import { TaskErrorState } from '@/features/downscaling-tasks/components/task-error-state'
@@ -123,15 +124,13 @@ export function ResultAnalysisPage() {
       {/* Analysis Tabs */}
       <AnalysisTabs activeTab={activeTab} onTabChange={handleTabChange}>
         <TabPanel value="map-comparison">
-          <Card>
-            <CardHeader>
-              <CardTitle>地图对比</CardTitle>
-              <CardDescription>原始数据与降尺度数据对比</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">地图可视化开发中...</p>
-            </CardContent>
-          </Card>
+          <MapComparisonPanel
+            taskId={task.id}
+            variable={task.configuration.variable}
+            unit={task.configuration.variable === 'temperature' ? '°C' : 'unit'}
+            region={task.configuration.region}
+            timeSlice={task.configuration.timeRange.start}
+          />
         </TabPanel>
 
         <TabPanel value="accuracy">
