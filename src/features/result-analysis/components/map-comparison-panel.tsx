@@ -1,4 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useObservationViewMode } from '../hooks/use-observation-view-mode'
+import { ObservationViewToggle } from './observation-view-toggle'
 
 interface MapComparisonPanelProps {
   taskId: string
@@ -20,6 +22,8 @@ export function MapComparisonPanel({
   region,
   timeSlice,
 }: MapComparisonPanelProps) {
+  const { mode: observationMode, toggle: toggleObservationMode } = useObservationViewMode()
+
   return (
     <div className="space-y-4">
       {/* Four-map grid layout */}
@@ -61,15 +65,25 @@ export function MapComparisonPanel({
         {/* Observation Data */}
         <Card>
           <CardHeader>
-            <CardTitle>Observation Data</CardTitle>
-            <CardDescription>
-              {variable} · {unit} · Interpolated from synthetic stations, for display only
-            </CardDescription>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <CardTitle>Observation Data</CardTitle>
+                <CardDescription>
+                  {variable} · {unit}
+                  {observationMode === 'interpolated' &&
+                    ' · Interpolated from synthetic stations, for display only'}
+                  {observationMode === 'station' && ' · Synthetic station points'}
+                </CardDescription>
+              </div>
+              <ObservationViewToggle mode={observationMode} onToggle={toggleObservationMode} />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="aspect-video rounded-md border bg-muted">
               <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Observation field map loading...
+                {observationMode === 'interpolated'
+                  ? 'Observation field map loading...'
+                  : 'Station points loading...'}
               </p>
             </div>
           </CardContent>
