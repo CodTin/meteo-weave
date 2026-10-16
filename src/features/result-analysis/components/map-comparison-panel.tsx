@@ -10,6 +10,8 @@ import {
 } from '../service/color-scales'
 import type { AccumulationInterval } from '../service/comparison-data'
 import { ComparisonInfoCard } from './comparison-info-card'
+import { useObservationViewMode } from '../hooks/use-observation-view-mode'
+import { ObservationViewToggle } from './observation-view-toggle'
 
 interface MapComparisonPanelProps {
   taskId: string
@@ -65,6 +67,7 @@ export function MapComparisonPanel({
   const variableLabel = getVariableLabel(variable)
   const absoluteColorScale = getAbsoluteColorScale(variable)
   const differenceColorScale = getDifferenceColorScale()
+  const { mode: observationMode, toggle: toggleObservationMode } = useObservationViewMode()
 
   const formatAccumulationInterval = (interval?: AccumulationInterval) => {
     if (!interval) return null
@@ -115,12 +118,34 @@ export function MapComparisonPanel({
         />
 
         {/* Observation Data */}
-        <MapCard
-          title="Observation Data"
-          description={`${variableLabel} · ${unit} · Interpolated from synthetic stations, for display only`}
-          colorScaleDescription={absoluteColorScale.description}
-          loadingText="Observation field map loading..."
-        />
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <CardTitle>Observation Data</CardTitle>
+                <CardDescription>
+                  {variableLabel} · {unit}
+                  {observationMode === 'interpolated' &&
+                    ' · Interpolated from synthetic stations, for display only'}
+                  {observationMode === 'station' && ' · Synthetic station points'}
+                </CardDescription>
+              </div>
+              <ObservationViewToggle mode={observationMode} onToggle={toggleObservationMode} />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="aspect-video rounded-md border bg-muted">
+              <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                {observationMode === 'interpolated'
+                  ? 'Observation field map loading...'
+                  : 'Station points loading...'}
+              </p>
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              Color scale: {absoluteColorScale.description}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Difference */}
         <Card>
