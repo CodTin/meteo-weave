@@ -8,6 +8,7 @@ import { MapComparisonPanel } from './components/map-comparison-panel'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
 import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
 import { TaskErrorState } from '@/features/downscaling-tasks/components/task-error-state'
+import { getVariableLabel, type Variable } from './service/color-scales'
 
 export function ResultAnalysisPage() {
   const { taskId } = useParams({ from: '/_workspace/tasks/$taskId/result' })
@@ -99,12 +100,7 @@ export function ResultAnalysisPage() {
             <div>
               <dt className="text-muted-foreground">变量</dt>
               <dd className="font-medium">
-                {{
-                  temperature: 'Temperature',
-                  wind: 'Wind',
-                  pressure: 'Pressure',
-                  precipitation: 'Precipitation',
-                }[task.configuration.variable] || task.configuration.variable}
+                {getVariableLabel(task.configuration.variable as Variable)}
               </dd>
             </div>
             <div>
@@ -126,8 +122,7 @@ export function ResultAnalysisPage() {
         <TabPanel value="map-comparison">
           <MapComparisonPanel
             taskId={task.id}
-            variable={task.configuration.variable}
-            unit={task.configuration.variable === 'temperature' ? '°C' : 'unit'}
+            variable={task.configuration.variable as Variable}
             region={task.configuration.region}
             timeSlice={task.configuration.timeRange.start}
           />

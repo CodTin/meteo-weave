@@ -10,8 +10,14 @@ export interface GridPoint {
   value: number | null
 }
 
+export interface AccumulationInterval {
+  start: string
+  end: string
+}
+
 export interface GridData {
   points: GridPoint[]
+  accumulationInterval?: AccumulationInterval
 }
 
 export interface AlignedPoint {
@@ -20,6 +26,13 @@ export interface AlignedPoint {
   time: string
   original: number | null
   downscaled: number | null
+}
+
+export interface AlignmentResult {
+  points: AlignedPoint[]
+  intervalsMatch: boolean
+  originalInterval?: AccumulationInterval
+  downscaledInterval?: AccumulationInterval
 }
 
 /**
@@ -41,11 +54,34 @@ export function computeDifference(
 }
 
 /**
+ * Checks if two accumulation intervals match.
+ * Returns true if both are undefined (instantaneous values) or if they have matching start and end times.
+ */
+export function intervalsMatch(
+  interval1: AccumulationInterval | undefined,
+  interval2: AccumulationInterval | undefined,
+): boolean {
+  // Both undefined means instantaneous values - they match
+  if (!interval1 && !interval2) {
+    return true
+  }
+
+  // One defined, one undefined - they don't match
+  if (!interval1 || !interval2) {
+    return false
+  }
+
+  // Both defined - compare start and end times
+  return interval1.start === interval2.start && interval1.end === interval2.end
+}
+
+/**
  * Aligns two grid datasets by matching longitude, latitude, and time.
  * Creates aligned points from the union of both datasets.
  * Missing values are represented as null.
+ * Also checks if accumulation intervals match for precipitation comparisons.
  */
-export function alignGridData(original: GridData, downscaled: GridData): AlignedPoint[] {
+export function alignGridData(original: GridData, downscaled: GridData): AlignmentResult {
   // Build a map from downscaled data for efficient lookup
   const downscaledMap = new Map<string, number | null>()
   for (const point of downscaled.points) {
@@ -84,7 +120,12 @@ export function alignGridData(original: GridData, downscaled: GridData): Aligned
     }
   }
 
-  return aligned
+  return {
+    points: aligned,
+    intervalsMatch: intervalsMatch(original.accumulationInterval, downscaled.accumulationInterval),
+    originalInterval: original.accumulationInterval,
+    downscaledInterval: downscaled.accumulationInterval,
+  }
 }
 
 /**
