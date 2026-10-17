@@ -9,6 +9,7 @@ import {
   type ErrorMapMode,
   type PredictionType,
 } from '../hooks/use-error-map-data'
+import { PowerSpectrumPanel } from './power-spectrum-panel'
 
 type SpatialAnalysisPanelProps = {
   taskId: string
@@ -243,6 +244,15 @@ export function SpatialAnalysisPanel({
           )}
         </CardContent>
       </Card>
+
+      {/* Power Spectrum Analysis */}
+      <PowerSpectrumPanel
+        taskId={taskId}
+        variable={variable}
+        region={region}
+        timeSlice={timeSlice}
+        requestId={requestId}
+      />
     </div>
   )
 }
