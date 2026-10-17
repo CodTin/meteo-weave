@@ -65,6 +65,7 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
         time: formatTime(originalPoint.time, data.granularity),
         original: originalPoint.value,
         downscaled: data.downscaled[index]?.value ?? null,
+        observation: data.observation?.[index]?.value ?? null,
       }))
     : []
 
@@ -196,6 +197,18 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
                     dot={false}
                     connectNulls
                   />
+                  {data.observation && (
+                    <Line
+                      type="monotone"
+                      dataKey="observation"
+                      stroke="hsl(142 76% 36%)"
+                      strokeWidth={2}
+                      strokeDasharray="3 3"
+                      name="观测参考"
+                      dot={false}
+                      connectNulls={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -207,7 +220,33 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
               </p>
               <p className="mt-1">
                 数据点数: 原始 {data.original.length} 点，降尺度 {data.downscaled.length} 点
+                {data.observation && `，观测 ${data.observation.length} 点`}
               </p>
+              {data.stationInfo && (
+                <div className="mt-3 rounded border border-muted bg-muted/50 p-3">
+                  <p className="font-medium">观测参考信息 (Synthetic Demo / 邻站参考)</p>
+                  <p className="mt-1">
+                    台站: {data.stationInfo.name} ({data.stationInfo.stationId})
+                  </p>
+                  <p className="mt-1">
+                    坐标: {data.stationInfo.coordinate.latitude.toFixed(4)}°N,{' '}
+                    {data.stationInfo.coordinate.longitude.toFixed(4)}°E
+                  </p>
+                  <p className="mt-1">距离: {data.stationInfo.distance.toFixed(2)} km</p>
+                  <p className="mt-2 text-xs italic">
+                    注:
+                    观测数据来自邻近合成台站，不代表所选坐标的实际观测或真实预报验证。仅供演示参考。
+                  </p>
+                </div>
+              )}
+              {!data.stationInfo && !data.observation && (
+                <div className="mt-3 rounded border border-muted bg-muted/50 p-3">
+                  <p className="font-medium">观测数据不可用</p>
+                  <p className="mt-1 text-xs">
+                    所选坐标 25km 范围内无可用台站。原始和降尺度数据仍可正常查看。
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
