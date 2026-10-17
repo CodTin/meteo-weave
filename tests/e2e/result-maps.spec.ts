@@ -239,22 +239,22 @@ test.describe('Result Maps - Ensemble switching', () => {
     await expect(ensembleSelect).toBeVisible()
 
     // Default should be Mean
-    await expect(ensembleSelect).toHaveValue(/mean/i)
+    await expect(ensembleSelect).toHaveValue('mean')
 
     // Switch to Standard Deviation
-    await ensembleSelect.selectOption(/Standard Deviation/i)
+    await ensembleSelect.selectOption('stddev')
     await page.waitForTimeout(500)
-    await expect(ensembleSelect).toHaveValue(/stddev/i)
+    await expect(ensembleSelect).toHaveValue('stddev')
 
     // Switch to a specific member
-    await ensembleSelect.selectOption(/Member 01/i)
+    await ensembleSelect.selectOption('member-01')
     await page.waitForTimeout(500)
-    await expect(ensembleSelect).toHaveValue(/member-01/i)
+    await expect(ensembleSelect).toHaveValue('member-01')
 
     // Switch back to Mean
-    await ensembleSelect.selectOption(/Mean/i)
+    await ensembleSelect.selectOption('mean')
     await page.waitForTimeout(500)
-    await expect(ensembleSelect).toHaveValue(/mean/i)
+    await expect(ensembleSelect).toHaveValue('mean')
   })
 
   test('displays effective K for ensemble statistics', async ({ page }) => {
@@ -275,13 +275,13 @@ test.describe('Result Maps - Ensemble switching', () => {
     await page.waitForLoadState('networkidle')
 
     // Check for effective K display when viewing mean or stddev
-    await page.getByLabel('Ensemble view').selectOption(/Mean/i)
+    await page.getByLabel('Ensemble view').selectOption('mean')
     await page.waitForTimeout(500)
     await expect(page.getByText(/valid members/i)).toBeVisible()
     await expect(page.getByText(/K = \d+/)).toBeVisible()
 
     // Check stddev also shows effective K
-    await page.getByLabel('Ensemble view').selectOption(/Standard Deviation/i)
+    await page.getByLabel('Ensemble view').selectOption('stddev')
     await page.waitForTimeout(500)
     await expect(page.getByText(/valid members/i)).toBeVisible()
   })
@@ -306,8 +306,8 @@ test.describe('Result Maps - Ensemble switching', () => {
     const ensembleSelect = page.getByLabel('Ensemble view')
 
     // Check Synthetic Demo label for each view
-    for (const option of ['Mean', 'Standard Deviation', 'Member 01']) {
-      await ensembleSelect.selectOption(new RegExp(option, 'i'))
+    for (const option of ['mean', 'stddev', 'member-01']) {
+      await ensembleSelect.selectOption(option)
       await page.waitForTimeout(500)
       await expect(page.getByText(/Synthetic Demo/i)).toBeVisible()
     }
