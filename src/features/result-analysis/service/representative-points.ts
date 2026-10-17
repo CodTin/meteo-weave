@@ -5,6 +5,7 @@
  */
 
 import type { Coordinate, Region } from './time-series-data'
+import { hashString, seededRandom } from './deterministic-random'
 
 export type TerrainType = 'city' | 'mountain' | 'plain'
 
@@ -12,31 +13,6 @@ export interface RepresentativePoint {
   terrainType: TerrainType
   label: string
   coordinate: Coordinate
-}
-
-/**
- * Simple pseudo-random number generator with seed support.
- * Uses a linear congruential generator for reproducibility.
- */
-function seededRandom(seed: number): () => number {
-  let state = seed
-  return () => {
-    state = (state * 1664525 + 1013904223) % 4294967296
-    return state / 4294967296
-  }
-}
-
-/**
- * Generates a deterministic hash from a string.
- */
-function hashString(str: string): number {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i)
-    hash = (hash << 5) - hash + char
-    hash = hash & hash // Convert to 32bit integer
-  }
-  return Math.abs(hash)
 }
 
 /**
