@@ -23,6 +23,10 @@ import {
 import { CoordinateSelectionMapClient } from './coordinate-selection-map-client'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
 import { Loader2, MapPin, Mountain, Home, Wheat } from 'lucide-react'
+import { LocalChangesBarChart } from '@/components/charts/local-changes-bar-chart'
+import { ErrorBarChart } from '@/components/charts/error-bar-chart'
+import { alignBarChartData } from '../service/bar-chart-data'
+import { formatTimeSeriesTime } from '../service/time-series-formatting'
 
 interface TimeSeriesPanelProps {
   task: DownscalingTask
@@ -91,7 +95,7 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
   // Prepare chart data
   const chartData = data
     ? data.original.map((originalPoint, index) => ({
-        time: formatTime(originalPoint.time, data.granularity),
+        time: formatTimeSeriesTime(originalPoint.time, data.granularity),
         original: originalPoint.value,
         downscaled: data.downscaled[index]?.value ?? null,
         observation: data.observation?.[index]?.value ?? null,
@@ -303,8 +307,8 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
 
             <div className="mt-4 text-sm text-muted-foreground">
               <p>
-                时间范围: {formatTime(data.timeRange.start, data.granularity)} ~{' '}
-                {formatTime(data.timeRange.end, data.granularity)}
+                时间范围: {formatTimeSeriesTime(data.timeRange.start, data.granularity)} ~{' '}
+                {formatTimeSeriesTime(data.timeRange.end, data.granularity)}
               </p>
               <p className="mt-1">
                 数据点数: 原始 {data.original.length} 点，降尺度 {data.downscaled.length} 点
@@ -339,27 +343,86 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
           </CardContent>
         </Card>
       )}
+
+      {data && !isLoading && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>局地变化：降尺度相对原始</CardTitle>
+              <CardDescription>
+                降尺度−原始数据的差值 · {data.unit} · 正值表示降尺度高于原始，负值表示降尺度低于原始
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <LocalChangesBarChart
+                data={alignBarChartData(data.original, data.downscaled, data.observation).map(
+                  (point) => ({
+                    time: point.time,
+                    change: point.change,
+                  }),
+                )}
+                unit={data.unit}
+                granularity={data.granularity}
+              />
+              <div className="mt-4 text-sm text-muted-foreground">
+                <p>
+                  柱状图显示降尺度数据相对原始数据的局地变化。零线表示无变化，正值表示降尺度增强，负值表示降尺度减弱。
+                </p>
+                {alignBarChartData(data.original, data.downscaled, data.observation).some(
+                  (point) => point.change === null,
+                ) && (
+                  <p className="mt-2 text-amber-600 dark:text-amber-500">
+                    部分时间点缺少原始或降尺度数据，对应柱图缺失。
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>降尺度相对观测的误差</CardTitle>
+              <CardDescription>
+                降尺度−观测数据的差值 · {data.unit} · 正值表示高估，负值表示低估
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ErrorBarChart
+                data={alignBarChartData(data.original, data.downscaled, data.observation).map(
+                  (point) => ({
+                    time: point.time,
+                    error: point.error,
+                  }),
+                )}
+                unit={data.unit}
+                granularity={data.granularity}
+              />
+              <div className="mt-4 text-sm text-muted-foreground">
+                {data.observation && data.stationInfo ? (
+                  <>
+                    <p>
+                      柱状图显示降尺度数据相对观测参考的误差。零线表示无误差，正值表示高估，负值表示低估。
+                    </p>
+                    {alignBarChartData(data.original, data.downscaled, data.observation).some(
+                      (point) => point.error === null,
+                    ) && (
+                      <p className="mt-2 text-amber-600 dark:text-amber-500">
+                        部分时间点缺少降尺度或观测数据，对应柱图缺失。
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">
+                    所选坐标 25km 范围内无可用观测参考，误差柱图无法显示。局地变化柱图仍可查看。
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   )
-}
-
-function formatTime(isoString: string, granularity: 'hourly' | 'daily'): string {
-  const date = new Date(isoString)
-  if (granularity === 'daily') {
-    return date.toLocaleDateString('zh-CN', {
-      timeZone: 'UTC',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-  }
-  return date.toLocaleString('zh-CN', {
-    timeZone: 'UTC',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 function getSemanticsLabel(semantics: string): string {
