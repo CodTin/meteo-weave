@@ -12,11 +12,23 @@ describe('AccuracyAssessmentPanel', () => {
       },
       samples: {
         n: 150,
-        timeCoverage: { start: '2024-01-01T00:00:00Z', end: '2024-01-07T23:00:00Z' },
+        stationCount: 10,
+        timeCoverage: {
+          start: '2024-01-01T00:00:00Z',
+          end: '2024-01-07T23:00:00Z',
+          actualTimes: 8,
+        },
+      },
+      stations: [{ stationId: 'S001', location: { lon: 120.5, lat: 30.5 }, elevation: 100 }],
+      sampling: {
+        budget: { maxPoints: 50, maxTimes: 10 },
+        actual: { points: 10, times: 8 },
+        plan: '预算内均匀采样：8 个时刻',
       },
       method: {
-        matching: 'station-within-25km',
+        matching: '台站坐标 25km 内取样',
         unit: '°C',
+        dataSource: 'Synthetic Demo' as const,
       },
     }
 
@@ -27,11 +39,12 @@ describe('AccuracyAssessmentPanel', () => {
     expect(screen.getByText(/MAE/)).toBeInTheDocument()
     expect(screen.getByText(/R²/)).toBeInTheDocument()
 
-    // Check sample count is displayed
-    expect(screen.getByText(/150/)).toBeInTheDocument()
+    // Check station count and sample count are displayed
+    expect(screen.getByText(/10.*个独立台站/)).toBeInTheDocument()
+    expect(screen.getByText(/150.*个站时样本/)).toBeInTheDocument()
 
-    // Check Synthetic Demo disclaimer
-    expect(screen.getByText(/Synthetic Demo/i)).toBeInTheDocument()
+    // Check Synthetic Demo data source
+    expect(screen.getByText(/Synthetic Demo/)).toBeInTheDocument()
   })
 
   test('shows improvement percentages', () => {
@@ -43,11 +56,23 @@ describe('AccuracyAssessmentPanel', () => {
       },
       samples: {
         n: 100,
-        timeCoverage: { start: '2024-01-01T00:00:00Z', end: '2024-01-07T23:00:00Z' },
+        stationCount: 5,
+        timeCoverage: {
+          start: '2024-01-01T00:00:00Z',
+          end: '2024-01-07T23:00:00Z',
+          actualTimes: 10,
+        },
+      },
+      stations: [],
+      sampling: {
+        budget: { maxPoints: 50, maxTimes: 10 },
+        actual: { points: 5, times: 10 },
+        plan: '完整时间覆盖：10 个时刻',
       },
       method: {
-        matching: 'station-within-25km',
+        matching: '台站坐标 25km 内取样',
         unit: '°C',
+        dataSource: 'Synthetic Demo' as const,
       },
     }
 
@@ -79,11 +104,23 @@ describe('AccuracyAssessmentPanel', () => {
       },
       samples: {
         n: 100,
-        timeCoverage: { start: '2024-01-01T00:00:00Z', end: '2024-01-07T23:00:00Z' },
+        stationCount: 5,
+        timeCoverage: {
+          start: '2024-01-01T00:00:00Z',
+          end: '2024-01-07T23:00:00Z',
+          actualTimes: 10,
+        },
+      },
+      stations: [],
+      sampling: {
+        budget: { maxPoints: 50, maxTimes: 10 },
+        actual: { points: 5, times: 10 },
+        plan: '完整时间覆盖：10 个时刻',
       },
       method: {
-        matching: 'station-within-25km',
+        matching: '台站坐标 25km 内取样',
         unit: '°C',
+        dataSource: 'Synthetic Demo' as const,
       },
     }
 
