@@ -9,11 +9,19 @@ import { WindMapComparisonPanel } from './components/wind-map-comparison-panel'
 import { TimeSliceSelector } from './components/time-slice-selector'
 import { AccuracyPanel } from './components/accuracy-panel'
 import { TimeSeriesPanel } from './components/time-series-panel'
+import { ElevationGroupingPanel } from './components/elevation-grouping-panel'
 import { useTimeSlice } from './hooks/use-time-slice'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
+import { createServerFn } from '@tanstack/react-start'
+import { getElevationGroupingData } from '@/server/services/elevation-grouping.server'
+import { useQuery } from '@tanstack/react-query'
 import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
 import { TaskErrorState } from '@/features/downscaling-tasks/components/task-error-state'
 import { getVariableLabel, type Variable } from './service/color-scales'
+
+const getElevationGroupingDataFn = createServerFn({ method: 'GET' })
+  .validator((data: string) => data)
+  .handler(({ data }) => getElevationGroupingData(data))
 
 export function ResultAnalysisPage() {
   const { taskId } = useParams({ from: '/_workspace/tasks/$taskId/result' })
@@ -83,6 +91,13 @@ export function ResultAnalysisPage() {
   }
 
   const variable = task.configuration.variable as Variable
+
+  // Load elevation grouping data for spatial analysis tab
+  const elevationGroupingQuery = useQuery({
+    queryKey: ['elevation-grouping', taskId],
+    queryFn: () => getElevationGroupingDataFn({ data: taskId }),
+    enabled: activeTab === 'spatial',
+  })
 
   return (
     <div className="space-y-6">
@@ -177,17 +192,37 @@ export function ResultAnalysisPage() {
         </TabPanel>
 
         <TabPanel value="spatial">
-          <Card>
-            <CardHeader>
-              <CardTitle>空间分析</CardTitle>
-              <CardDescription>待交付</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                空间分析功能将在后续版本提供，包括相关性分布、功率谱等分析。
-              </p>
-            </CardContent>
-          </Card>
+          {elevationGroupingQuery.isLoading ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>空间分析</CardTitle>
+                <CardDescription>加载中...</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : elevationGroupingQuery.error ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>空间分析</CardTitle>
+                <CardDescription>加载失败</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  {elevationGroupingQuery.error instanceof Error
+                    ? elevationGroupingQuery.error.message
+                    : '未知错误'}
+                </p>
+              </CardContent>
+            </Card>
+          ) : elevationGroupingQuery.data?.ok && elevationGroupingQuery.data.data ? (
+            <ElevationGroupingPanel data={elevationGroupingQuery.data.data} />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>空间分析</CardTitle>
+                <CardDescription>无数据</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
         </TabPanel>
 
         <TabPanel value="export">
