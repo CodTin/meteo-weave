@@ -17,11 +17,18 @@ type AccuracyData =
       }
       samples: {
         n: number
-        timeCoverage: { start: string; end: string }
+        stationCount: number
+        timeCoverage: { start: string; end: string; actualTimes: number }
+      }
+      sampling: {
+        budget: { maxPoints: number; maxTimes: number }
+        actual: { points: number; times: number }
+        plan: string
       }
       method: {
         matching: string
         unit: string
+        dataSource: 'Synthetic Demo'
       }
     }
   | {
@@ -115,7 +122,7 @@ export function AccuracyAssessmentPanel({
     )
   }
 
-  const { metrics, samples, method } = data
+  const { metrics, samples, sampling, method } = data
 
   return (
     <div className="space-y-6">
@@ -124,15 +131,28 @@ export function AccuracyAssessmentPanel({
         <CardHeader>
           <CardTitle>精度评估</CardTitle>
           <CardDescription>
-            基于 {samples.n} 个共同有效样本 · {method.matching} · Synthetic Demo
+            基于 {samples.stationCount} 个独立台站 · {samples.n} 个站时样本 · {method.dataSource}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="text-sm text-muted-foreground">
-            <p>
-              评估时段：{samples.timeCoverage.start} 至 {samples.timeCoverage.end}
-            </p>
-            <p className="mt-2">单位：{method.unit} · 模拟评估数据，不代表真实预报能力</p>
+        <CardContent className="space-y-3">
+          <div className="text-sm">
+            <div className="font-medium text-foreground">时间覆盖</div>
+            <div className="text-muted-foreground">
+              {samples.timeCoverage.start} 至 {samples.timeCoverage.end}（实际查询{' '}
+              {samples.timeCoverage.actualTimes} 个时刻）
+            </div>
+          </div>
+          <div className="text-sm">
+            <div className="font-medium text-foreground">取样方案</div>
+            <div className="text-muted-foreground">
+              {method.matching} · {sampling.plan}
+            </div>
+          </div>
+          <div className="text-sm">
+            <div className="font-medium text-foreground">单位与数据说明</div>
+            <div className="text-muted-foreground">
+              {method.unit} · 合成台站参考，不代表真实预报能力
+            </div>
           </div>
         </CardContent>
       </Card>

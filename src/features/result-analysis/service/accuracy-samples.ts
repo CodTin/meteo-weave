@@ -2,6 +2,8 @@ export type SamplePoint = {
   stationId: string
   time: string
   value: number
+  location?: { lon: number; lat: number }
+  elevation?: number
 }
 
 export type AlignedSample = {
@@ -10,6 +12,8 @@ export type AlignedSample = {
   original: number
   downscaled: number
   observed: number
+  location?: { lon: number; lat: number }
+  elevation?: number
 }
 
 export type AlignmentResult = {
@@ -26,36 +30,36 @@ export function alignAccuracySamples(
   // Create lookup maps for efficient matching and track duplicates
   const makeKey = (stationId: string, time: string) => `${stationId}|${time}`
 
-  const originalMap = new Map<string, { time: string; value: number }>()
+  const originalMap = new Map<string, SamplePoint>()
   let originalDuplicates = 0
   for (const point of original) {
     const key = makeKey(point.stationId, point.time)
     if (originalMap.has(key)) {
       originalDuplicates++
     } else {
-      originalMap.set(key, { time: point.time, value: point.value })
+      originalMap.set(key, point)
     }
   }
 
-  const downscaledMap = new Map<string, number>()
+  const downscaledMap = new Map<string, SamplePoint>()
   let downscaledDuplicates = 0
   for (const point of downscaled) {
     const key = makeKey(point.stationId, point.time)
     if (downscaledMap.has(key)) {
       downscaledDuplicates++
     } else {
-      downscaledMap.set(key, point.value)
+      downscaledMap.set(key, point)
     }
   }
 
-  const observationMap = new Map<string, number>()
+  const observationMap = new Map<string, SamplePoint>()
   let observationDuplicates = 0
   for (const point of observation) {
     const key = makeKey(point.stationId, point.time)
     if (observationMap.has(key)) {
       observationDuplicates++
     } else {
-      observationMap.set(key, point.value)
+      observationMap.set(key, point)
     }
   }
 
@@ -65,16 +69,16 @@ export function alignAccuracySamples(
 
   // Process each original entry to build aligned samples
   for (const [key, origData] of originalMap.entries()) {
-    const downVal = downscaledMap.get(key)
-    const obsVal = observationMap.get(key)
+    const downData = downscaledMap.get(key)
+    const obsData = observationMap.get(key)
 
     // Check if all three values exist and are finite
     if (
-      downVal === undefined ||
-      obsVal === undefined ||
+      !downData ||
+      !obsData ||
       !Number.isFinite(origData.value) ||
-      !Number.isFinite(downVal) ||
-      !Number.isFinite(obsVal)
+      !Number.isFinite(downData.value) ||
+      !Number.isFinite(obsData.value)
     ) {
       excluded++
       continue
@@ -82,12 +86,15 @@ export function alignAccuracySamples(
 
     const stationId = key.split('|')[0]
     if (!stationId) continue
+
     aligned.push({
       stationId,
       time: origData.time,
       original: origData.value,
-      downscaled: downVal,
-      observed: obsVal,
+      downscaled: downData.value,
+      observed: obsData.value,
+      location: obsData.location || origData.location || downData.location,
+      elevation: obsData.elevation ?? origData.elevation ?? downData.elevation,
     })
   }
 

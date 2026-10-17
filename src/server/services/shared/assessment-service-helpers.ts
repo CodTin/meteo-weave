@@ -183,19 +183,42 @@ export type AlignedSamples = {
     observed: number
     original: number
     downscaled: number
+    location?: { lon: number; lat: number }
+    elevation?: number
   }>
   timeCoverage: { start: string; end: string }
 }
 
 /**
- * Extracts samples from result values with observation data.
+ * Extracts samples from result values with observation data, preserving station metadata.
  */
 function extractSamplesWithObservation(
   values: ResultValue[],
   variable: string,
-): Array<{ stationId: string; time: string; value: number }> {
+): Array<{
+  stationId: string
+  time: string
+  value: number
+  location?: { lon: number; lat: number }
+  elevation?: number
+}> {
   const getStationId = (obs: NonNullable<ResultValue['observation']>): string => {
     return obs.mode === 'stations' ? obs.station.id : 'interpolated'
+  }
+
+  const getStationLocation = (
+    obs: NonNullable<ResultValue['observation']>,
+  ): { lon: number; lat: number } | undefined => {
+    return obs.mode === 'stations'
+      ? { lon: obs.station.longitude, lat: obs.station.latitude }
+      : undefined
+  }
+
+  const getStationElevation = (
+    _obs: NonNullable<ResultValue['observation']>,
+  ): number | undefined => {
+    // Elevation is not in ObservationStation type yet, return undefined
+    return undefined
   }
 
   return values
@@ -206,13 +229,15 @@ function extractSamplesWithObservation(
       stationId: getStationId(v.observation!),
       time: v.time,
       value: extractComparableValue(v, variable),
+      location: getStationLocation(v.observation!),
+      elevation: getStationElevation(v.observation!),
     }))
     .filter((s) => Number.isFinite(s.value))
 }
 
 /**
  * Extracts and aligns samples from query results.
- * Returns aligned samples ready for assessment calculations.
+ * Returns aligned samples ready for assessment calculations with station metadata preserved.
  */
 export function extractAndAlignSamples(
   original: ResultValue[],
@@ -224,12 +249,23 @@ export function extractAndAlignSamples(
   const downscaledSamples = extractSamplesWithObservation(downscaled, variable)
 
   const observationSamples = observation
-    .map((v) => ({
-      stationId:
-        v.observation && v.observation.mode === 'stations' ? v.observation.station.id : 'unknown',
-      time: v.time,
-      value: extractComparableValue(v, variable),
-    }))
+    .map((v) => {
+      const stationId =
+        v.observation && v.observation.mode === 'stations' ? v.observation.station.id : 'unknown'
+      const location =
+        v.observation && v.observation.mode === 'stations'
+          ? { lon: v.observation.station.longitude, lat: v.observation.station.latitude }
+          : undefined
+      const elevation = undefined // Elevation not yet in ObservationStation type
+
+      return {
+        stationId,
+        time: v.time,
+        value: extractComparableValue(v, variable),
+        location,
+        elevation,
+      }
+    })
     .filter((s) => Number.isFinite(s.value))
 
   const aligned = alignAccuracySamples(originalSamples, downscaledSamples, observationSamples)
