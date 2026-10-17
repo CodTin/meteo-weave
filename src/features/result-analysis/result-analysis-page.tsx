@@ -8,6 +8,7 @@ import { MapComparisonPanel } from './components/map-comparison-panel'
 import { WindMapComparisonPanel } from './components/wind-map-comparison-panel'
 import { TimeSliceSelector } from './components/time-slice-selector'
 import { AccuracyPanel } from './components/accuracy-panel'
+import { TimeSeriesPanel } from './components/time-series-panel'
 import { useTimeSlice } from './hooks/use-time-slice'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
 import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
@@ -172,17 +173,7 @@ export function ResultAnalysisPage() {
         </TabPanel>
 
         <TabPanel value="time-series">
-          <Card>
-            <CardHeader>
-              <CardTitle>时间序列</CardTitle>
-              <CardDescription>待交付</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                时间序列分析功能将在后续版本提供，展示特定点位的时间演变对比。
-              </p>
-            </CardContent>
-          </Card>
+          <TimeSeriesPanel task={task} />
         </TabPanel>
 
         <TabPanel value="spatial">
