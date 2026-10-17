@@ -72,16 +72,19 @@ export function useTimeSlice({
   }, [taskId, currentTime])
 
   // Handle time change with race condition protection
-  const setTime = useCallback((time: string) => {
-    // Validate time is in available slices
-    const isValid = timeSlices.some((slice) => slice.value === time)
-    if (!isValid) {
-      console.warn(`Time ${time} is not in available time slices`)
-      return
-    }
+  const setTime = useCallback(
+    (time: string) => {
+      // Validate time is in available slices
+      const isValid = timeSlices.some((slice) => slice.value === time)
+      if (!isValid) {
+        console.warn(`Time ${time} is not in available time slices`)
+        return
+      }
 
-    setCurrentTimeState(time)
-  }, [timeSlices])
+      setCurrentTimeState(time)
+    },
+    [timeSlices],
+  )
 
   return {
     currentTime,

@@ -7,6 +7,7 @@ import { AnalysisTabs, TabPanel, type AnalysisTab } from './components/analysis-
 import { MapComparisonPanel } from './components/map-comparison-panel'
 import { WindMapComparisonPanel } from './components/wind-map-comparison-panel'
 import { TimeSliceSelector } from './components/time-slice-selector'
+import { AccuracyPanel } from './components/accuracy-panel'
 import { useTimeSlice } from './hooks/use-time-slice'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
 import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
@@ -162,17 +163,12 @@ export function ResultAnalysisPage() {
         </TabPanel>
 
         <TabPanel value="accuracy">
-          <Card>
-            <CardHeader>
-              <CardTitle>精度评估</CardTitle>
-              <CardDescription>待交付</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                精度评估功能将在后续版本提供，包括 RMSE、MAE、R² 等统计指标。
-              </p>
-            </CardContent>
-          </Card>
+          <AccuracyPanel
+            taskId={task.id}
+            variable={variable}
+            timeRange={task.configuration.timeRange}
+            region={task.configuration.region}
+          />
         </TabPanel>
 
         <TabPanel value="time-series">

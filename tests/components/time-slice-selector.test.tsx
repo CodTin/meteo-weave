@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { TimeSliceSelector, type TimeSlice } from '@/features/result-analysis/components/time-slice-selector'
+import {
+  TimeSliceSelector,
+  type TimeSlice,
+} from '@/features/result-analysis/components/time-slice-selector'
 
 describe('TimeSliceSelector', () => {
   const mockTimeSlices: TimeSlice[] = [
