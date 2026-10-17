@@ -121,9 +121,10 @@ const populationStddev = (values: number[], mean: number) => {
   return Math.round(Math.sqrt(variance) * 10_000) / 10_000
 }
 
-function means<T extends ResultValue, R extends ResultValue>(
+function aggregateEnsemble<T extends ResultValue, R extends ResultValue>(
   groups: Array<{ point: ResultPoint; time: string; values: T[] }>,
   selection: Selection,
+  aggregateValue: (values: T[]) => number,
   project: (values: T[], scalar: MeanValue) => R,
 ): R[] | Unavailable {
   const rows: R[] = []
@@ -138,7 +139,7 @@ function means<T extends ResultValue, R extends ResultValue>(
       project(group.values, {
         ...group.point,
         time: group.time,
-        value: average(group.values.map((value) => value.value)),
+        value: aggregateValue(group.values),
         ensembleMean: {
           sampleCount: group.values.length,
           validMemberIds,
@@ -150,35 +151,33 @@ function means<T extends ResultValue, R extends ResultValue>(
   return rows
 }
 
+function means<T extends ResultValue, R extends ResultValue>(
+  groups: Array<{ point: ResultPoint; time: string; values: T[] }>,
+  selection: Selection,
+  project: (values: T[], scalar: MeanValue) => R,
+): R[] | Unavailable {
+  return aggregateEnsemble(
+    groups,
+    selection,
+    (values) => average(values.map((v) => v.value)),
+    project,
+  )
+}
+
 function stddevs<T extends ResultValue, R extends ResultValue>(
   groups: Array<{ point: ResultPoint; time: string; values: T[] }>,
   selection: Selection,
   project: (values: T[], scalar: MeanValue) => R,
 ): R[] | Unavailable {
-  const rows: R[] = []
-  for (const group of groups) {
-    if (!group.values.length)
-      return unavailable(
-        'MISSING_ENSEMBLE',
-        'No available members at a requested point/time; an empty ensemble is not zero.',
-      )
-    const validMemberIds = group.values.map((value) => value.memberId!)
-    const mean = average(group.values.map((value) => value.value))
-    const stddev = populationStddev(group.values.map((value) => value.value), mean)
-    rows.push(
-      project(group.values, {
-        ...group.point,
-        time: group.time,
-        value: stddev,
-        ensembleMean: {
-          sampleCount: group.values.length,
-          validMemberIds,
-          unavailableMemberIds: selection.memberIds.filter((id) => !validMemberIds.includes(id)),
-        },
-      }),
-    )
-  }
-  return rows
+  return aggregateEnsemble(
+    groups,
+    selection,
+    (values) => {
+      const vals = values.map((v) => v.value)
+      return populationStddev(vals, average(vals))
+    },
+    project,
+  )
 }
 
 export function queryEnsemble(
