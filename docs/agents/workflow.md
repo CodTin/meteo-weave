@@ -19,6 +19,18 @@
    path or working-tree fingerprint exits nonzero. Inspect the difference before updating the
    checkpoint; the command never resets files, resumes agents or starts servers.
 
+## Worktree creation
+
+Always create worker worktrees from the main repository root, not from inside another worktree:
+
+```bash
+# From main repo root
+cd /Users/xiaoyu/Projects/meteo-weave
+git worktree add --detach .claude/worktrees/ticket-N <commit>
+```
+
+Never run git worktree add from inside an existing worktree path.
+
 ## Ownership protection
 
 Before writes, pin the exact starting commit and declare owned paths:

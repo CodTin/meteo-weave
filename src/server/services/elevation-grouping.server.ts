@@ -122,10 +122,7 @@ export async function getElevationGroupingData(taskId: string): Promise<Elevatio
     }
 
     // Extract station coordinates from observation data
-    const stationCoords = new Map<
-      string,
-      { latitude: number; longitude: number }
-    >()
+    const stationCoords = new Map<string, { latitude: number; longitude: number }>()
 
     for (const value of observationResult.values) {
       if (value.observation && value.observation.mode === 'stations') {

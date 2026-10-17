@@ -36,6 +36,12 @@ the guardrail is missing, bypassed or wrong.
   `workspace-cases` when testing those same behaviors. Keep scenario-specific assertions local;
   extract real repeated coordination, not a generic testing framework.
 
+## Shared utilities
+
+- **Mathematical functions**: Pure calculation functions (RMSE, MAE, correlation, statistical operations) belong in `src/features/[domain]/service/metrics-utils.ts` or a shared `[domain]-utils.ts`.
+- **Domain utilities**: Feature-specific helpers stay with their feature.
+- **Cross-domain utilities**: Shared across multiple features go in `src/lib/utils.ts`.
+
 ## Authority
 
 The originating spec defines scope. `docs/development.md` describes the current framework and

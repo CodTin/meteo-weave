@@ -71,6 +71,30 @@ for (const file of files(join(root, 'src')).filter((file) => /\.[cm]?[jt]sx?$/.t
     )
   }
 }
+// Check code duplication threshold
+const duplicationResult = Bun.spawnSync([
+  'jscpd',
+  'src',
+  '--config',
+  '.jscpd.json',
+  '--format',
+  'json',
+  '--silent',
+])
+if (duplicationResult.exitCode === 0 && duplicationResult.stdout) {
+  try {
+    const duplication = JSON.parse(duplicationResult.stdout.toString())
+    const percentage = duplication.statistics?.total?.percentage ?? 0
+    if (percentage > 0.5) {
+      failures.push(
+        `code-duplication: ${percentage.toFixed(2)}% duplication exceeds 0.5% threshold. Run 'bun run check:duplication' for details.`,
+      )
+    }
+  } catch {
+    // Silently skip if jscpd output is unparseable
+  }
+}
+
 if (failures.length) {
   console.error(failures.join('\n'))
   process.exitCode = 1

@@ -225,8 +225,24 @@ describe('groupStationsByElevation', () => {
 describe('calculateGroupMetrics', () => {
   it('calculates RMSE for a group', () => {
     const samples: StationSample[] = [
-      { stationId: 's1', latitude: 0, longitude: 0, time: 't1', observed: 10, original: 12, downscaled: 11 },
-      { stationId: 's2', latitude: 0, longitude: 0, time: 't2', observed: 20, original: 22, downscaled: 21 },
+      {
+        stationId: 's1',
+        latitude: 0,
+        longitude: 0,
+        time: 't1',
+        observed: 10,
+        original: 12,
+        downscaled: 11,
+      },
+      {
+        stationId: 's2',
+        latitude: 0,
+        longitude: 0,
+        time: 't2',
+        observed: 20,
+        original: 22,
+        downscaled: 21,
+      },
     ]
 
     const metrics = calculateGroupMetrics(samples, 'plains')
@@ -239,8 +255,24 @@ describe('calculateGroupMetrics', () => {
 
   it('calculates MAE for a group', () => {
     const samples: StationSample[] = [
-      { stationId: 's1', latitude: 0, longitude: 0, time: 't1', observed: 10, original: 12, downscaled: 11 },
-      { stationId: 's2', latitude: 0, longitude: 0, time: 't2', observed: 20, original: 24, downscaled: 21 },
+      {
+        stationId: 's1',
+        latitude: 0,
+        longitude: 0,
+        time: 't1',
+        observed: 10,
+        original: 12,
+        downscaled: 11,
+      },
+      {
+        stationId: 's2',
+        latitude: 0,
+        longitude: 0,
+        time: 't2',
+        observed: 20,
+        original: 24,
+        downscaled: 21,
+      },
     ]
 
     const metrics = calculateGroupMetrics(samples, 'plains')
@@ -253,8 +285,24 @@ describe('calculateGroupMetrics', () => {
 
   it('calculates improvement as (original - downscaled) / original * 100', () => {
     const samples: StationSample[] = [
-      { stationId: 's1', latitude: 0, longitude: 0, time: 't1', observed: 10, original: 14, downscaled: 11 },
-      { stationId: 's2', latitude: 0, longitude: 0, time: 't2', observed: 20, original: 26, downscaled: 21 },
+      {
+        stationId: 's1',
+        latitude: 0,
+        longitude: 0,
+        time: 't1',
+        observed: 10,
+        original: 14,
+        downscaled: 11,
+      },
+      {
+        stationId: 's2',
+        latitude: 0,
+        longitude: 0,
+        time: 't2',
+        observed: 20,
+        original: 26,
+        downscaled: 21,
+      },
     ]
 
     const metrics = calculateGroupMetrics(samples, 'plains')
@@ -267,8 +315,24 @@ describe('calculateGroupMetrics', () => {
 
   it('preserves negative improvement when downscaled is worse', () => {
     const samples: StationSample[] = [
-      { stationId: 's1', latitude: 0, longitude: 0, time: 't1', observed: 10, original: 11, downscaled: 14 },
-      { stationId: 's2', latitude: 0, longitude: 0, time: 't2', observed: 20, original: 21, downscaled: 24 },
+      {
+        stationId: 's1',
+        latitude: 0,
+        longitude: 0,
+        time: 't1',
+        observed: 10,
+        original: 11,
+        downscaled: 14,
+      },
+      {
+        stationId: 's2',
+        latitude: 0,
+        longitude: 0,
+        time: 't2',
+        observed: 20,
+        original: 21,
+        downscaled: 24,
+      },
     ]
 
     const metrics = calculateGroupMetrics(samples, 'plains')
@@ -291,7 +355,15 @@ describe('calculateGroupMetrics', () => {
 
   it('handles zero baseline with appropriate messaging', () => {
     const samples: StationSample[] = [
-      { stationId: 's1', latitude: 0, longitude: 0, time: 't1', observed: 10, original: 10, downscaled: 10 },
+      {
+        stationId: 's1',
+        latitude: 0,
+        longitude: 0,
+        time: 't1',
+        observed: 10,
+        original: 10,
+        downscaled: 10,
+      },
     ]
 
     const metrics = calculateGroupMetrics(samples, 'plains')
@@ -303,9 +375,33 @@ describe('calculateGroupMetrics', () => {
 
   it('includes sample count and station support', () => {
     const samples: StationSample[] = [
-      { stationId: 's1', latitude: 0, longitude: 0, time: 't1', observed: 10, original: 12, downscaled: 11 },
-      { stationId: 's1', latitude: 0, longitude: 0, time: 't2', observed: 11, original: 13, downscaled: 12 },
-      { stationId: 's2', latitude: 0, longitude: 0, time: 't1', observed: 20, original: 22, downscaled: 21 },
+      {
+        stationId: 's1',
+        latitude: 0,
+        longitude: 0,
+        time: 't1',
+        observed: 10,
+        original: 12,
+        downscaled: 11,
+      },
+      {
+        stationId: 's1',
+        latitude: 0,
+        longitude: 0,
+        time: 't2',
+        observed: 11,
+        original: 13,
+        downscaled: 12,
+      },
+      {
+        stationId: 's2',
+        latitude: 0,
+        longitude: 0,
+        time: 't1',
+        observed: 20,
+        original: 22,
+        downscaled: 21,
+      },
     ]
 
     const metrics = calculateGroupMetrics(samples, 'plains')

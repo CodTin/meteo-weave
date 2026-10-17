@@ -237,13 +237,17 @@ export function ElevationGroupingPanel({ data }: ElevationGroupingPanelProps) {
             </div>
             <div>
               <div className="text-muted-foreground">总体 RMSE 改善</div>
-              <div className={`text-lg font-semibold ${formatImprovement(data.overall.rmse.improvement).className}`}>
+              <div
+                className={`text-lg font-semibold ${formatImprovement(data.overall.rmse.improvement).className}`}
+              >
                 {formatImprovement(data.overall.rmse.improvement).text}
               </div>
             </div>
             <div>
               <div className="text-muted-foreground">总体 MAE 改善</div>
-              <div className={`text-lg font-semibold ${formatImprovement(data.overall.mae.improvement).className}`}>
+              <div
+                className={`text-lg font-semibold ${formatImprovement(data.overall.mae.improvement).className}`}
+              >
                 {formatImprovement(data.overall.mae.improvement).text}
               </div>
             </div>
@@ -251,8 +255,8 @@ export function ElevationGroupingPanel({ data }: ElevationGroupingPanelProps) {
           <Alert>
             <Info className="size-4" />
             <AlertDescription className="text-xs">
-              总体指标基于所有分组的共同有效样本计算，不是各组 RMSE/MAE
-              的简单平均。请在精度评估 Tab 中核对这些数值。
+              总体指标基于所有分组的共同有效样本计算，不是各组 RMSE/MAE 的简单平均。请在精度评估 Tab
+              中核对这些数值。
             </AlertDescription>
           </Alert>
         </CardContent>
