@@ -320,3 +320,27 @@ export async function queryAndAlignSamples(
     timeCoverage: { start: times[0] || '', end: times[times.length - 1] || '' },
   }
 }
+
+/**
+ * Generic wrapper that handles the common pattern of validating a task and returning unavailable data on failure.
+ * This eliminates duplication across assessment endpoints.
+ */
+export async function withTaskValidation<T>(
+  taskId: string,
+  handler: (task: DownscalingTask, service: ReturnType<typeof createTaskService>) => Promise<T>,
+): Promise<{ ok: true; data: T | { available: false; reason: string } }> {
+  const taskValidation = await initializeAndValidateTask(taskId)
+  if (!taskValidation.ok) {
+    return {
+      ok: true,
+      data: {
+        available: false,
+        reason: taskValidation.reason,
+      },
+    }
+  }
+
+  const { task, service } = taskValidation
+  const data = await handler(task, service)
+  return { ok: true, data }
+}

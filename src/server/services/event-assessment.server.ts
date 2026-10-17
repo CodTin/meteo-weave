@@ -6,7 +6,7 @@ import {
 } from '@/features/result-analysis/service/event-metrics'
 import {
   queryAndAlignSamples,
-  initializeAndValidateTask,
+  withTaskValidation,
 } from '@/server/services/shared/assessment-service-helpers'
 
 type EventAssessmentData =
@@ -86,95 +86,71 @@ function createDemoThreshold(variable: string): EventAssessmentDefinition | null
 }
 
 export async function getEventAssessmentData(taskId: string): Promise<EventAssessmentResponse> {
-  // Initialize service and validate task
-  const taskValidation = await initializeAndValidateTask(taskId)
-  if (!taskValidation.ok) {
-    return {
-      ok: true,
-      data: {
-        available: false,
-        reason: taskValidation.reason,
-      },
-    }
-  }
-
-  const { task, service } = taskValidation
-
-  // Get demo threshold for this variable
-  const definition = createDemoThreshold(task.configuration.variable)
-  if (!definition) {
-    return {
-      ok: true,
-      data: {
+  return withTaskValidation(taskId, async (task, service) => {
+    // Get demo threshold for this variable
+    const definition = createDemoThreshold(task.configuration.variable)
+    if (!definition) {
+      return {
         available: false,
         reason: '该变量暂无事件阈值定义',
-      },
+      }
     }
-  }
 
-  try {
-    // Get time range for queries
-    const { start, end } = task.configuration.timeRange
-    const times = [start] // For now, query first time only to stay within budget
+    try {
+      // Get time range for queries
+      const { start, end } = task.configuration.timeRange
+      const times = [start] // For now, query first time only to stay within budget
 
-    // Query and align samples
-    const sampleResult = await queryAndAlignSamples(
-      service,
-      {
-        taskId,
-        region: task.configuration.region,
-        times,
-        maxPoints: 50,
-      },
-      task.configuration.variable,
-      '没有共同有效样本用于事件评估',
-    )
+      // Query and align samples
+      const sampleResult = await queryAndAlignSamples(
+        service,
+        {
+          taskId,
+          region: task.configuration.region,
+          times,
+          maxPoints: 50,
+        },
+        task.configuration.variable,
+        '没有共同有效样本用于事件评估',
+      )
 
-    if (!sampleResult.ok) {
-      return {
-        ok: true,
-        data: {
+      if (!sampleResult.ok) {
+        return {
           available: false,
           reason: sampleResult.reason,
-        },
+        }
       }
-    }
 
-    const { samples: alignedSamples } = sampleResult
+      const { samples: alignedSamples } = sampleResult
 
-    // Assess events for original vs observed
-    const originalAssessment = assessEvents(
-      alignedSamples.map((s) => s.observed),
-      alignedSamples.map((s) => s.original),
-      definition,
-    )
+      // Assess events for original vs observed
+      const originalAssessment = assessEvents(
+        alignedSamples.map((s) => s.observed),
+        alignedSamples.map((s) => s.original),
+        definition,
+      )
 
-    // Assess events for downscaled vs observed
-    const downscaledAssessment = assessEvents(
-      alignedSamples.map((s) => s.observed),
-      alignedSamples.map((s) => s.downscaled),
-      definition,
-    )
+      // Assess events for downscaled vs observed
+      const downscaledAssessment = assessEvents(
+        alignedSamples.map((s) => s.observed),
+        alignedSamples.map((s) => s.downscaled),
+        definition,
+      )
 
-    // Both assessments must be available for comparison
-    if (!originalAssessment.available || !downscaledAssessment.available) {
-      const reason = !originalAssessment.available
-        ? originalAssessment.reason
-        : !downscaledAssessment.available
-          ? downscaledAssessment.reason
-          : '评估失败'
-      return {
-        ok: true,
-        data: {
+      // Both assessments must be available for comparison
+      if (!originalAssessment.available || !downscaledAssessment.available) {
+        const reason = !originalAssessment.available
+          ? originalAssessment.reason
+          : !downscaledAssessment.available
+            ? downscaledAssessment.reason
+            : '评估失败'
+        return {
           available: false,
           reason,
-        },
+        }
       }
-    }
 
-    return {
-      ok: true,
-      data: {
+      return {
         available: true,
         original: originalAssessment,
         downscaled: downscaledAssessment,
@@ -183,15 +159,12 @@ export async function getEventAssessmentData(taskId: string): Promise<EventAsses
           timeCoverage: { start, end },
         },
         definition,
-      },
-    }
-  } catch (error) {
-    return {
-      ok: true,
-      data: {
+      }
+    } catch (error) {
+      return {
         available: false,
         reason: `评估失败: ${error instanceof Error ? error.message : '未知错误'}`,
-      },
+      }
     }
-  }
+  })
 }

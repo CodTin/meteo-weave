@@ -45,6 +45,14 @@ const ensembleSchema = z
     (selection) =>
       !selection.memberIds || new Set(selection.memberIds).size === selection.memberIds.length,
   )
+const baseWindowSchema = {
+  layer: layerSchema,
+  ensemble: ensembleSchema.optional(),
+  observationMode: z.enum(['stations', 'interpolated']).optional(),
+  temporalResolution: z.enum(['hourly', 'daily']).optional(),
+  window: windowSchema,
+  times: timesSchema,
+}
 const querySchema = z.discriminatedUnion('kind', [
   z
     .strictObject({
@@ -70,21 +78,11 @@ const querySchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({
     kind: z.enum(['grid', 'export']),
-    layer: layerSchema,
-    ensemble: ensembleSchema.optional(),
-    observationMode: z.enum(['stations', 'interpolated']).optional(),
-    temporalResolution: z.enum(['hourly', 'daily']).optional(),
-    window: windowSchema,
-    times: timesSchema,
+    ...baseWindowSchema,
   }),
   z.strictObject({
     kind: z.literal('preview'),
-    layer: layerSchema,
-    ensemble: ensembleSchema.optional(),
-    observationMode: z.enum(['stations', 'interpolated']).optional(),
-    temporalResolution: z.enum(['hourly', 'daily']).optional(),
-    window: windowSchema,
-    times: timesSchema,
+    ...baseWindowSchema,
     maxPoints: z.number().int().min(1).max(RESULT_QUERY_LIMITS.gridPoints),
   }),
 ])

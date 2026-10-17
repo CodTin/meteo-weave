@@ -3,7 +3,7 @@ import { calculateAccuracyMetrics } from '@/features/result-analysis/service/acc
 import { getVariableUnit } from '@/features/result-analysis/service/variable-accuracy'
 import {
   queryAndAlignSamples,
-  initializeAndValidateTask,
+  withTaskValidation,
 } from '@/server/services/shared/assessment-service-helpers'
 
 /**
@@ -116,82 +116,61 @@ function extractStationMetadata(
 }
 
 export async function getAccuracyAssessmentData(taskId: string): Promise<AccuracyResponse> {
-  // Initialize service and validate task
-  const taskValidation = await initializeAndValidateTask(taskId)
-  if (!taskValidation.ok) {
-    return {
-      ok: true,
-      data: {
-        available: false,
-        reason: taskValidation.reason,
-      },
-    }
-  }
+  return withTaskValidation(taskId, async (task, service) => {
+    try {
+      // Get time range and determine sampling plan
+      const { start, end } = task.configuration.timeRange
+      const maxTimes = 10 // Budget: maximum time samples to query
+      const maxPoints = 50 // Budget: maximum spatial points per time
 
-  const { task, service } = taskValidation
+      const { times, plan } = determineSamplingPlan(start, end, maxTimes)
 
-  try {
-    // Get time range and determine sampling plan
-    const { start, end } = task.configuration.timeRange
-    const maxTimes = 10 // Budget: maximum time samples to query
-    const maxPoints = 50 // Budget: maximum spatial points per time
+      // Query and align samples across actual time coverage
+      const sampleResult = await queryAndAlignSamples(
+        service,
+        {
+          taskId,
+          region: task.configuration.region,
+          times,
+          maxPoints,
+        },
+        task.configuration.variable,
+        '没有共同有效样本用于精度评估',
+      )
 
-    const { times, plan } = determineSamplingPlan(start, end, maxTimes)
-
-    // Query and align samples across actual time coverage
-    const sampleResult = await queryAndAlignSamples(
-      service,
-      {
-        taskId,
-        region: task.configuration.region,
-        times,
-        maxPoints,
-      },
-      task.configuration.variable,
-      '没有共同有效样本用于精度评估',
-    )
-
-    if (!sampleResult.ok) {
-      return {
-        ok: true,
-        data: {
+      if (!sampleResult.ok) {
+        return {
           available: false,
           reason: sampleResult.reason,
-        },
+        }
       }
-    }
 
-    const { samples: alignedSamples, timeCoverage } = sampleResult
+      const { samples: alignedSamples, timeCoverage } = sampleResult
 
-    // Extract station metadata for terrain grouping
-    const stations = extractStationMetadata(alignedSamples)
-    const uniqueStations = new Set(alignedSamples.map((s) => s.stationId))
+      // Extract station metadata for terrain grouping
+      const stations = extractStationMetadata(alignedSamples)
+      const uniqueStations = new Set(alignedSamples.map((s) => s.stationId))
 
-    // Calculate metrics for original vs observed
-    const originalMetrics = calculateAccuracyMetrics(
-      alignedSamples.map((s) => s.observed),
-      alignedSamples.map((s) => s.original),
-    )
+      // Calculate metrics for original vs observed
+      const originalMetrics = calculateAccuracyMetrics(
+        alignedSamples.map((s) => s.observed),
+        alignedSamples.map((s) => s.original),
+      )
 
-    // Calculate metrics for downscaled vs observed
-    const downscaledMetrics = calculateAccuracyMetrics(
-      alignedSamples.map((s) => s.observed),
-      alignedSamples.map((s) => s.downscaled),
-    )
+      // Calculate metrics for downscaled vs observed
+      const downscaledMetrics = calculateAccuracyMetrics(
+        alignedSamples.map((s) => s.observed),
+        alignedSamples.map((s) => s.downscaled),
+      )
 
-    if (!originalMetrics.available || !downscaledMetrics.available) {
-      return {
-        ok: true,
-        data: {
+      if (!originalMetrics.available || !downscaledMetrics.available) {
+        return {
           available: false,
           reason: '无法计算精度指标',
-        },
+        }
       }
-    }
 
-    return {
-      ok: true,
-      data: {
+      return {
         available: true,
         metrics: {
           original: originalMetrics.metrics,
@@ -217,15 +196,12 @@ export async function getAccuracyAssessmentData(taskId: string): Promise<Accurac
           unit: getVariableUnit(task.configuration.variable),
           dataSource: 'Synthetic Demo',
         },
-      },
-    }
-  } catch (error) {
-    return {
-      ok: true,
-      data: {
+      }
+    } catch (error) {
+      return {
         available: false,
         reason: `评估失败: ${error instanceof Error ? error.message : '未知错误'}`,
-      },
+      }
     }
-  }
+  })
 }
