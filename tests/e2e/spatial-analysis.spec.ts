@@ -211,4 +211,18 @@ test.describe('Spatial Analysis Panel', () => {
     await expect(page.locator('text=数据已就绪')).toBeVisible()
     await expect(page.locator('text=个有效点')).toBeVisible()
   })
+
+  test('visual verification - screenshot with spatial analysis panel', async ({ page }) => {
+    await navigateToSpatialAnalysis(page)
+
+    // Wait for all content to load
+    await page.waitForSelector('text=统计摘要')
+    await page.waitForSelector('text=方法说明')
+
+    // Take screenshot for visual verification
+    await expect(page).toHaveScreenshot('spatial-analysis-panel.png', {
+      fullPage: true,
+      animations: 'disabled',
+    })
+  })
 })

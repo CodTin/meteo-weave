@@ -10,6 +10,7 @@ import {
   type PredictionType,
 } from '../hooks/use-error-map-data'
 import { PowerSpectrumPanel } from './power-spectrum-panel'
+import { getVariableLabel } from './analysis-context-shared'
 
 type SpatialAnalysisPanelProps = {
   taskId: string
@@ -255,19 +256,4 @@ export function SpatialAnalysisPanel({
       />
     </div>
   )
-}
-
-function getVariableLabel(variable: Variable): string {
-  switch (variable) {
-    case 'temperature':
-      return '气温 (T2M)'
-    case 'pressure':
-      return '海平面气压 (MSL)'
-    case 'precipitation':
-      return '总降水 (TP)'
-    case 'wind':
-      return '风速风向 (U10/V10)'
-    default:
-      return variable
-  }
 }

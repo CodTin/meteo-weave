@@ -4,6 +4,7 @@
  */
 
 import { hashString } from './deterministic-random'
+import { calculateRmse, calculateMae } from './metrics-utils'
 
 export interface StationSample {
   stationId: string
@@ -184,24 +185,6 @@ export function calculateGroupMetrics(
     },
     improvement,
   }
-}
-
-/**
- * Calculates Root Mean Square Error.
- */
-function calculateRmse(errors: number[]): number {
-  if (errors.length === 0) return 0
-  const sumSquares = errors.reduce((sum, err) => sum + err * err, 0)
-  return Math.sqrt(sumSquares / errors.length)
-}
-
-/**
- * Calculates Mean Absolute Error.
- */
-function calculateMae(errors: number[]): number {
-  if (errors.length === 0) return 0
-  const sumAbs = errors.reduce((sum, err) => sum + Math.abs(err), 0)
-  return sumAbs / errors.length
 }
 
 /**
