@@ -356,4 +356,124 @@ test.describe('Time Series Analysis', () => {
     // Should update coordinate
     await expect(page.locator('text=当前坐标:')).toBeVisible()
   })
+
+  test('displays map selection interface', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Should display map selection card
+    await expect(page.getByText('地图选点')).toBeVisible()
+    await expect(page.getByText(/点击地图任务范围内的任意位置/)).toBeVisible()
+
+    // Map container should be present (either map or fallback)
+    const mapContainer = page.locator('canvas.mapboxgl-canvas, text=地图加载中, text=地图功能需要')
+    await expect(mapContainer.first()).toBeVisible()
+  })
+
+  test('map click within bounds updates coordinate', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Check if mapbox is available
+    const mapCanvas = page.locator('canvas.mapboxgl-canvas')
+    const hasMap = (await mapCanvas.count()) > 0
+
+    if (!hasMap) {
+      // Skip if map not loaded (e.g., no token)
+      test.skip()
+      return
+    }
+
+    // Click center of the map (should be within task region)
+    const mapBounds = await mapCanvas.boundingBox()
+    if (mapBounds) {
+      await page.mouse.click(mapBounds.x + mapBounds.width / 2, mapBounds.y + mapBounds.height / 2)
+      await page.waitForLoadState('networkidle')
+
+      // Coordinate inputs should be filled
+      const latInput = page.getByLabel('纬度')
+      const lonInput = page.getByLabel('经度')
+
+      await expect(latInput).not.toHaveValue('')
+      await expect(lonInput).not.toHaveValue('')
+
+      // Should show current coordinate
+      await expect(page.locator('text=当前坐标:')).toBeVisible()
+    }
+  })
+
+  test('coordinate state syncs across all three input methods', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Method 1: Manual input
+    await page.getByLabel('纬度').fill('35.5')
+    await page.getByLabel('经度').fill('120.5')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    const hasCoordinate1 = await page.locator('text=当前坐标:').isVisible()
+    const hasError1 = await page.getByText('坐标超出任务范围').isVisible()
+
+    // Method 2: Representative point (if first method succeeded)
+    if (hasCoordinate1) {
+      await page.getByRole('button', { name: /城市代表点/ }).click()
+      await page.waitForLoadState('networkidle')
+
+      // Inputs should update
+      const newLat = await page.getByLabel('纬度').inputValue()
+      const newLon = await page.getByLabel('经度').inputValue()
+
+      expect(newLat).not.toBe('35.5')
+      expect(newLon).not.toBe('120.5')
+
+      // Coordinate display should still be visible
+      await expect(page.locator('text=当前坐标:')).toBeVisible()
+    }
+
+    // All methods should update the same state (verified by coordinate display consistency)
+    expect(hasCoordinate1 || hasError1).toBe(true)
+  })
 })

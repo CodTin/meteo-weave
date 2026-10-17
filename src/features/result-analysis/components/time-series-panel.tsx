@@ -17,6 +17,7 @@ import {
 import { useTimeSeriesData } from '../hooks/use-time-series-data'
 import { validateCoordinate, isWithinRegion, type Coordinate } from '../service/time-series-data'
 import { generateRepresentativePoints, type RepresentativePoint } from '../service/representative-points'
+import { CoordinateSelectionMapClient } from './coordinate-selection-map-client'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
 import { Loader2, MapPin, Mountain, Home, Wheat } from 'lucide-react'
 
@@ -72,6 +73,17 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
     setLatitudeInput(point.coordinate.latitude.toString())
     setLongitudeInput(point.coordinate.longitude.toString())
     setSelectedCoordinate(point.coordinate)
+  }
+
+  const handleMapCoordinateSelect = (coordinate: Coordinate) => {
+    setValidationError(null)
+    setLatitudeInput(coordinate.latitude.toFixed(4))
+    setLongitudeInput(coordinate.longitude.toFixed(4))
+    setSelectedCoordinate(coordinate)
+  }
+
+  const handleMapOutOfBounds = () => {
+    setValidationError('点击位置超出任务范围，请在任务边界内选择')
   }
 
   // Prepare chart data
@@ -181,6 +193,25 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
               {task.configuration.region.west}°E ~ {task.configuration.region.east}°E
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Map selection */}
+      <Card>
+        <CardHeader>
+          <CardTitle>地图选点</CardTitle>
+          <CardDescription>点击地图任务范围内的任意位置选择分析坐标</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CoordinateSelectionMapClient
+            region={task.configuration.region}
+            selectedCoordinate={selectedCoordinate}
+            onCoordinateSelect={handleMapCoordinateSelect}
+            onOutOfBounds={handleMapOutOfBounds}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            点击地图内任意位置选择坐标。红色标记显示当前选中的点位。
+          </p>
         </CardContent>
       </Card>
 
