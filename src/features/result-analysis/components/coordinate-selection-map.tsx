@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Map, { Marker } from 'react-map-gl/mapbox'
-import type { MapRef, MapLayerMouseEvent } from 'react-map-gl/mapbox'
+import type { MapRef } from 'react-map-gl/mapbox'
 import { MapPin } from 'lucide-react'
 import type { Coordinate, Region } from '../service/time-series-data'
 import 'mapbox-gl/dist/mapbox-gl.css'
@@ -30,7 +30,7 @@ export function CoordinateSelectionMap({
     zoom: 6,
   }
 
-  const handleMapClick = (event: MapLayerMouseEvent) => {
+  const handleMapClick = (event: { lngLat: { lng: number; lat: number } }) => {
     const { lng, lat } = event.lngLat
 
     // Check if clicked coordinate is within region

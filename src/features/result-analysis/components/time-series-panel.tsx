@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,10 @@ import {
 } from 'recharts'
 import { useTimeSeriesData } from '../hooks/use-time-series-data'
 import { validateCoordinate, isWithinRegion, type Coordinate } from '../service/time-series-data'
-import { generateRepresentativePoints, type RepresentativePoint } from '../service/representative-points'
+import {
+  generateRepresentativePoints,
+  type RepresentativePoint,
+} from '../service/representative-points'
 import { CoordinateSelectionMapClient } from './coordinate-selection-map-client'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
 import { Loader2, MapPin, Mountain, Home, Wheat } from 'lucide-react'
@@ -30,13 +33,12 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
   const [longitudeInput, setLongitudeInput] = useState('')
   const [selectedCoordinate, setSelectedCoordinate] = useState<Coordinate | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
-  const [representativePoints, setRepresentativePoints] = useState<RepresentativePoint[]>([])
 
   // Generate representative points when task changes
-  useEffect(() => {
-    const points = generateRepresentativePoints(task.configuration.region, task.id)
-    setRepresentativePoints(points)
-  }, [task.id, task.configuration.region])
+  const representativePoints = useMemo(
+    () => generateRepresentativePoints(task.configuration.region, task.id),
+    [task.id, task.configuration.region],
+  )
 
   const { data, isLoading, error } = useTimeSeriesData({
     task,
@@ -177,7 +179,8 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
                   {getTerrainIcon(point.terrainType)}
                   <span>{point.label}</span>
                   <span className="text-xs text-muted-foreground">
-                    ({point.coordinate.latitude.toFixed(2)}°N, {point.coordinate.longitude.toFixed(2)}°E)
+                    ({point.coordinate.latitude.toFixed(2)}°N,{' '}
+                    {point.coordinate.longitude.toFixed(2)}°E)
                   </span>
                 </Button>
               ))}

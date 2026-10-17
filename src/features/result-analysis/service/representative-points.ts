@@ -64,9 +64,7 @@ export function generateRepresentativePoints(
   const lonRange = region.east - region.west
 
   // Generate one point for each terrain type with spatial distribution
-  for (let i = 0; i < terrainTypes.length; i++) {
-    const terrainType = terrainTypes[i]
-
+  for (const terrainType of terrainTypes) {
     // Use different portions of the region for each terrain type to ensure spatial spread
     // City: northwest quadrant bias
     // Mountain: northeast quadrant bias
