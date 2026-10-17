@@ -1,6 +1,8 @@
 import '@tanstack/react-start/server-only'
 import { z } from 'zod'
 import { queryDownscalingTaskResult } from './downscaling-tasks.server'
+import { findNearbyStation } from './station-matching.server'
+import type { StationMetadata } from '@/server/types/station-types'
 
 const coordinateSchema = z.strictObject({
   latitude: z.number().min(-90).max(90).finite(),
@@ -27,6 +29,8 @@ export interface TimeSeriesResponse {
   semantics: 'instantaneous' | 'daily-mean' | 'daily-minimum'
   original: TimeSeriesDataPoint[]
   downscaled: TimeSeriesDataPoint[]
+  observation?: TimeSeriesDataPoint[]
+  stationInfo?: StationMetadata
 }
 
 export interface TimeSeriesError {
@@ -123,6 +127,28 @@ export function getTimeSeriesData(input: unknown): TimeSeriesResult {
   // Determine unit and semantics based on variable and granularity
   const { unit, semantics } = getVariableMetadata(variable, granularity)
 
+  // Try to find nearby station for observation reference
+  const stationInfo = findNearbyStation(coordinate, 25)
+
+  // Query observation data if station found
+  let observationPoints: TimeSeriesDataPoint[] | undefined
+  if (stationInfo) {
+    const observationResult = queryDownscalingTaskResult({
+      task,
+      query: {
+        kind: 'time-series',
+        layer: 'observation',
+        point: stationInfo.coordinate,
+        timeRange: { start: timeRange.start, end: timeRange.end },
+        temporalResolution,
+      },
+    })
+
+    if (observationResult.ok) {
+      observationPoints = extractTimeSeriesPoints(observationResult)
+    }
+  }
+
   return {
     ok: true,
     coordinate,
@@ -133,6 +159,8 @@ export function getTimeSeriesData(input: unknown): TimeSeriesResult {
     semantics,
     original: originalPoints,
     downscaled: downscaledPoints,
+    observation: observationPoints,
+    stationInfo: stationInfo || undefined,
   }
 }
 

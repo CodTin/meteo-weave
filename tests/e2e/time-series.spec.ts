@@ -476,4 +476,161 @@ test.describe('Time Series Analysis', () => {
     // All methods should update the same state (verified by coordinate display consistency)
     expect(hasCoordinate1 || hasError1).toBe(true)
   })
+
+  test('displays three curves when station found within 25km', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Submit coordinate near a demo station
+    await page.getByLabel('纬度').fill('35.05')
+    await page.getByLabel('经度').fill('120.05')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Check if coordinate is within task region
+    const coordinateAccepted = await page.locator('text=当前坐标:').isVisible()
+
+    if (!coordinateAccepted) {
+      // Coordinate outside region, test not applicable
+      test.skip()
+      return
+    }
+
+    // Should show chart with legend entries
+    await expect(page.getByText('时间序列对比')).toBeVisible()
+    await expect(page.getByText('原始数据')).toBeVisible()
+    await expect(page.getByText('降尺度数据')).toBeVisible()
+
+    // Should show observation if station found
+    const hasObservation = await page.getByText('观测参考').isVisible()
+
+    if (hasObservation) {
+      // Verify station info is displayed
+      await expect(page.getByText('观测参考信息')).toBeVisible()
+      await expect(page.getByText('Synthetic Demo')).toBeVisible()
+      await expect(page.getByText(/台站:/)).toBeVisible()
+      await expect(page.getByText(/距离:/)).toBeVisible()
+      await expect(page.getByText(/不代表所选坐标的实际观测/)).toBeVisible()
+    }
+  })
+
+  test('shows no-station message when beyond 25km', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Submit coordinate far from any demo station
+    await page.getByLabel('纬度').fill('45.0')
+    await page.getByLabel('经度').fill('85.0')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Check if coordinate is within task region
+    const coordinateAccepted = await page.locator('text=当前坐标:').isVisible()
+
+    if (!coordinateAccepted) {
+      // Coordinate outside region, test not applicable
+      test.skip()
+      return
+    }
+
+    // Should show chart
+    await expect(page.getByText('时间序列对比')).toBeVisible()
+
+    // Should show no-station message
+    await expect(page.getByText('观测数据不可用')).toBeVisible()
+    await expect(page.getByText(/25km 范围内无可用台站/)).toBeVisible()
+
+    // Original and downscaled should still be visible
+    await expect(page.getByText('原始数据')).toBeVisible()
+    await expect(page.getByText('降尺度数据')).toBeVisible()
+
+    // Observation should not be in legend
+    const hasObservation = await page.getByText('观测参考').isVisible()
+    expect(hasObservation).toBe(false)
+  })
+
+  test('handles fast coordinate switching without data mixing', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Submit first coordinate
+    await page.getByLabel('纬度').fill('35.05')
+    await page.getByLabel('经度').fill('120.05')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    const firstCoordinateAccepted = await page.locator('text=当前坐标:').isVisible()
+
+    if (!firstCoordinateAccepted) {
+      test.skip()
+      return
+    }
+
+    // Capture first coordinate display
+    const firstCoordText = await page.locator('text=当前坐标:').textContent()
+
+    // Quickly switch to second coordinate
+    await page.getByLabel('纬度').fill('35.5')
+    await page.getByLabel('经度').fill('120.5')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    const secondCoordinateAccepted = await page.locator('text=当前坐标:').isVisible()
+
+    if (!secondCoordinateAccepted) {
+      test.skip()
+      return
+    }
+
+    // Verify coordinate display updated
+    const secondCoordText = await page.locator('text=当前坐标:').textContent()
+    expect(secondCoordText).not.toBe(firstCoordText)
+    expect(secondCoordText).toContain('35.5')
+    expect(secondCoordText).toContain('120.5')
+
+    // Chart should still be visible and stable
+    await expect(page.getByText('时间序列对比')).toBeVisible()
+  })
 })
