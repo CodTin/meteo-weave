@@ -34,7 +34,7 @@ const windowSchema = z
 const timesSchema = z.array(instantSchema).min(1).max(RESULT_QUERY_LIMITS.times)
 const ensembleSchema = z
   .strictObject({
-    kind: z.enum(['members', 'mean']),
+    kind: z.enum(['members', 'mean', 'stddev']),
     memberIds: z
       .array(z.string().min(1).max(64))
       .min(1)
@@ -137,7 +137,7 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
   if (selection && 'ok' in selection) return selection
   const memberFactor =
     requested.layer === 'downscaled' && selection
-      ? selection.memberIds.length + (selection.kind === 'mean' ? 1 : 0)
+      ? selection.memberIds.length + (selection.kind === 'mean' || selection.kind === 'stddev' ? 1 : 0)
       : 1
   const { region, timeRange } = task.configuration
   const daily = requested.temporalResolution === 'daily'

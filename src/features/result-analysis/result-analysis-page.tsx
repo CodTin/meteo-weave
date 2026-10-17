@@ -174,6 +174,15 @@ export function ResultAnalysisPage() {
               region={task.configuration.region}
               timeSlice={timeSliceState.currentTime}
               requestId={timeSliceState.requestId}
+              isProbabilistic={task.configuration.resolvedMethod === 'probabilistic'}
+              allMemberIds={
+                task.configuration.resolvedMethod === 'probabilistic'
+                  ? Array.from(
+                      { length: task.configuration.advanced?.ensembleMembers || 10 },
+                      (_, index) => `member-${String(index + 1).padStart(2, '0')}`,
+                    )
+                  : []
+              }
             />
           )}
         </TabPanel>
