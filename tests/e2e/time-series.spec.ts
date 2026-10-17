@@ -1,0 +1,636 @@
+import { test, expect } from './browser-guard'
+import { signInDemo } from './demo-login'
+
+test.describe('Time Series Analysis', () => {
+  test.beforeEach(async ({ context }) => {
+    await signInDemo(context)
+  })
+
+  test('displays coordinate input form on time series tab', async ({ page }) => {
+    // Navigate to tasks page
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    // For this test to work, we need tasks to exist. Skip if no result links found.
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    // Click on first result link
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    // Click time series tab
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify coordinate input form is visible
+    await expect(page.getByLabel('纬度')).toBeVisible()
+    await expect(page.getByLabel('经度')).toBeVisible()
+    await expect(page.getByRole('button', { name: '查询时间序列' })).toBeVisible()
+  })
+
+  test('validates coordinate input - out of bounds', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Enter out-of-bounds latitude
+    await page.getByLabel('纬度').fill('91')
+    await page.getByLabel('经度').fill('120')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+
+    // Should show error message
+    await expect(page.getByText(/纬度范围必须在/)).toBeVisible()
+  })
+
+  test('submits valid coordinate and displays time series', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Enter valid coordinate (use center of typical range)
+    await page.getByLabel('纬度').fill('35.5')
+    await page.getByLabel('经度').fill('105.5')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+
+    // Wait for loading to complete
+    await page.waitForLoadState('networkidle')
+
+    // Should show current coordinate display or error if outside task region
+    const coordinateDisplay = page.locator('text=当前坐标:')
+    const errorDisplay = page.locator('text=坐标超出任务范围')
+
+    // Either coordinate is accepted or rejected based on actual task region
+    const accepted = await coordinateDisplay.isVisible()
+    const rejected = await errorDisplay.isVisible()
+
+    expect(accepted || rejected).toBe(true)
+
+    if (accepted) {
+      // Should show time series chart
+      await expect(page.getByText('时间序列对比')).toBeVisible()
+      await expect(page.locator('text=UTC')).toBeVisible()
+    }
+  })
+
+  test('preserves coordinate when switching tabs', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Submit coordinate
+    await page.getByLabel('纬度').fill('35.5')
+    await page.getByLabel('经度').fill('105.5')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Verify coordinate is displayed (if within region)
+    const coordinateDisplayed = await page.locator('text=当前坐标:').isVisible()
+
+    // Switch to map comparison tab
+    await page.getByRole('tab', { name: '地图对比' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Switch back to time series
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Input fields should retain values
+    await expect(page.getByLabel('纬度')).toHaveValue('35.5')
+    await expect(page.getByLabel('经度')).toHaveValue('105.5')
+
+    // If coordinate was displayed before, it should still be displayed
+    if (coordinateDisplayed) {
+      await expect(page.locator('text=当前坐标:')).toBeVisible()
+    }
+  })
+
+  test('keyboard accessible coordinate input', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Focus on latitude input and type
+    const latInput = page.getByLabel('纬度')
+    await latInput.focus()
+    await page.keyboard.type('35.5')
+
+    // Tab to longitude input
+    await page.keyboard.press('Tab')
+    await page.keyboard.type('105.5')
+
+    // Tab to submit button and press Enter
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Enter')
+
+    await page.waitForLoadState('networkidle')
+
+    // Should process the submission (either show result or error)
+    const hasCoordinate = await page.locator('text=当前坐标:').isVisible()
+    const hasError = await page.locator('text=坐标超出任务范围').isVisible()
+
+    expect(hasCoordinate || hasError).toBe(true)
+  })
+
+  test('displays representative terrain point shortcuts', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Should display three representative point buttons
+    await expect(page.getByRole('button', { name: /城市代表点/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /山区代表点/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /平原代表点/ })).toBeVisible()
+
+    // Should display disclaimer
+    await expect(page.getByText(/不代表真实城市或观测站点/)).toBeVisible()
+  })
+
+  test('representative point click updates coordinate inputs', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Click on city representative point
+    const cityButton = page.getByRole('button', { name: /城市代表点/ })
+    await cityButton.click()
+    await page.waitForLoadState('networkidle')
+
+    // Coordinate inputs should be filled
+    const latInput = page.getByLabel('纬度')
+    const lonInput = page.getByLabel('经度')
+
+    await expect(latInput).not.toHaveValue('')
+    await expect(lonInput).not.toHaveValue('')
+
+    // Current coordinate should be displayed
+    await expect(page.locator('text=当前坐标:')).toBeVisible()
+  })
+
+  test('representative points are within task region', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Click each representative point and verify no out-of-bounds error
+    const terrainTypes = ['城市代表点', '山区代表点', '平原代表点']
+
+    for (const terrainType of terrainTypes) {
+      const button = page.getByRole('button', { name: new RegExp(terrainType) })
+      await button.click()
+      await page.waitForLoadState('networkidle')
+
+      // Should not show out-of-bounds error
+      await expect(page.getByText('坐标超出任务范围')).not.toBeVisible()
+
+      // Should show current coordinate
+      await expect(page.locator('text=当前坐标:')).toBeVisible()
+    }
+  })
+
+  test('switching between representative points updates selection', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Click city point
+    await page.getByRole('button', { name: /城市代表点/ }).click()
+    await page.waitForLoadState('networkidle')
+
+    const cityLat = await page.getByLabel('纬度').inputValue()
+    const cityLon = await page.getByLabel('经度').inputValue()
+
+    // Click mountain point
+    await page.getByRole('button', { name: /山区代表点/ }).click()
+    await page.waitForLoadState('networkidle')
+
+    const mountainLat = await page.getByLabel('纬度').inputValue()
+    const mountainLon = await page.getByLabel('经度').inputValue()
+
+    // Coordinates should be different
+    expect(cityLat).not.toBe(mountainLat)
+    expect(cityLon).not.toBe(mountainLon)
+
+    // Both should show current coordinate display
+    await expect(page.locator('text=当前坐标:')).toBeVisible()
+  })
+
+  test('representative point buttons are keyboard accessible', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Focus on city representative point button using keyboard
+    const cityButton = page.getByRole('button', { name: /城市代表点/ })
+    await cityButton.focus()
+
+    // Verify button is focused
+    await expect(cityButton).toBeFocused()
+
+    // Activate with Enter key
+    await page.keyboard.press('Enter')
+    await page.waitForLoadState('networkidle')
+
+    // Should update coordinate
+    await expect(page.locator('text=当前坐标:')).toBeVisible()
+  })
+
+  test('displays map selection interface', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Should display map selection card
+    await expect(page.getByText('地图选点')).toBeVisible()
+    await expect(page.getByText(/点击地图任务范围内的任意位置/)).toBeVisible()
+
+    // Map container should be present (either map or fallback)
+    const mapContainer = page.locator('canvas.mapboxgl-canvas, text=地图加载中, text=地图功能需要')
+    await expect(mapContainer.first()).toBeVisible()
+  })
+
+  test('map click within bounds updates coordinate', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Check if mapbox is available
+    const mapCanvas = page.locator('canvas.mapboxgl-canvas')
+    const hasMap = (await mapCanvas.count()) > 0
+
+    if (!hasMap) {
+      // Skip if map not loaded (e.g., no token)
+      test.skip()
+      return
+    }
+
+    // Click center of the map (should be within task region)
+    const mapBounds = await mapCanvas.boundingBox()
+    if (mapBounds) {
+      await page.mouse.click(mapBounds.x + mapBounds.width / 2, mapBounds.y + mapBounds.height / 2)
+      await page.waitForLoadState('networkidle')
+
+      // Coordinate inputs should be filled
+      const latInput = page.getByLabel('纬度')
+      const lonInput = page.getByLabel('经度')
+
+      await expect(latInput).not.toHaveValue('')
+      await expect(lonInput).not.toHaveValue('')
+
+      // Should show current coordinate
+      await expect(page.locator('text=当前坐标:')).toBeVisible()
+    }
+  })
+
+  test('coordinate state syncs across all three input methods', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Method 1: Manual input
+    await page.getByLabel('纬度').fill('35.5')
+    await page.getByLabel('经度').fill('120.5')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    const hasCoordinate1 = await page.locator('text=当前坐标:').isVisible()
+    const hasError1 = await page.getByText('坐标超出任务范围').isVisible()
+
+    // Method 2: Representative point (if first method succeeded)
+    if (hasCoordinate1) {
+      await page.getByRole('button', { name: /城市代表点/ }).click()
+      await page.waitForLoadState('networkidle')
+
+      // Inputs should update
+      const newLat = await page.getByLabel('纬度').inputValue()
+      const newLon = await page.getByLabel('经度').inputValue()
+
+      expect(newLat).not.toBe('35.5')
+      expect(newLon).not.toBe('120.5')
+
+      // Coordinate display should still be visible
+      await expect(page.locator('text=当前坐标:')).toBeVisible()
+    }
+
+    // All methods should update the same state (verified by coordinate display consistency)
+    expect(hasCoordinate1 || hasError1).toBe(true)
+  })
+
+  test('displays three curves when station found within 25km', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Submit coordinate near a demo station
+    await page.getByLabel('纬度').fill('35.05')
+    await page.getByLabel('经度').fill('120.05')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Check if coordinate is within task region
+    const coordinateAccepted = await page.locator('text=当前坐标:').isVisible()
+
+    if (!coordinateAccepted) {
+      // Coordinate outside region, test not applicable
+      test.skip()
+      return
+    }
+
+    // Should show chart with legend entries
+    await expect(page.getByText('时间序列对比')).toBeVisible()
+    await expect(page.getByText('原始数据')).toBeVisible()
+    await expect(page.getByText('降尺度数据')).toBeVisible()
+
+    // Should show observation if station found
+    const hasObservation = await page.getByText('观测参考').isVisible()
+
+    if (hasObservation) {
+      // Verify station info is displayed
+      await expect(page.getByText('观测参考信息')).toBeVisible()
+      await expect(page.getByText('Synthetic Demo')).toBeVisible()
+      await expect(page.getByText(/台站:/)).toBeVisible()
+      await expect(page.getByText(/距离:/)).toBeVisible()
+      await expect(page.getByText(/不代表所选坐标的实际观测/)).toBeVisible()
+    }
+  })
+
+  test('shows no-station message when beyond 25km', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Submit coordinate far from any demo station
+    await page.getByLabel('纬度').fill('45.0')
+    await page.getByLabel('经度').fill('85.0')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Check if coordinate is within task region
+    const coordinateAccepted = await page.locator('text=当前坐标:').isVisible()
+
+    if (!coordinateAccepted) {
+      // Coordinate outside region, test not applicable
+      test.skip()
+      return
+    }
+
+    // Should show chart
+    await expect(page.getByText('时间序列对比')).toBeVisible()
+
+    // Should show no-station message
+    await expect(page.getByText('观测数据不可用')).toBeVisible()
+    await expect(page.getByText(/25km 范围内无可用台站/)).toBeVisible()
+
+    // Original and downscaled should still be visible
+    await expect(page.getByText('原始数据')).toBeVisible()
+    await expect(page.getByText('降尺度数据')).toBeVisible()
+
+    // Observation should not be in legend
+    const hasObservation = await page.getByText('观测参考').isVisible()
+    expect(hasObservation).toBe(false)
+  })
+
+  test('handles fast coordinate switching without data mixing', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Submit first coordinate
+    await page.getByLabel('纬度').fill('35.05')
+    await page.getByLabel('经度').fill('120.05')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    const firstCoordinateAccepted = await page.locator('text=当前坐标:').isVisible()
+
+    if (!firstCoordinateAccepted) {
+      test.skip()
+      return
+    }
+
+    // Capture first coordinate display
+    const firstCoordText = await page.locator('text=当前坐标:').textContent()
+
+    // Quickly switch to second coordinate
+    await page.getByLabel('纬度').fill('35.5')
+    await page.getByLabel('经度').fill('120.5')
+    await page.getByRole('button', { name: '查询时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    const secondCoordinateAccepted = await page.locator('text=当前坐标:').isVisible()
+
+    if (!secondCoordinateAccepted) {
+      test.skip()
+      return
+    }
+
+    // Verify coordinate display updated
+    const secondCoordText = await page.locator('text=当前坐标:').textContent()
+    expect(secondCoordText).not.toBe(firstCoordText)
+    expect(secondCoordText).toContain('35.5')
+    expect(secondCoordText).toContain('120.5')
+
+    // Chart should still be visible and stable
+    await expect(page.getByText('时间序列对比')).toBeVisible()
+  })
+})

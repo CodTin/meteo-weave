@@ -1,4 +1,4 @@
-import { expect, test } from './browser-guard'
+import { expect, test } from '../browser-guard'
 
 test.describe('Event Assessment', () => {
   test('displays event metrics for completed task', async ({ page }) => {
