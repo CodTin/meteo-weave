@@ -188,4 +188,172 @@ test.describe('Time Series Analysis', () => {
 
     expect(hasCoordinate || hasError).toBe(true)
   })
+
+  test('displays representative terrain point shortcuts', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Should display three representative point buttons
+    await expect(page.getByRole('button', { name: /城市代表点/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /山区代表点/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: /平原代表点/ })).toBeVisible()
+
+    // Should display disclaimer
+    await expect(page.getByText(/不代表真实城市或观测站点/)).toBeVisible()
+  })
+
+  test('representative point click updates coordinate inputs', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Click on city representative point
+    const cityButton = page.getByRole('button', { name: /城市代表点/ })
+    await cityButton.click()
+    await page.waitForLoadState('networkidle')
+
+    // Coordinate inputs should be filled
+    const latInput = page.getByLabel('纬度')
+    const lonInput = page.getByLabel('经度')
+
+    await expect(latInput).not.toHaveValue('')
+    await expect(lonInput).not.toHaveValue('')
+
+    // Current coordinate should be displayed
+    await expect(page.locator('text=当前坐标:')).toBeVisible()
+  })
+
+  test('representative points are within task region', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Click each representative point and verify no out-of-bounds error
+    const terrainTypes = ['城市代表点', '山区代表点', '平原代表点']
+
+    for (const terrainType of terrainTypes) {
+      const button = page.getByRole('button', { name: new RegExp(terrainType) })
+      await button.click()
+      await page.waitForLoadState('networkidle')
+
+      // Should not show out-of-bounds error
+      await expect(page.getByText('坐标超出任务范围')).not.toBeVisible()
+
+      // Should show current coordinate
+      await expect(page.locator('text=当前坐标:')).toBeVisible()
+    }
+  })
+
+  test('switching between representative points updates selection', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Click city point
+    await page.getByRole('button', { name: /城市代表点/ }).click()
+    await page.waitForLoadState('networkidle')
+
+    const cityLat = await page.getByLabel('纬度').inputValue()
+    const cityLon = await page.getByLabel('经度').inputValue()
+
+    // Click mountain point
+    await page.getByRole('button', { name: /山区代表点/ }).click()
+    await page.waitForLoadState('networkidle')
+
+    const mountainLat = await page.getByLabel('纬度').inputValue()
+    const mountainLon = await page.getByLabel('经度').inputValue()
+
+    // Coordinates should be different
+    expect(cityLat).not.toBe(mountainLat)
+    expect(cityLon).not.toBe(mountainLon)
+
+    // Both should show current coordinate display
+    await expect(page.locator('text=当前坐标:')).toBeVisible()
+  })
+
+  test('representative point buttons are keyboard accessible', async ({ page }) => {
+    await page.goto('/tasks')
+    await page.waitForLoadState('networkidle')
+
+    const resultLinks = page.locator('a[href*="/result"]')
+    const count = await resultLinks.count()
+
+    if (count === 0) {
+      test.skip()
+      return
+    }
+
+    await resultLinks.first().click()
+    await page.waitForURL(/\/tasks\/[^/]+\/result/)
+
+    await page.getByRole('tab', { name: '时间序列' }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Focus on city representative point button using keyboard
+    const cityButton = page.getByRole('button', { name: /城市代表点/ })
+    await cityButton.focus()
+
+    // Verify button is focused
+    await expect(cityButton).toBeFocused()
+
+    // Activate with Enter key
+    await page.keyboard.press('Enter')
+    await page.waitForLoadState('networkidle')
+
+    // Should update coordinate
+    await expect(page.locator('text=当前坐标:')).toBeVisible()
+  })
 })

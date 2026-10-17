@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,8 +16,9 @@ import {
 } from 'recharts'
 import { useTimeSeriesData } from '../hooks/use-time-series-data'
 import { validateCoordinate, isWithinRegion, type Coordinate } from '../service/time-series-data'
+import { generateRepresentativePoints, type RepresentativePoint } from '../service/representative-points'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
-import { Loader2 } from 'lucide-react'
+import { Loader2, MapPin, Mountain, Home, Wheat } from 'lucide-react'
 
 interface TimeSeriesPanelProps {
   task: DownscalingTask
@@ -28,6 +29,13 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
   const [longitudeInput, setLongitudeInput] = useState('')
   const [selectedCoordinate, setSelectedCoordinate] = useState<Coordinate | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [representativePoints, setRepresentativePoints] = useState<RepresentativePoint[]>([])
+
+  // Generate representative points when task changes
+  useEffect(() => {
+    const points = generateRepresentativePoints(task.configuration.region, task.id)
+    setRepresentativePoints(points)
+  }, [task.id, task.configuration.region])
 
   const { data, isLoading, error } = useTimeSeriesData({
     task,
@@ -59,6 +67,13 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
     setSelectedCoordinate(validation.coordinate!)
   }
 
+  const handleRepresentativePointClick = (point: RepresentativePoint) => {
+    setValidationError(null)
+    setLatitudeInput(point.coordinate.latitude.toString())
+    setLongitudeInput(point.coordinate.longitude.toString())
+    setSelectedCoordinate(point.coordinate)
+  }
+
   // Prepare chart data
   const chartData = data
     ? data.original.map((originalPoint, index) => ({
@@ -68,12 +83,25 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
       }))
     : []
 
+  const getTerrainIcon = (terrainType: string) => {
+    switch (terrainType) {
+      case 'city':
+        return <Home className="size-4" />
+      case 'mountain':
+        return <Mountain className="size-4" />
+      case 'plain':
+        return <Wheat className="size-4" />
+      default:
+        return <MapPin className="size-4" />
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>坐标选点</CardTitle>
-          <CardDescription>输入任务范围内的经纬度坐标，查看该点位的时间序列对比</CardDescription>
+          <CardDescription>输入经纬度、选择代表点位，或在地图上点击选取分析位置</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -110,7 +138,7 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
               </Alert>
             )}
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <Button type="submit">查询时间序列</Button>
               {selectedCoordinate && (
                 <div className="text-sm text-muted-foreground">
@@ -120,6 +148,32 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
               )}
             </div>
           </form>
+
+          {/* Representative terrain points */}
+          <div className="mt-6 space-y-3">
+            <Label className="text-sm font-medium">典型地形快捷点位</Label>
+            <div className="flex flex-wrap gap-2">
+              {representativePoints.map((point) => (
+                <Button
+                  key={point.terrainType}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRepresentativePointClick(point)}
+                  className="flex items-center gap-2"
+                >
+                  {getTerrainIcon(point.terrainType)}
+                  <span>{point.label}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({point.coordinate.latitude.toFixed(2)}°N, {point.coordinate.longitude.toFixed(2)}°E)
+                  </span>
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              快捷点位基于当前任务区域生成，不代表真实城市或观测站点
+            </p>
+          </div>
 
           <div className="mt-4 text-sm text-muted-foreground">
             <p>
