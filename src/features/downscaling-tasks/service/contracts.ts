@@ -83,7 +83,7 @@ export type ObservationSupport =
   | { mode: 'stations'; station: ObservationStation; distanceKm: number }
   | { mode: 'interpolated'; stations: Array<{ station: ObservationStation; weight: number }> }
 
-export type EnsembleSelection = { kind: 'members' | 'mean'; memberIds?: string[] }
+export type EnsembleSelection = { kind: 'members' | 'mean' | 'stddev'; memberIds?: string[] }
 export type ResultQuery = {
   /** Only probabilistic tasks have members. Source/reference layers remain shared. */
   ensemble?: EnsembleSelection
@@ -172,7 +172,7 @@ export type EnsembleUnavailable = ResultPoint & {
 export type EnsembleSample = ResultValue &
   Partial<WindValue> & { daily?: DailyTemperature; accumulation?: Accumulation }
 export type EnsembleMetadata = {
-  kind: 'members' | 'mean'
+  kind: 'members' | 'mean' | 'stddev'
   missingPolicy: 'exclude-unavailable-per-location-time'
   /** Exact member samples used by the mean, not independently generated summary data. */
   samples?: EnsembleSample[]

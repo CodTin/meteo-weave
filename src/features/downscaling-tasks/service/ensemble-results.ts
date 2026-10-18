@@ -116,7 +116,10 @@ const average = (values: number[]) =>
 const populationStddev = (values: number[], mean: number) => {
   if (values.length === 0) return 0
   const variance =
-    values.reduce((sum, value) => sum + Math.pow(Math.round(value * 10_000) - Math.round(mean * 10_000), 2), 0) /
+    values.reduce(
+      (sum, value) => sum + Math.pow(Math.round(value * 10_000) - Math.round(mean * 10_000), 2),
+      0,
+    ) /
     (values.length * 10_000 * 10_000)
   return Math.round(Math.sqrt(variance) * 10_000) / 10_000
 }
