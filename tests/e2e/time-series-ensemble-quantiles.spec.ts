@@ -39,9 +39,7 @@ test.describe('Time Series Ensemble Quantile Bands', () => {
 
       if (coordinateAccepted) {
         // Check for probabilistic indicators
-        const hasProbabilisticIndicator = await page
-          .locator('text=/概率式集合.*K=/i')
-          .isVisible()
+        const hasProbabilisticIndicator = await page.locator('text=/概率式集合.*K=/i').isVisible()
 
         if (hasProbabilisticIndicator) {
           foundProbabilisticTask = true
@@ -158,9 +156,7 @@ test.describe('Time Series Ensemble Quantile Bands', () => {
 
       if (coordinateAccepted) {
         // Check if this is deterministic (no K indicator)
-        const hasProbabilisticIndicator = await page
-          .locator('text=/概率式集合.*K=/i')
-          .isVisible()
+        const hasProbabilisticIndicator = await page.locator('text=/概率式集合.*K=/i').isVisible()
 
         if (!hasProbabilisticIndicator) {
           foundDeterministicTask = true

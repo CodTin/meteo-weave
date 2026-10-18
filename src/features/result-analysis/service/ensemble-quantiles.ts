@@ -42,9 +42,7 @@ export function calculateEnsembleQuantiles(
   memberValues: Array<number | null>,
 ): EnsembleQuantiles | null {
   // Filter out null and non-finite values
-  const validValues = memberValues.filter(
-    (v): v is number => v !== null && Number.isFinite(v),
-  )
+  const validValues = memberValues.filter((v): v is number => v !== null && Number.isFinite(v))
 
   if (validValues.length === 0) {
     return null

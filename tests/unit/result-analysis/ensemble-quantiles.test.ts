@@ -258,9 +258,7 @@ describe('Ensemble Quantiles', () => {
     })
 
     it('handles empty times array', () => {
-      const samples = [
-        { time: '2024-01-01T00:00:00Z', memberId: 'member-01', value: 10 },
-      ]
+      const samples = [{ time: '2024-01-01T00:00:00Z', memberId: 'member-01', value: 10 }]
       const allMemberIds = ['member-01']
 
       const result = groupEnsembleSamplesByTime(samples, [], allMemberIds)

@@ -266,12 +266,7 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
               {data.coordinate.latitude.toFixed(4)}°N, {data.coordinate.longitude.toFixed(4)}°E ·{' '}
               {data.timezone} · {data.unit} · {getSemanticsLabel(data.semantics)} ·{' '}
               {data.granularity === 'daily' ? '按日' : '按小时'}
-              {data.ensemble && (
-                <>
-                  {' '}
-                  · 概率式集合 (K={data.ensemble.totalMembers})
-                </>
-              )}
+              {data.ensemble && <> · 概率式集合 (K={data.ensemble.totalMembers})</>}
             </CardDescription>
           </CardHeader>
           <CardContent>
