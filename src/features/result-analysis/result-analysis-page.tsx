@@ -193,6 +193,8 @@ export function ResultAnalysisPage() {
             variable={variable}
             timeRange={task.configuration.timeRange}
             region={task.configuration.region}
+            isProbabilistic={task.configuration.resolvedMethod === 'probabilistic'}
+            currentTime={timeSliceState.currentTime}
           />
         </TabPanel>
 

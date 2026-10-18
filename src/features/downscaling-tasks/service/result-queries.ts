@@ -137,7 +137,8 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
   if (selection && 'ok' in selection) return selection
   const memberFactor =
     requested.layer === 'downscaled' && selection
-      ? selection.memberIds.length + (selection.kind === 'mean' || selection.kind === 'stddev' ? 1 : 0)
+      ? selection.memberIds.length +
+        (selection.kind === 'mean' || selection.kind === 'stddev' ? 1 : 0)
       : 1
   const { region, timeRange } = task.configuration
   const daily = requested.temporalResolution === 'daily'

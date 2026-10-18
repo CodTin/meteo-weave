@@ -39,9 +39,7 @@ export function EnsembleSwitcher({
         </SelectContent>
       </Select>
       {effectiveK !== undefined && (view === 'mean' || view === 'stddev') && (
-        <span className="text-sm text-muted-foreground">
-          (K = {effectiveK} valid members)
-        </span>
+        <span className="text-sm text-muted-foreground">(K = {effectiveK} valid members)</span>
       )}
     </div>
   )
