@@ -181,6 +181,37 @@ function computeValues<T extends ResultValue, R extends ResultValue>(
   return result.values
 }
 
+function buildEnsembleMetadata(
+  selection: Selection,
+  result: { failures: EnsembleUnavailable[]; values: EnsembleSample[] },
+): EnsembleMetadata {
+  const base = {
+    ...selection,
+    unavailable: result.failures,
+    missingPolicy: 'exclude-unavailable-per-location-time' as const,
+  }
+
+  if (selection.kind === 'mean') {
+    return {
+      ...base,
+      samples: result.values,
+      meanDefinition:
+        'Arithmetic available-member scalars and diagnostics: daily.minimum is the mean of member daily minima, not the minimum of the mean field. Wind averages U10/V10 before deriving speed/direction; meanMemberSpeed is the arithmetic mean of member speeds.',
+    }
+  }
+
+  if (selection.kind === 'stddev') {
+    return {
+      ...base,
+      samples: result.values,
+      meanDefinition:
+        'Population standard deviation of available members: sqrt(sum((x - mean)^2) / K). This measures ensemble spread, not validated prediction uncertainty.',
+    }
+  }
+
+  return base
+}
+
 export function queryEnsemble(
   task: DownscalingTask,
   query: Query,
@@ -194,36 +225,6 @@ export function queryEnsemble(
       description:
         'Versioned Synthetic Demo members reconstructed from pinned temperature-v1/variables-v2 fields and stable member seeds. Not a trained model or actual provider run. Original/reference data are shared, not member-randomized.',
     },
-  }
-  function buildEnsembleMetadata(
-    selection: Selection,
-    result: { failures: EnsembleUnavailable[]; values: EnsembleSample[] },
-  ): EnsembleMetadata {
-    const base = {
-      ...selection,
-      unavailable: result.failures,
-      missingPolicy: 'exclude-unavailable-per-location-time' as const,
-    }
-
-    if (selection.kind === 'mean') {
-      return {
-        ...base,
-        samples: result.values,
-        meanDefinition:
-          'Arithmetic available-member scalars and diagnostics: daily.minimum is the mean of member daily minima, not the minimum of the mean field. Wind averages U10/V10 before deriving speed/direction; meanMemberSpeed is the arithmetic mean of member speeds.',
-      }
-    }
-
-    if (selection.kind === 'stddev') {
-      return {
-        ...base,
-        samples: result.values,
-        meanDefinition:
-          'Population standard deviation of available members: sqrt(sum((x - mean)^2) / K). This measures ensemble spread, not validated prediction uncertainty.',
-      }
-    }
-
-    return base
   }
   if (task.configuration.variable === 'wind') {
     const result = collect(task, query, selection, (member, point, time) =>
