@@ -87,39 +87,35 @@ function generateMockGridData(): { original: GridData; downscaled: GridData } {
   const size = 16
   const cellSizeKm = 10
 
-  // Create a simple spatial pattern
-  const originalField = Array(size)
-    .fill(null)
-    .map((_, i) =>
-      Array(size)
-        .fill(null)
-        .map((_, j) => {
-          // Coarse-scale pattern (large wavelength)
-          const x = i * cellSizeKm
-          const y = j * cellSizeKm
-          return (
-            50 + 30 * Math.sin((2 * Math.PI * x) / 100) + 20 * Math.cos((2 * Math.PI * y) / 120)
-          )
-        }),
-    )
+  // Helper to create a 2D field with a given pattern function
+  const createField = (pattern: (x: number, y: number) => number) =>
+    Array(size)
+      .fill(null)
+      .map((_, i) =>
+        Array(size)
+          .fill(null)
+          .map((_, j) => {
+            const x = i * cellSizeKm
+            const y = j * cellSizeKm
+            return pattern(x, y)
+          }),
+      )
 
-  const downscaledField = Array(size)
-    .fill(null)
-    .map((_, i) =>
-      Array(size)
-        .fill(null)
-        .map((_, j) => {
-          // Finer-scale pattern (smaller wavelength added)
-          const x = i * cellSizeKm
-          const y = j * cellSizeKm
-          return (
-            50 +
-            30 * Math.sin((2 * Math.PI * x) / 100) +
-            20 * Math.cos((2 * Math.PI * y) / 120) +
-            10 * Math.sin((2 * Math.PI * x) / 40) // Additional fine-scale detail
-          )
-        }),
-    )
+  // Create a simple spatial pattern
+  const originalField = createField(
+    (x, y) =>
+      // Coarse-scale pattern (large wavelength)
+      50 + 30 * Math.sin((2 * Math.PI * x) / 100) + 20 * Math.cos((2 * Math.PI * y) / 120),
+  )
+
+  const downscaledField = createField(
+    (x, y) =>
+      // Finer-scale pattern (smaller wavelength added)
+      50 +
+      30 * Math.sin((2 * Math.PI * x) / 100) +
+      20 * Math.cos((2 * Math.PI * y) / 120) +
+      10 * Math.sin((2 * Math.PI * x) / 40), // Additional fine-scale detail
+  )
 
   const mask = Array(size)
     .fill(null)

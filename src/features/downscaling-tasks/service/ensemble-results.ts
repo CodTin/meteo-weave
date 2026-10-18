@@ -116,7 +116,10 @@ const average = (values: number[]) =>
 const populationStddev = (values: number[], mean: number) => {
   if (values.length === 0) return 0
   const variance =
-    values.reduce((sum, value) => sum + Math.pow(Math.round(value * 10_000) - Math.round(mean * 10_000), 2), 0) /
+    values.reduce(
+      (sum, value) => sum + Math.pow(Math.round(value * 10_000) - Math.round(mean * 10_000), 2),
+      0,
+    ) /
     (values.length * 10_000 * 10_000)
   return Math.round(Math.sqrt(variance) * 10_000) / 10_000
 }
@@ -151,33 +154,31 @@ function aggregateEnsemble<T extends ResultValue, R extends ResultValue>(
   return rows
 }
 
-function means<T extends ResultValue, R extends ResultValue>(
-  groups: Array<{ point: ResultPoint; time: string; values: T[] }>,
+function computeValues<T extends ResultValue, R extends ResultValue>(
+  result: { groups: Array<{ point: ResultPoint; time: string; values: T[] }>; values: T[] },
   selection: Selection,
-  project: (values: T[], scalar: MeanValue) => R,
-): R[] | Unavailable {
-  return aggregateEnsemble(
-    groups,
-    selection,
-    (values) => average(values.map((v) => v.value)),
-    project,
-  )
-}
-
-function stddevs<T extends ResultValue, R extends ResultValue>(
-  groups: Array<{ point: ResultPoint; time: string; values: T[] }>,
-  selection: Selection,
-  project: (values: T[], scalar: MeanValue) => R,
-): R[] | Unavailable {
-  return aggregateEnsemble(
-    groups,
-    selection,
-    (values) => {
-      const vals = values.map((v) => v.value)
-      return populationStddev(vals, average(vals))
-    },
-    project,
-  )
+  meanProjection: (values: T[], scalar: MeanValue) => R,
+): T[] | R[] | Unavailable {
+  if (selection.kind === 'mean') {
+    return aggregateEnsemble(
+      result.groups,
+      selection,
+      (values) => average(values.map((v) => v.value)),
+      meanProjection,
+    )
+  }
+  if (selection.kind === 'stddev') {
+    return aggregateEnsemble(
+      result.groups,
+      selection,
+      (values) => {
+        const vals = values.map((v) => v.value)
+        return populationStddev(vals, average(vals))
+      },
+      meanProjection,
+    )
+  }
+  return result.values
 }
 
 export function queryEnsemble(
@@ -194,53 +195,49 @@ export function queryEnsemble(
         'Versioned Synthetic Demo members reconstructed from pinned temperature-v1/variables-v2 fields and stable member seeds. Not a trained model or actual provider run. Original/reference data are shared, not member-randomized.',
     },
   }
-  const ensemble = (result: {
-    failures: EnsembleUnavailable[]
-    values: EnsembleSample[]
-  }): EnsembleMetadata => ({
-    ...selection,
-    unavailable: result.failures,
-    missingPolicy: 'exclude-unavailable-per-location-time',
-    ...(selection.kind === 'mean'
-      ? {
-          samples: result.values,
-          meanDefinition:
-            'Arithmetic available-member scalars and diagnostics: daily.minimum is the mean of member daily minima, not the minimum of the mean field. Wind averages U10/V10 before deriving speed/direction; meanMemberSpeed is the arithmetic mean of member speeds.',
-        }
-      : selection.kind === 'stddev'
-        ? {
-            samples: result.values,
-            meanDefinition:
-              'Population standard deviation of available members: sqrt(sum((x - mean)^2) / K). This measures ensemble spread, not validated prediction uncertainty.',
-          }
-        : {}),
-  })
+  function buildEnsembleMetadata(
+    selection: Selection,
+    result: { failures: EnsembleUnavailable[]; values: EnsembleSample[] },
+  ): EnsembleMetadata {
+    const base = {
+      ...selection,
+      unavailable: result.failures,
+      missingPolicy: 'exclude-unavailable-per-location-time' as const,
+    }
+
+    if (selection.kind === 'mean') {
+      return {
+        ...base,
+        samples: result.values,
+        meanDefinition:
+          'Arithmetic available-member scalars and diagnostics: daily.minimum is the mean of member daily minima, not the minimum of the mean field. Wind averages U10/V10 before deriving speed/direction; meanMemberSpeed is the arithmetic mean of member speeds.',
+      }
+    }
+
+    if (selection.kind === 'stddev') {
+      return {
+        ...base,
+        samples: result.values,
+        meanDefinition:
+          'Population standard deviation of available members: sqrt(sum((x - mean)^2) / K). This measures ensemble spread, not validated prediction uncertainty.',
+      }
+    }
+
+    return base
+  }
   if (task.configuration.variable === 'wind') {
     const result = collect(task, query, selection, (member, point, time) =>
       windAt(member, 'downscaled', point, time),
     )
-    const values =
-      selection.kind === 'mean'
-        ? means(result.groups, selection, (members, scalar) => {
-            const u10 = average(members.map((value) => value.u10))
-            const v10 = average(members.map((value) => value.v10))
-            return {
-              ...scalar,
-              ...windDiagnostics(u10, v10),
-              ensembleMean: { ...scalar.ensembleMean, meanMemberSpeed: scalar.value },
-            }
-          })
-        : selection.kind === 'stddev'
-          ? stddevs(result.groups, selection, (members, scalar) => {
-              const u10 = average(members.map((value) => value.u10))
-              const v10 = average(members.map((value) => value.v10))
-              return {
-                ...scalar,
-                ...windDiagnostics(u10, v10),
-                ensembleMean: { ...scalar.ensembleMean, meanMemberSpeed: average(members.map((value) => value.speed)) },
-              }
-            })
-          : result.values
+    const values = computeValues(result, selection, (members, scalar) => {
+      const u10 = average(members.map((value) => value.u10))
+      const v10 = average(members.map((value) => value.v10))
+      return {
+        ...scalar,
+        ...windDiagnostics(u10, v10),
+        ensembleMean: { ...scalar.ensembleMean, meanMemberSpeed: scalar.value },
+      }
+    })
     if (!Array.isArray(values)) return values
     return {
       ...modelMetadata,
@@ -249,7 +246,7 @@ export function queryEnsemble(
       unit: 'm/s',
       directionUnit: 'degrees',
       directionConvention: 'meteorological-from',
-      ensemble: ensemble(result),
+      ensemble: buildEnsembleMetadata(selection, result),
       values,
     }
   }
@@ -263,24 +260,13 @@ export function queryEnsemble(
     const result = collect(task, query, selection, (member, point, time) =>
       precipitationAt(member, 'downscaled', point, time, duration),
     )
-    const values =
-      selection.kind === 'mean'
-        ? means(result.groups, selection, (members, scalar) => ({
-            ...scalar,
-            accumulation: {
-              ...members[0]!.accumulation,
-              complete: members.every((value) => value.accumulation.complete),
-            },
-          }))
-        : selection.kind === 'stddev'
-          ? stddevs(result.groups, selection, (members, scalar) => ({
-              ...scalar,
-              accumulation: {
-                ...members[0]!.accumulation,
-                complete: members.every((value) => value.accumulation.complete),
-              },
-            }))
-          : result.values
+    const values = computeValues(result, selection, (members, scalar) => ({
+      ...scalar,
+      accumulation: {
+        ...members[0]!.accumulation,
+        complete: members.every((value) => value.accumulation.complete),
+      },
+    }))
     if (!Array.isArray(values)) return values
     return {
       ...modelMetadata,
@@ -288,7 +274,7 @@ export function queryEnsemble(
       quantity: 'TP',
       unit: 'mm',
       temporalStatistic: 'accumulation',
-      ensemble: ensemble(result),
+      ensemble: buildEnsembleMetadata(selection, result),
       values,
     }
   }
@@ -296,28 +282,15 @@ export function queryEnsemble(
     const result = collect(task, query, selection, (member, point, time) =>
       temperatureDay(member, 'downscaled', point, time),
     )
-    const values =
-      selection.kind === 'mean'
-        ? means(result.groups, selection, (members, scalar) => ({
-            ...scalar,
-            daily: {
-              ...members[0]!.daily,
-              mean: scalar.value,
-              minimum: average(members.map((value) => value.daily.minimum)),
-              completeDay: members.every((value) => value.daily.completeDay),
-            },
-          }))
-        : selection.kind === 'stddev'
-          ? stddevs(result.groups, selection, (members, scalar) => ({
-              ...scalar,
-              daily: {
-                ...members[0]!.daily,
-                mean: average(members.map((value) => value.daily.mean)),
-                minimum: average(members.map((value) => value.daily.minimum)),
-                completeDay: members.every((value) => value.daily.completeDay),
-              },
-            }))
-          : result.values
+    const values = computeValues(result, selection, (members, scalar) => ({
+      ...scalar,
+      daily: {
+        ...members[0]!.daily,
+        mean: scalar.value,
+        minimum: average(members.map((value) => value.daily.minimum)),
+        completeDay: members.every((value) => value.daily.completeDay),
+      },
+    }))
     if (!Array.isArray(values)) return values
     return {
       ...modelMetadata,
@@ -325,7 +298,7 @@ export function queryEnsemble(
       quantity: 'T2M',
       unit: '°C',
       temporalStatistic: 'daily-mean',
-      ensemble: ensemble(result),
+      ensemble: buildEnsembleMetadata(selection, result),
       values,
     }
   }
@@ -333,12 +306,7 @@ export function queryEnsemble(
     const result = collect(task, query, selection, (member, point, time) => ({
       value: temperatureAt(member, 'downscaled', point.longitude, point.latitude, time),
     }))
-    const values =
-      selection.kind === 'mean'
-        ? means(result.groups, selection, (_members, scalar) => scalar)
-        : selection.kind === 'stddev'
-          ? stddevs(result.groups, selection, (_members, scalar) => scalar)
-          : result.values
+    const values = computeValues(result, selection, (_members, scalar) => scalar)
     if (!Array.isArray(values)) return values
     return {
       ...modelMetadata,
@@ -346,26 +314,21 @@ export function queryEnsemble(
       quantity: 'T2M',
       unit: '°C',
       temporalStatistic: 'instantaneous',
-      ensemble: ensemble(result),
+      ensemble: buildEnsembleMetadata(selection, result),
       values,
     }
   }
   const result = collect(task, query, selection, (member, point, time) => ({
     value: pressureAt(member, 'downscaled', point, time),
   }))
-  const values =
-    selection.kind === 'mean'
-      ? means(result.groups, selection, (_members, scalar) => scalar)
-      : selection.kind === 'stddev'
-        ? stddevs(result.groups, selection, (_members, scalar) => scalar)
-        : result.values
+  const values = computeValues(result, selection, (_members, scalar) => scalar)
   if (!Array.isArray(values)) return values
   return {
     ...modelMetadata,
     variable: 'pressure',
     quantity: 'MSL',
     unit: 'hPa',
-    ensemble: ensemble(result),
+    ensemble: buildEnsembleMetadata(selection, result),
     values,
   }
 }
