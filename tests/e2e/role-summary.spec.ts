@@ -1,4 +1,4 @@
-import { test, expect } from '../browser-guard'
+import { test, expect } from './browser-guard'
 import { loginAs, createDemoProbabilisticTask } from './helpers/demo-auth'
 
 test.describe('Role-based result summaries', () => {

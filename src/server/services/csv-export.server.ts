@@ -36,6 +36,7 @@ type CsvExportResult = CsvExportSuccess | CsvExportError
  * prefix with a single quote to neutralize it.
  */
 export function escapeCsvText(text: string): string {
+  // eslint-disable-next-line no-control-regex -- intentional control character detection for CSV safety
   const dangerous = /^[=+\-@]|[\x00-\x1F]/
   if (dangerous.test(text)) {
     return `'${text}`
@@ -70,10 +71,12 @@ export function calculateBboxWidthKm(bbox: CsvExportRequest['bbox']): number {
   const R = 6371 // Earth radius in km
 
   // Calculate distance along north edge
-  const northDistance = R * Math.abs(east - west) * (Math.PI / 180) * Math.cos(north * Math.PI / 180)
+  const northDistance =
+    R * Math.abs(east - west) * (Math.PI / 180) * Math.cos((north * Math.PI) / 180)
 
   // Calculate distance along south edge
-  const southDistance = R * Math.abs(east - west) * (Math.PI / 180) * Math.cos(south * Math.PI / 180)
+  const southDistance =
+    R * Math.abs(east - west) * (Math.PI / 180) * Math.cos((south * Math.PI) / 180)
 
   return Math.max(northDistance, southDistance)
 }
@@ -157,7 +160,9 @@ export function generateCsvContent(request: CsvExportRequest): string {
 
   // Add a minimal row with the taskId to demonstrate formula injection protection
   const taskIdField = encodeCsvField(request.taskId)
-  rows.push(`${taskIdField},downscaled,2024-01-01T00:00:00Z,120.0,30.0,temperature,15.5,°C,Synthetic Demo`)
+  rows.push(
+    `${taskIdField},downscaled,2024-01-01T00:00:00Z,120.0,30.0,temperature,15.5,°C,Synthetic Demo`,
+  )
 
   return rows.join('\n')
 }

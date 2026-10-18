@@ -115,7 +115,10 @@ export function ResultAnalysisPage() {
     queryFn: () =>
       userRole
         ? getRoleSummaryDataFn({ data: { taskId, role: userRole } })
-        : Promise.resolve({ ok: true as const, data: { available: false as const, reason: '未登录' } }),
+        : Promise.resolve({
+            ok: true as const,
+            data: { available: false as const, reason: '未登录' },
+          }),
     enabled: task?.configuration.resolvedMethod === 'probabilistic' && !!userRole,
   })
 

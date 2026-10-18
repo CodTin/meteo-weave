@@ -62,9 +62,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
     <Card>
       <CardHeader>
         <CardTitle>数据导出</CardTitle>
-        <CardDescription>
-          选择坐标范围、时间段和数据类型，导出 CSV 格式的降尺度结果
-        </CardDescription>
+        <CardDescription>选择坐标范围、时间段和数据类型，导出 CSV 格式的降尺度结果</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Coordinate Selection */}
@@ -132,9 +130,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
                 id="start-time"
                 type="datetime-local"
                 value={timeRange.start.slice(0, 16)}
-                onChange={(e) =>
-                  setTimeRange({ ...timeRange, start: e.target.value + ':00Z' })
-                }
+                onChange={(e) => setTimeRange({ ...timeRange, start: e.target.value + ':00Z' })}
               />
             </div>
             <div className="space-y-2">

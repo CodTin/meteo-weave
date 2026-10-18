@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './browser-guard'
 
 test.describe('Data Export', () => {
   test('displays export panel for completed temperature task', async ({ page }) => {
