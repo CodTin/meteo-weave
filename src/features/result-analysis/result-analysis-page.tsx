@@ -11,6 +11,7 @@ import { AccuracyPanel } from './components/accuracy-panel'
 import { TimeSeriesPanel } from './components/time-series-panel'
 import { ElevationGroupingPanel } from './components/elevation-grouping-panel'
 import { RoleSummaryPanel } from './components/role-summary-panel'
+import { DataExportPanel } from './components/data-export-panel'
 import { useTimeSlice } from './hooks/use-time-slice'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
 import { useUserRole } from './hooks/use-user-role'
@@ -269,17 +270,7 @@ export function ResultAnalysisPage() {
         </TabPanel>
 
         <TabPanel value="export">
-          <Card>
-            <CardHeader>
-              <CardTitle>数据导出</CardTitle>
-              <CardDescription>待交付</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                数据导出功能将在后续版本提供，支持 CSV、GeoJSON、NetCDF 格式。
-              </p>
-            </CardContent>
-          </Card>
+          <DataExportPanel task={task} />
         </TabPanel>
       </AnalysisTabs>
     </div>
