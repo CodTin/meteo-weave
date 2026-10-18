@@ -10,18 +10,26 @@ import { TimeSliceSelector } from './components/time-slice-selector'
 import { AccuracyPanel } from './components/accuracy-panel'
 import { TimeSeriesPanel } from './components/time-series-panel'
 import { ElevationGroupingPanel } from './components/elevation-grouping-panel'
+import { RoleSummaryPanel } from './components/role-summary-panel'
 import { useTimeSlice } from './hooks/use-time-slice'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
+import { useUserRole } from './hooks/use-user-role'
 import { createServerFn } from '@tanstack/react-start'
 import { getElevationGroupingData } from '@/server/services/elevation-grouping.server'
+import { getRoleSummaryData } from '@/server/services/role-summary.server'
 import { useQuery } from '@tanstack/react-query'
 import { TaskLoadingState } from '@/features/downscaling-tasks/components/task-loading-state'
 import { TaskErrorState } from '@/features/downscaling-tasks/components/task-error-state'
 import { getVariableLabel, type Variable } from './service/color-scales'
+import type { UserRole } from './types/role-emphasis'
 
 const getElevationGroupingDataFn = createServerFn({ method: 'GET' })
   .validator((data: string) => data)
   .handler(({ data }) => getElevationGroupingData(data))
+
+const getRoleSummaryDataFn = createServerFn({ method: 'GET' })
+  .validator((data: { taskId: string; role: UserRole }) => data)
+  .handler(({ data }) => getRoleSummaryData(data.taskId, data.role))
 
 export function ResultAnalysisPage() {
   const { taskId } = useParams({ from: '/_workspace/tasks/$taskId/result' })
@@ -30,6 +38,7 @@ export function ResultAnalysisPage() {
   const [activeTab, setActiveTab] = useState<AnalysisTab>((search as any)?.tab || 'map-comparison')
 
   const { task, loading, error } = useTaskLoader({ taskId })
+  const { data: userRole } = useUserRole()
 
   // Time slice management
   const timeSliceState = useTimeSlice({
@@ -99,6 +108,16 @@ export function ResultAnalysisPage() {
     enabled: activeTab === 'spatial',
   })
 
+  // Load role summary data for probabilistic tasks
+  const roleSummaryQuery = useQuery({
+    queryKey: ['role-summary', taskId, userRole],
+    queryFn: () =>
+      userRole
+        ? getRoleSummaryDataFn({ data: { taskId, role: userRole } })
+        : Promise.resolve({ ok: true as const, data: { available: false as const, reason: '未登录' } }),
+    enabled: task?.configuration.resolvedMethod === 'probabilistic' && !!userRole,
+  })
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -144,6 +163,19 @@ export function ResultAnalysisPage() {
           </dl>
         </CardContent>
       </Card>
+
+      {/* Role Summary Panel */}
+      {userRole && task.configuration.resolvedMethod === 'probabilistic' && (
+        <RoleSummaryPanel
+          role={userRole}
+          task={task}
+          summaryData={
+            roleSummaryQuery.data?.ok && roleSummaryQuery.data.data.available
+              ? roleSummaryQuery.data.data
+              : undefined
+          }
+        />
+      )}
 
       {/* Time Slice Selector */}
       <Card>
