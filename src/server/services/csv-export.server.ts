@@ -149,12 +149,7 @@ export function generateCsvContent(
   const variable = task.configuration.variable
 
   // Build CSV header with new fields for multi-type export
-  const baseHeaders = [
-    'taskId',
-    'dataType',
-    'sampling',
-    'provenance',
-  ]
+  const baseHeaders = ['taskId', 'dataType', 'sampling', 'provenance']
 
   // Add stationId column if observation data is requested
   if (request.dataTypes.includes('observation')) {
@@ -228,12 +223,7 @@ export function generateCsvContent(
       baseFields.push(encodeCsvField(stationId))
     }
 
-    const commonFields = [
-      time,
-      lon.toString(),
-      lat.toString(),
-      encodeCsvField(variable),
-    ]
+    const commonFields = [time, lon.toString(), lat.toString(), encodeCsvField(variable)]
 
     // Variable-specific fields
     let variableFields: string[] = []
@@ -257,7 +247,13 @@ export function generateCsvContent(
       // Precipitation has accumulation interval
       const accStart = '2024-01-01T00:00:00Z'
       const accEnd = '2024-01-01T01:00:00Z'
-      variableFields = [value.toString(), encodeCsvField(unit), accStart, accEnd, encodeCsvField(qualityFlag)]
+      variableFields = [
+        value.toString(),
+        encodeCsvField(unit),
+        accStart,
+        accEnd,
+        encodeCsvField(qualityFlag),
+      ]
     } else {
       variableFields = [value.toString(), encodeCsvField(unit), encodeCsvField(qualityFlag)]
     }

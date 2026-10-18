@@ -10,16 +10,15 @@ const mockTask: DownscalingTask = {
   schemaVersion: 1,
   id: 'test-task',
   name: 'Test Task',
-  ownerId: 'test-owner',
+  ownerId: 'researcher',
   configuration: {
-    dataSource: 'ECMWF',
+    dataSource: 'ecmwf',
     variable: 'temperature',
     region: { west: 119.5, east: 120.5, south: 29.5, north: 30.5 },
-    timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-03T00:00:00Z' },
-    timeMode: 'forecast',
+    timeRange: { mode: 'forecast', start: '2024-01-01T00:00:00Z', end: '2024-01-03T00:00:00Z' },
     method: 'recommended',
     resolvedMethod: 'deterministic',
-    targetResolutionKm: 3,
+    resolution: '3km',
   },
   createdAt: '2024-01-01T00:00:00Z',
   submittedAt: '2024-01-01T00:00:00Z',
@@ -118,7 +117,10 @@ describe('CSV Export', () => {
 
   describe('variable support', () => {
     it('exports temperature with °C unit', () => {
-      const tempTask = { ...mockTask, configuration: { ...mockTask.configuration, variable: 'temperature' } }
+      const tempTask = {
+        ...mockTask,
+        configuration: { ...mockTask.configuration, variable: 'temperature' },
+      }
       const csv = generateCsvContent(
         {
           taskId: 'test-task',
@@ -134,7 +136,10 @@ describe('CSV Export', () => {
     })
 
     it('exports precipitation with mm unit and accumulation metadata', () => {
-      const precipTask = { ...mockTask, configuration: { ...mockTask.configuration, variable: 'precipitation' } }
+      const precipTask = {
+        ...mockTask,
+        configuration: { ...mockTask.configuration, variable: 'precipitation' },
+      }
       const csv = generateCsvContent(
         {
           taskId: 'test-task',
@@ -153,7 +158,10 @@ describe('CSV Export', () => {
     })
 
     it('exports wind with u10, v10, speed, direction fields and m/s unit', () => {
-      const windTask = { ...mockTask, configuration: { ...mockTask.configuration, variable: 'wind' } }
+      const windTask = {
+        ...mockTask,
+        configuration: { ...mockTask.configuration, variable: 'wind' },
+      }
       const csv = generateCsvContent(
         {
           taskId: 'test-task',
@@ -173,7 +181,10 @@ describe('CSV Export', () => {
     })
 
     it('exports pressure with hPa unit', () => {
-      const pressureTask = { ...mockTask, configuration: { ...mockTask.configuration, variable: 'pressure' } }
+      const pressureTask = {
+        ...mockTask,
+        configuration: { ...mockTask.configuration, variable: 'pressure' },
+      }
       const csv = generateCsvContent(
         {
           taskId: 'test-task',
@@ -189,7 +200,10 @@ describe('CSV Export', () => {
     })
 
     it('handles wind direction null for calm conditions', () => {
-      const windTask = { ...mockTask, configuration: { ...mockTask.configuration, variable: 'wind' } }
+      const windTask = {
+        ...mockTask,
+        configuration: { ...mockTask.configuration, variable: 'wind' },
+      }
       const csv = generateCsvContent(
         {
           taskId: 'test-task',

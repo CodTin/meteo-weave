@@ -1,7 +1,9 @@
 import { test, expect } from './browser-guard'
 
 test.describe('Data Export', () => {
-  test('displays export panel for completed temperature task with all data type options', async ({ page }) => {
+  test('displays export panel for completed temperature task with all data type options', async ({
+    page,
+  }) => {
     // Navigate to the app
     await page.goto('/')
 
