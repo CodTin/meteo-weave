@@ -7,16 +7,24 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Download, AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
+import { ExportRegionMap } from './export-region-map'
 
 interface DataExportPanelProps {
   task: DownscalingTask
+}
+
+interface BBox {
+  west: number
+  east: number
+  south: number
+  north: number
 }
 
 export function DataExportPanel({ task }: DataExportPanelProps) {
   const { configuration } = task
 
   // Initialize with task bounds
-  const [bbox, setBbox] = useState({
+  const [bbox, setBbox] = useState<BBox>({
     west: configuration.region.west,
     east: configuration.region.east,
     south: configuration.region.south,
@@ -32,6 +40,17 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
   const [includeOriginal, setIncludeOriginal] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
+
+  // Get Mapbox token from environment
+  const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined
+
+  const handleBboxChange = (field: keyof BBox, value: number) => {
+    setBbox((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleMapBoundsChange = (newBounds: BBox) => {
+    setBbox(newBounds)
+  }
 
   const handleDownload = async () => {
     setError(null)
@@ -65,6 +84,20 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
         <CardDescription>选择坐标范围、时间段和数据类型，导出 CSV 格式的降尺度结果</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Map Component */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">区域选择</h3>
+          <p className="text-xs text-muted-foreground">
+            在地图上绘制矩形或通过下方坐标输入精确选择导出区域
+          </p>
+          <ExportRegionMap
+            taskBounds={configuration.region}
+            exportBounds={bbox}
+            onBoundsChange={handleMapBoundsChange}
+            mapboxToken={mapboxToken}
+          />
+        </div>
+
         {/* Coordinate Selection */}
         <div className="space-y-4">
           <h3 className="text-sm font-medium">坐标范围</h3>
@@ -76,7 +109,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
                 type="number"
                 step="0.01"
                 value={bbox.west}
-                onChange={(e) => setBbox({ ...bbox, west: parseFloat(e.target.value) })}
+                onChange={(e) => handleBboxChange('west', parseFloat(e.target.value))}
                 min={configuration.region.west}
                 max={configuration.region.east}
               />
@@ -88,7 +121,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
                 type="number"
                 step="0.01"
                 value={bbox.east}
-                onChange={(e) => setBbox({ ...bbox, east: parseFloat(e.target.value) })}
+                onChange={(e) => handleBboxChange('east', parseFloat(e.target.value))}
                 min={configuration.region.west}
                 max={configuration.region.east}
               />
@@ -100,7 +133,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
                 type="number"
                 step="0.01"
                 value={bbox.south}
-                onChange={(e) => setBbox({ ...bbox, south: parseFloat(e.target.value) })}
+                onChange={(e) => handleBboxChange('south', parseFloat(e.target.value))}
                 min={configuration.region.south}
                 max={configuration.region.north}
               />
@@ -112,7 +145,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
                 type="number"
                 step="0.01"
                 value={bbox.north}
-                onChange={(e) => setBbox({ ...bbox, north: parseFloat(e.target.value) })}
+                onChange={(e) => handleBboxChange('north', parseFloat(e.target.value))}
                 min={configuration.region.south}
                 max={configuration.region.north}
               />

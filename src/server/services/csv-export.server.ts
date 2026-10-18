@@ -97,6 +97,21 @@ export function calculateBboxHeightKm(bbox: CsvExportRequest['bbox']): number {
 }
 
 /**
+ * Check if a bbox is fully contained within another bbox (task bounds).
+ */
+export function isBboxWithinBounds(
+  exportBbox: CsvExportRequest['bbox'],
+  taskBounds: CsvExportRequest['bbox'],
+): boolean {
+  return (
+    exportBbox.west >= taskBounds.west &&
+    exportBbox.east <= taskBounds.east &&
+    exportBbox.south >= taskBounds.south &&
+    exportBbox.north <= taskBounds.north
+  )
+}
+
+/**
  * Validate export request parameters.
  * Returns null if valid, or an error result if invalid.
  */
