@@ -3,6 +3,8 @@ import { type Variable, getVariableUnit } from '../service/color-scales'
 import type { DistributionMetrics } from '../service/distribution-metrics'
 import { ThresholdPanel } from './threshold-panel'
 import { useThresholdResultData } from '../hooks/use-threshold-result-data'
+import { EnsembleCRPSPanel } from './ensemble-crps-panel'
+import { useEnsembleCRPS } from '../hooks/use-ensemble-crps'
 
 export interface AccuracyPanelProps {
   taskId: string
@@ -44,6 +46,9 @@ export function AccuracyPanel({
     enabled: isProbabilistic && !!currentTime,
   })
 
+  // Fetch ensemble CRPS data if probabilistic
+  const crpsQuery = useEnsembleCRPS(isProbabilistic ? taskId : undefined)
+
   if (loading) {
     return (
       <Card>
@@ -71,6 +76,32 @@ export function AccuracyPanel({
 
   return (
     <div className="space-y-6">
+      {/* Ensemble CRPS Assessment for Probabilistic Tasks */}
+      {isProbabilistic && (
+        <>
+          {crpsQuery.isLoading ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>集合 CRPS 评估</CardTitle>
+                <CardDescription>加载中...</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : crpsQuery.error ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>集合 CRPS 评估</CardTitle>
+                <CardDescription>加载失败</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-destructive">加载失败: {String(crpsQuery.error)}</p>
+              </CardContent>
+            </Card>
+          ) : crpsQuery.data?.ok && crpsQuery.data.data ? (
+            <EnsembleCRPSPanel data={crpsQuery.data.data} variable={variable} />
+          ) : null}
+        </>
+      )}
+
       {/* Threshold Analysis for Probabilistic Tasks */}
       {isProbabilistic && (
         <Card>

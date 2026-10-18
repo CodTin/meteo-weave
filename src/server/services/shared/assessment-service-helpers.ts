@@ -358,3 +358,160 @@ export function wrapSampleQueryFailure(
   }
   return null
 }
+
+/**
+ * Station metadata for reproducibility
+ */
+export type StationMetadata = {
+  stationId: string
+  location: { lon: number; lat: number }
+  elevation?: number
+}
+
+/**
+ * Extracts unique station metadata from aligned samples
+ */
+export function extractStationMetadata(
+  samples: Array<{
+    stationId: string
+    time: string
+    location?: { lon: number; lat: number }
+    elevation?: number
+  }>,
+): StationMetadata[] {
+  const stationMap = new Map<string, StationMetadata>()
+
+  for (const sample of samples) {
+    if (!stationMap.has(sample.stationId) && sample.location) {
+      stationMap.set(sample.stationId, {
+        stationId: sample.stationId,
+        location: sample.location,
+        elevation: sample.elevation,
+      })
+    }
+  }
+
+  return Array.from(stationMap.values())
+}
+
+/**
+ * Determines sampling plan based on task time range and budget
+ */
+export function determineSamplingPlan(
+  startTime: string,
+  endTime: string,
+  maxTimes: number,
+): { times: string[]; plan: string } {
+  const start = new Date(startTime)
+  const end = new Date(endTime)
+  const totalHours = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60))
+
+  if (totalHours <= maxTimes) {
+    const times: string[] = []
+    for (let h = 0; h <= totalHours; h++) {
+      const time = new Date(start.getTime() + h * 60 * 60 * 1000)
+      times.push(time.toISOString())
+    }
+    return {
+      times,
+      plan: `完整时间覆盖：${times.length} 个时刻`,
+    }
+  } else {
+    const times: string[] = []
+    const interval = Math.floor(totalHours / (maxTimes - 1))
+    for (let i = 0; i < maxTimes; i++) {
+      const hours = i === maxTimes - 1 ? totalHours : i * interval
+      const time = new Date(start.getTime() + hours * 60 * 60 * 1000)
+      times.push(time.toISOString())
+    }
+    return {
+      times,
+      plan: `预算内均匀采样：${times.length} 个时刻（总时长 ${totalHours + 1} 小时，间隔 ${interval} 小时）`,
+    }
+  }
+}
+
+/**
+ * Builds the final assessment response data structure.
+ * Shared pattern for returning station count, time coverage, and sampling details.
+ */
+export function buildAssessmentSamplingInfo(
+  alignedSamples: Array<{ stationId: string }>,
+  timeCoverage: { start: string; end: string },
+  times: string[],
+  maxPoints: number,
+  maxTimes: number,
+  plan: string,
+) {
+  const uniqueStations = new Set(alignedSamples.map((s) => s.stationId))
+  return {
+    stationCount: uniqueStations.size,
+    timeCoverage: {
+      start: timeCoverage.start,
+      end: timeCoverage.end,
+      actualTimes: times.length,
+    },
+    sampling: {
+      budget: { maxPoints, maxTimes },
+      actual: { points: uniqueStations.size, times: times.length },
+      plan,
+    },
+  }
+}
+
+/**
+ * Wraps assessment errors into standard response format.
+ */
+export function wrapAssessmentError(
+  error: unknown,
+  assessmentType: string,
+): { ok: true; data: { available: false; reason: string } } {
+  return {
+    ok: true,
+    data: {
+      available: false,
+      reason: `${assessmentType}评估失败: ${error instanceof Error ? error.message : '未知错误'}`,
+    },
+  }
+}
+
+/**
+ * Standard sampling budget constants for all assessment types.
+ * Ensures consistent sampling across accuracy and CRPS evaluations.
+ */
+export const ASSESSMENT_SAMPLING_BUDGET = {
+  maxTimes: 10, // Maximum time samples to query
+  maxPoints: 50, // Maximum spatial points per time
+} as const
+
+/**
+ * Prepares sampling plan and queries aligned samples using the standard assessment budget.
+ * Reduces duplication in assessment setup across different evaluation types.
+ */
+export async function prepareAssessmentSamples(
+  task: {
+    configuration: { timeRange: { start: string; end: string }; region: any; variable: string }
+  },
+  service: ReturnType<typeof import('@/features/downscaling-tasks/service').createTaskService>,
+  taskId: string,
+  unavailableReason: string,
+) {
+  const { start, end } = task.configuration.timeRange
+  const { maxTimes, maxPoints } = ASSESSMENT_SAMPLING_BUDGET
+
+  const { times, plan } = determineSamplingPlan(start, end, maxTimes)
+
+  const sampleResult = await queryAndAlignSamples(
+    service,
+    {
+      taskId,
+      region: task.configuration.region,
+      times,
+      maxPoints,
+    },
+    task.configuration.variable,
+    unavailableReason,
+  )
+
+  return { sampleResult, times, plan, maxTimes, maxPoints }
+}
