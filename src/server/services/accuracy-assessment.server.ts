@@ -4,6 +4,8 @@ import { getVariableUnit } from '@/features/result-analysis/service/variable-acc
 import {
   queryAndAlignSamples,
   initializeAndValidateTask,
+  wrapValidationFailure,
+  wrapSampleQueryFailure,
 } from '@/server/services/shared/assessment-service-helpers'
 
 /**
@@ -118,16 +120,10 @@ function extractStationMetadata(
 export async function getAccuracyAssessmentData(taskId: string): Promise<AccuracyResponse> {
   // Initialize service and validate task
   const taskValidation = await initializeAndValidateTask(taskId)
-  if (!taskValidation.ok) {
-    return {
-      ok: true,
-      data: {
-        available: false,
-        reason: taskValidation.reason,
-      },
-    }
-  }
+  const validationFailure = wrapValidationFailure(taskValidation)
+  if (validationFailure) return validationFailure
 
+  if (!taskValidation.ok) throw new Error('Unreachable')
   const { task, service } = taskValidation
 
   try {
@@ -151,16 +147,10 @@ export async function getAccuracyAssessmentData(taskId: string): Promise<Accurac
       '没有共同有效样本用于精度评估',
     )
 
-    if (!sampleResult.ok) {
-      return {
-        ok: true,
-        data: {
-          available: false,
-          reason: sampleResult.reason,
-        },
-      }
-    }
+    const sampleFailure = wrapSampleQueryFailure(sampleResult)
+    if (sampleFailure) return sampleFailure
 
+    if (!sampleResult.ok) throw new Error('Unreachable')
     const { samples: alignedSamples, timeCoverage } = sampleResult
 
     // Extract station metadata for terrain grouping

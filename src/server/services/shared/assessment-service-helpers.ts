@@ -320,3 +320,41 @@ export async function queryAndAlignSamples(
     timeCoverage: { start: times[0] || '', end: times[times.length - 1] || '' },
   }
 }
+
+/**
+ * Wraps task validation result into a standard assessment response format.
+ * Reduces duplication across assessment server endpoints.
+ */
+export function wrapValidationFailure(
+  taskValidation: TaskValidationResult,
+): { ok: true; data: { available: false; reason: string } } | null {
+  if (!taskValidation.ok) {
+    return {
+      ok: true,
+      data: {
+        available: false,
+        reason: taskValidation.reason,
+      },
+    }
+  }
+  return null
+}
+
+/**
+ * Wraps sample query failure into a standard assessment response format.
+ * Reduces duplication across assessment server endpoints.
+ */
+export function wrapSampleQueryFailure(
+  sampleResult: AlignedSampleResult,
+): { ok: true; data: { available: false; reason: string } } | null {
+  if (!sampleResult.ok) {
+    return {
+      ok: true,
+      data: {
+        available: false,
+        reason: sampleResult.reason,
+      },
+    }
+  }
+  return null
+}

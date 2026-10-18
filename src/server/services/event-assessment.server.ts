@@ -7,6 +7,8 @@ import {
 import {
   queryAndAlignSamples,
   initializeAndValidateTask,
+  wrapValidationFailure,
+  wrapSampleQueryFailure,
 } from '@/server/services/shared/assessment-service-helpers'
 
 type EventAssessmentData =
@@ -88,16 +90,10 @@ function createDemoThreshold(variable: string): EventAssessmentDefinition | null
 export async function getEventAssessmentData(taskId: string): Promise<EventAssessmentResponse> {
   // Initialize service and validate task
   const taskValidation = await initializeAndValidateTask(taskId)
-  if (!taskValidation.ok) {
-    return {
-      ok: true,
-      data: {
-        available: false,
-        reason: taskValidation.reason,
-      },
-    }
-  }
+  const validationFailure = wrapValidationFailure(taskValidation)
+  if (validationFailure) return validationFailure
 
+  if (!taskValidation.ok) throw new Error('Unreachable')
   const { task, service } = taskValidation
 
   // Get demo threshold for this variable
@@ -130,16 +126,10 @@ export async function getEventAssessmentData(taskId: string): Promise<EventAsses
       '没有共同有效样本用于事件评估',
     )
 
-    if (!sampleResult.ok) {
-      return {
-        ok: true,
-        data: {
-          available: false,
-          reason: sampleResult.reason,
-        },
-      }
-    }
+    const sampleFailure = wrapSampleQueryFailure(sampleResult)
+    if (sampleFailure) return sampleFailure
 
+    if (!sampleResult.ok) throw new Error('Unreachable')
     const { samples: alignedSamples } = sampleResult
 
     // Assess events for original vs observed

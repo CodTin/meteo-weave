@@ -8,6 +8,8 @@ import {
 import {
   queryAndAlignSamples,
   initializeAndValidateTask,
+  wrapValidationFailure,
+  wrapSampleQueryFailure,
 } from '@/server/services/shared/assessment-service-helpers'
 import { getVariableUnit } from '@/features/result-analysis/service/variable-accuracy'
 
@@ -58,16 +60,10 @@ export type ElevationGroupingResponse =
 export async function getElevationGroupingData(taskId: string): Promise<ElevationGroupingResponse> {
   // Initialize service and validate task
   const taskValidation = await initializeAndValidateTask(taskId)
-  if (!taskValidation.ok) {
-    return {
-      ok: true,
-      data: {
-        available: false,
-        reason: taskValidation.reason,
-      },
-    }
-  }
+  const validationFailure = wrapValidationFailure(taskValidation)
+  if (validationFailure) return validationFailure
 
+  if (!taskValidation.ok) throw new Error('Unreachable')
   const { task, service } = taskValidation
 
   try {
@@ -88,16 +84,10 @@ export async function getElevationGroupingData(taskId: string): Promise<Elevatio
       '没有共同有效样本用于高程分组分析',
     )
 
-    if (!sampleResult.ok) {
-      return {
-        ok: true,
-        data: {
-          available: false,
-          reason: sampleResult.reason,
-        },
-      }
-    }
+    const sampleFailure = wrapSampleQueryFailure(sampleResult)
+    if (sampleFailure) return sampleFailure
 
+    if (!sampleResult.ok) throw new Error('Unreachable')
     const { samples: alignedSamples } = sampleResult
 
     // Query station metadata to get coordinates
