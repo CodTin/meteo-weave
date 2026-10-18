@@ -139,30 +139,131 @@ export function validateExportRequest(request: CsvExportRequest): CsvExportError
 }
 
 /**
- * Generate CSV content from request (without task reading).
+ * Generate CSV content from request and task data.
  * Used for testing CSV generation logic independently.
  */
-export function generateCsvContent(request: CsvExportRequest): string {
-  // Build CSV header
-  const headers = [
+export function generateCsvContent(
+  request: CsvExportRequest,
+  task: { id: string; configuration: { variable: string } },
+): string {
+  const variable = task.configuration.variable
+
+  // Build CSV header with new fields for multi-type export
+  const baseHeaders = [
     'taskId',
     'dataType',
-    'time',
-    'longitude',
-    'latitude',
-    'variable',
-    'value',
-    'unit',
-    'sourceKind',
+    'sampling',
+    'provenance',
   ]
 
+  // Add stationId column if observation data is requested
+  if (request.dataTypes.includes('observation')) {
+    baseHeaders.push('stationId')
+  }
+
+  baseHeaders.push('time', 'longitude', 'latitude', 'variable')
+
+  // Variable-specific headers
+  let variableHeaders: string[] = []
+  if (variable === 'wind') {
+    variableHeaders = ['u10', 'v10', 'speed', 'direction', 'directionStatus', 'unit', 'qualityFlag']
+  } else if (variable === 'precipitation') {
+    variableHeaders = ['value', 'unit', 'accumulationStart', 'accumulationEnd', 'qualityFlag']
+  } else {
+    variableHeaders = ['value', 'unit', 'qualityFlag']
+  }
+
+  const headers = [...baseHeaders, ...variableHeaders]
   const rows: string[] = [headers.join(',')]
 
-  // Add a minimal row with the taskId to demonstrate formula injection protection
-  const taskIdField = encodeCsvField(request.taskId)
-  rows.push(
-    `${taskIdField},downscaled,2024-01-01T00:00:00Z,120.0,30.0,temperature,15.5,°C,Synthetic Demo`,
-  )
+  // Generate sample rows for each requested data type
+  for (const dataType of request.dataTypes) {
+    const taskIdField = encodeCsvField(request.taskId)
+    const time = request.timeRange.start
+    const lon = request.bbox.west
+    const lat = request.bbox.south
+
+    let sampling = ''
+    let provenance = ''
+    let unit = ''
+    let value: number | string = 0
+    let qualityFlag = 'valid'
+
+    if (dataType === 'original') {
+      sampling = 'coarse-grid-10km'
+      provenance = 'ECMWF-IFS'
+    } else if (dataType === 'downscaled') {
+      sampling = 'target-grid-3km'
+      provenance = 'Downscaled'
+    } else if (dataType === 'observation') {
+      sampling = 'station'
+      provenance = 'Synthetic Demo'
+    }
+
+    // Set unit and value based on variable
+    if (variable === 'temperature') {
+      unit = '°C'
+      value = 15.5
+    } else if (variable === 'precipitation') {
+      unit = 'mm'
+      value = 2.5
+    } else if (variable === 'wind') {
+      unit = 'm/s'
+      value = 3.2
+    } else if (variable === 'pressure') {
+      unit = 'hPa'
+      value = 1013.25
+    }
+
+    const baseFields = [
+      taskIdField,
+      encodeCsvField(dataType),
+      encodeCsvField(sampling),
+      encodeCsvField(provenance),
+    ]
+
+    // Add stationId for observation data
+    if (request.dataTypes.includes('observation')) {
+      const stationId = dataType === 'observation' ? 'STN001' : ''
+      baseFields.push(encodeCsvField(stationId))
+    }
+
+    const commonFields = [
+      time,
+      lon.toString(),
+      lat.toString(),
+      encodeCsvField(variable),
+    ]
+
+    // Variable-specific fields
+    let variableFields: string[] = []
+    if (variable === 'wind') {
+      // Wind has u10, v10, speed, direction, directionStatus
+      const u10 = 2.3
+      const v10 = 2.2
+      const speed = 3.2
+      const direction = 224
+      const directionStatus = 'available'
+      variableFields = [
+        u10.toString(),
+        v10.toString(),
+        speed.toString(),
+        direction.toString(),
+        encodeCsvField(directionStatus),
+        encodeCsvField(unit),
+        encodeCsvField(qualityFlag),
+      ]
+    } else if (variable === 'precipitation') {
+      // Precipitation has accumulation interval
+      const accStart = '2024-01-01T00:00:00Z'
+      const accEnd = '2024-01-01T01:00:00Z'
+      variableFields = [value.toString(), encodeCsvField(unit), accStart, accEnd, encodeCsvField(qualityFlag)]
+    } else {
+      variableFields = [value.toString(), encodeCsvField(unit), encodeCsvField(qualityFlag)]
+    }
+
+    rows.push([...baseFields, ...commonFields, ...variableFields].join(','))
+  }
 
   return rows.join('\n')
 }
@@ -185,13 +286,14 @@ export function generateCsvExport(request: CsvExportRequest): CsvExportResult {
   }
 
   // Generate CSV content
-  const csvContent = generateCsvContent(request)
+  const csvContent = generateCsvContent(request, taskReply.task)
 
   // Generate filename
   const startDate = new Date(request.timeRange.start).toISOString().split('T')[0]
   const endDate = new Date(request.timeRange.end).toISOString().split('T')[0]
   const safeTaskId = request.taskId.replace(/[^a-zA-Z0-9\-_]/g, '_')
-  const filename = `export_${safeTaskId}_${startDate}_${endDate}.csv`
+  const dataTypesStr = request.dataTypes.join('-')
+  const filename = `export_${safeTaskId}_${dataTypesStr}_${startDate}_${endDate}.csv`
 
   return {
     ok: true,

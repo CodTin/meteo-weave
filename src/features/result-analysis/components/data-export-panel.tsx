@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Download, AlertCircle } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
+import { exportCsv } from '@/server/functions/csv-export'
 
 interface DataExportPanelProps {
   task: DownscalingTask
@@ -30,6 +31,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
 
   const [includeDownscaled, setIncludeDownscaled] = useState(true)
   const [includeOriginal, setIncludeOriginal] = useState(false)
+  const [includeObservation, setIncludeObservation] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
 
@@ -39,8 +41,9 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
 
     try {
       const dataTypes = []
-      if (includeDownscaled) dataTypes.push('downscaled')
       if (includeOriginal) dataTypes.push('original')
+      if (includeDownscaled) dataTypes.push('downscaled')
+      if (includeObservation) dataTypes.push('observation')
 
       if (dataTypes.length === 0) {
         setError('请至少选择一种数据类型')
@@ -48,9 +51,27 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
         return
       }
 
-      // TODO: Call server function to generate CSV
-      // For now, show a placeholder message
-      setError('CSV 下载功能正在实现中')
+      // Call server function to generate CSV
+      const result = await exportCsv({
+        data: {
+          taskId: task.id,
+          bbox,
+          timeRange,
+          dataTypes,
+        },
+      })
+
+      // Create a blob and download it
+      const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', result.filename)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
     } catch (err) {
       setError(err instanceof Error ? err.message : '下载失败')
     } finally {
@@ -151,22 +172,32 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="downscaled"
-                checked={includeDownscaled}
-                onCheckedChange={(checked) => setIncludeDownscaled(!!checked)}
-              />
-              <Label htmlFor="downscaled" className="cursor-pointer">
-                降尺度数据
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
                 id="original"
                 checked={includeOriginal}
                 onCheckedChange={(checked) => setIncludeOriginal(!!checked)}
               />
               <Label htmlFor="original" className="cursor-pointer">
-                原始数据
+                原始数据（粗网格）
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="downscaled"
+                checked={includeDownscaled}
+                onCheckedChange={(checked) => setIncludeDownscaled(!!checked)}
+              />
+              <Label htmlFor="downscaled" className="cursor-pointer">
+                降尺度数据（目标网格）
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="observation"
+                checked={includeObservation}
+                onCheckedChange={(checked) => setIncludeObservation(!!checked)}
+              />
+              <Label htmlFor="observation" className="cursor-pointer">
+                观测数据（台站）
               </Label>
             </div>
           </div>
