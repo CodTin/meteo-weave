@@ -1,6 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { type Variable, getVariableUnit } from '../service/color-scales'
 import type { DistributionMetrics } from '../service/distribution-metrics'
+import { ThresholdPanel } from './threshold-panel'
+import { useThresholdResultData } from '../hooks/use-threshold-result-data'
 
 export interface AccuracyPanelProps {
   taskId: string
@@ -15,9 +17,17 @@ export interface AccuracyPanelProps {
     south: number
     north: number
   }
+  isProbabilistic?: boolean
+  currentTime?: string
 }
 
-export function AccuracyPanel({ variable }: AccuracyPanelProps) {
+export function AccuracyPanel({
+  variable,
+  taskId,
+  region,
+  isProbabilistic,
+  currentTime,
+}: AccuracyPanelProps) {
   // TODO: Fetch distribution metrics from API
   // taskId, timeRange, and region will be used when integrating with the backend
   const metrics = null as DistributionMetrics | null
@@ -25,6 +35,14 @@ export function AccuracyPanel({ variable }: AccuracyPanelProps) {
   const error = null as string | null
 
   const unit = getVariableUnit(variable)
+
+  // Fetch result data for threshold analysis if probabilistic
+  const thresholdResultQuery = useThresholdResultData({
+    taskId,
+    timeSlice: currentTime || '',
+    region,
+    enabled: isProbabilistic && !!currentTime,
+  })
 
   if (loading) {
     return (
@@ -53,6 +71,27 @@ export function AccuracyPanel({ variable }: AccuracyPanelProps) {
 
   return (
     <div className="space-y-6">
+      {/* Threshold Analysis for Probabilistic Tasks */}
+      {isProbabilistic && (
+        <Card>
+          <CardHeader>
+            <CardTitle>阈值概率分析</CardTitle>
+            <CardDescription>可配置气象阈值的集合成员超阈值概率与格点影响范围</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {thresholdResultQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">加载结果数据中...</p>
+            ) : thresholdResultQuery.error ? (
+              <p className="text-sm text-destructive">
+                加载失败: {String(thresholdResultQuery.error)}
+              </p>
+            ) : (
+              <ThresholdPanel result={thresholdResultQuery.data || null} isPreview={true} />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>精度评估</CardTitle>
