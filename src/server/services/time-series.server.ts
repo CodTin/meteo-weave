@@ -3,6 +3,11 @@ import { z } from 'zod'
 import { queryDownscalingTaskResult } from './downscaling-tasks.server'
 import { findNearbyStation } from './station-matching.server'
 import type { StationMetadata } from '@/server/types/station-types'
+import {
+  groupEnsembleSamplesByTime,
+  calculateQuantileTimeSeries,
+  type QuantileTimeSeriesPoint,
+} from '@/features/result-analysis/service/ensemble-quantiles'
 
 const coordinateSchema = z.strictObject({
   latitude: z.number().min(-90).max(90).finite(),
@@ -19,6 +24,14 @@ export interface TimeSeriesDataPoint {
   value: number | null
 }
 
+export interface EnsembleQuantileData {
+  quantiles: QuantileTimeSeriesPoint[]
+  /** Total number of members in the ensemble */
+  totalMembers: number
+  /** Indicates this is a probabilistic task with ensemble data */
+  isProbabilistic: boolean
+}
+
 export interface TimeSeriesResponse {
   ok: true
   coordinate: { latitude: number; longitude: number }
@@ -31,6 +44,8 @@ export interface TimeSeriesResponse {
   downscaled: TimeSeriesDataPoint[]
   observation?: TimeSeriesDataPoint[]
   stationInfo?: StationMetadata
+  /** Ensemble quantile bands (P10/P50/P90) for probabilistic tasks */
+  ensemble?: EnsembleQuantileData
 }
 
 export interface TimeSeriesError {
@@ -149,6 +164,54 @@ export function getTimeSeriesData(input: unknown): TimeSeriesResult {
     }
   }
 
+  // Query ensemble member data for probabilistic tasks
+  let ensembleData: EnsembleQuantileData | undefined
+  if (taskObj.configuration.resolvedMethod === 'probabilistic') {
+    const ensembleResult = queryDownscalingTaskResult({
+      task,
+      query: {
+        kind: 'time-series',
+        layer: 'downscaled',
+        ensemble: { kind: 'members' },
+        point: coordinate,
+        timeRange: { start: timeRange.start, end: timeRange.end },
+        temporalResolution,
+      },
+    })
+
+    if (ensembleResult.ok && ensembleResult.ensemble) {
+      const { ensemble, values } = ensembleResult as any
+
+      // Extract all member samples with their values
+      const memberSamples = (values || [])
+        .filter((v: any) => v.memberId && typeof v.value === 'number')
+        .map((v: any) => ({
+          time: v.time,
+          memberId: v.memberId,
+          value: v.value,
+        }))
+
+      // Get list of times from downscaled points
+      const times = downscaledPoints.map((p) => p.time)
+
+      // Group samples by time
+      const groupedData = groupEnsembleSamplesByTime(
+        memberSamples,
+        times,
+        ensemble.allMemberIds || [],
+      )
+
+      // Calculate quantiles for each time point
+      const quantiles = calculateQuantileTimeSeries(groupedData)
+
+      ensembleData = {
+        quantiles,
+        totalMembers: ensemble.allMemberIds?.length || 0,
+        isProbabilistic: true,
+      }
+    }
+  }
+
   return {
     ok: true,
     coordinate,
@@ -161,6 +224,7 @@ export function getTimeSeriesData(input: unknown): TimeSeriesResult {
     downscaled: downscaledPoints,
     observation: observationPoints,
     stationInfo: stationInfo || undefined,
+    ensemble: ensembleData,
   }
 }
 

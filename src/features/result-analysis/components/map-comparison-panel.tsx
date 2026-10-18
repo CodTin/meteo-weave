@@ -12,6 +12,8 @@ import type { AccumulationInterval } from '../service/comparison-data'
 import { ComparisonInfoCard } from './comparison-info-card'
 import { useObservationViewMode } from '../hooks/use-observation-view-mode'
 import { ObservationViewToggle } from './observation-view-toggle'
+import { EnsembleSwitcher } from './ensemble-switcher'
+import { useEnsembleSelection } from '../hooks/use-ensemble-selection'
 
 interface MapComparisonPanelProps {
   taskId: string
@@ -26,6 +28,8 @@ interface MapComparisonPanelProps {
   requestId?: string
   accumulationInterval?: AccumulationInterval
   intervalsMatch?: boolean
+  isProbabilistic?: boolean
+  allMemberIds?: string[]
 }
 
 interface MapCardProps {
@@ -78,12 +82,15 @@ export function MapComparisonPanel({
   requestId: _requestId,
   accumulationInterval,
   intervalsMatch = true,
+  isProbabilistic = false,
+  allMemberIds = [],
 }: MapComparisonPanelProps) {
   const unit = getVariableUnit(variable)
   const variableLabel = getVariableLabel(variable)
   const absoluteColorScale = getAbsoluteColorScale(variable)
   const differenceColorScale = getDifferenceColorScale()
   const { mode: observationMode, toggle: toggleObservationMode } = useObservationViewMode()
+  const { view: ensembleView, selectView: selectEnsembleView } = useEnsembleSelection()
 
   const formatAccumulationInterval = (interval?: AccumulationInterval) => {
     if (!interval) return null
@@ -92,8 +99,36 @@ export function MapComparisonPanel({
     return `${start} to ${end}`
   }
 
+  const getDownscaledDescription = () => {
+    if (!isProbabilistic) {
+      return `${variableLabel} · ${unit} · High-resolution`
+    }
+    if (ensembleView === 'mean') {
+      return `${variableLabel} · ${unit} · Ensemble Mean · Synthetic Demo`
+    }
+    if (ensembleView === 'stddev') {
+      return `${variableLabel} · ${unit} · Standard Deviation (ensemble spread) · Synthetic Demo`
+    }
+    const memberLabel = ensembleView.replace('member-', 'Member ')
+    return `${variableLabel} · ${unit} · ${memberLabel} · Synthetic Demo`
+  }
+
   return (
     <div className="space-y-4">
+      {/* Ensemble switcher for probabilistic tasks */}
+      {isProbabilistic && allMemberIds.length > 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <EnsembleSwitcher
+              view={ensembleView}
+              onViewChange={selectEnsembleView}
+              allMemberIds={allMemberIds}
+              effectiveK={allMemberIds.length}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Accumulation interval warning for precipitation */}
       {variable === 'precipitation' && !intervalsMatch && (
         <Alert variant="destructive">
@@ -128,7 +163,7 @@ export function MapComparisonPanel({
         {/* Downscaled Data */}
         <MapCard
           title="Downscaled Data"
-          description={`${variableLabel} · ${unit} · High-resolution`}
+          description={getDownscaledDescription()}
           colorScaleDescription={absoluteColorScale.description}
           loadingText="Downscaled field map loading..."
         />

@@ -487,6 +487,31 @@ it.each(['temperature', 'wind', 'pressure', 'precipitation'] as const)(
 )
 
 it.each(['temperature', 'wind', 'pressure', 'precipitation'] as const)(
+  'rejects stddev requests for deterministic %s tasks',
+  async (variable) => {
+    const task = await browser.seed({
+      ...queryConfiguration,
+      variable,
+      region: ensembleConfiguration.region,
+    })
+    const query = {
+      kind: 'points',
+      layer: 'downscaled',
+      points: [point],
+      times: ['2024-01-01T00:00:00Z'],
+    } as const
+    expect(
+      await browser.result(task, {
+        ...query,
+        points: [...query.points],
+        times: [...query.times],
+        ensemble: { kind: 'stddev' },
+      }),
+    ).toMatchObject({ ok: false, code: 'NOT_PROBABILISTIC' })
+  },
+)
+
+it.each(['temperature', 'wind', 'pressure', 'precipitation'] as const)(
   'keeps %s member identities and mean inputs consistent across all spatial/time query modes',
   async (variable) => {
     const task = await browser.seed({ ...ensembleConfiguration, variable })
@@ -854,3 +879,100 @@ it.each([
     expect(fifth).toEqual(first)
   },
 )
+
+it('computes population standard deviation from the same member samples used for the mean', async () => {
+  const task = await browser.seed(ensembleConfiguration)
+  const query = {
+    kind: 'points',
+    layer: 'downscaled',
+    points: [point],
+    times: ['2024-01-01T00:00:00Z'],
+  } as const
+  const members = await browser.result(task, {
+    ...query,
+    points: [...query.points],
+    times: [...query.times],
+    ensemble: { kind: 'members' },
+  })
+  if (!members.ok) throw new Error('Expected actual samples')
+  expect(members.values.map((value) => value.value)).toEqual([
+    1022.25, 1018.25, 1012.25, 1013.25, 1020.25,
+  ])
+  const stddev = await browser.result(task, {
+    ...query,
+    points: [...query.points],
+    times: [...query.times],
+    ensemble: { kind: 'stddev' },
+  })
+  // Population stddev: sqrt(sum((x - mean)^2) / N)
+  // mean = 1017.25
+  // deviations: [5, 1, -5, -4, 3]
+  // squared: [25, 1, 25, 16, 9]
+  // sum = 76, N = 5, variance = 15.2, stddev = 3.8987
+  expect(stddev).toMatchObject({
+    ok: true,
+    unit: 'hPa',
+    ensemble: { kind: 'stddev', memberIds, samples: members.values },
+    values: [
+      {
+        value: 3.8987,
+        ensembleMean: { sampleCount: 5, validMemberIds: memberIds, unavailableMemberIds: [] },
+      },
+    ],
+  })
+})
+
+it('computes stddev with partial members excluding unavailable per location/time', async () => {
+  const task = await browser.seed(ensembleConfiguration)
+  const query = {
+    kind: 'points',
+    temporalResolution: 'hourly',
+    layer: 'downscaled',
+    points: [point],
+    times: ['2024-01-01T00:00:00Z', '2024-01-01T06:00:00Z'],
+  } as const
+  const members = await browser.result(task, {
+    ...query,
+    points: [...query.points],
+    times: [...query.times],
+    ensemble: { kind: 'members' },
+  })
+  expect(members).toMatchObject({
+    ok: true,
+    ensemble: {
+      unavailable: [
+        { memberId: 'member-05', time: '2024-01-01T06:00:00.000Z', code: 'MISSING_MEMBER' },
+      ],
+    },
+  })
+  if (!members.ok) throw new Error('Expected member availability')
+  expect(members.values).toHaveLength(9)
+  const stddev = await browser.result(task, {
+    ...query,
+    points: [...query.points],
+    times: [...query.times],
+    ensemble: { kind: 'stddev' },
+  })
+  expect(stddev).toMatchObject({
+    ok: true,
+    ensemble: { kind: 'stddev', samples: members.values },
+    values: [
+      {
+        value: 3.8987,
+        ensembleMean: { sampleCount: 5, validMemberIds: memberIds, unavailableMemberIds: [] },
+      },
+      {
+        ensembleMean: {
+          sampleCount: 4,
+          validMemberIds: memberIds.slice(0, 4),
+          unavailableMemberIds: ['member-05'],
+        },
+      },
+    ],
+  })
+  if (!stddev.ok) throw new Error('Expected stddev values')
+  // Second time has 4 members: [1022.2715, 1018.2715, 1012.2715, 1013.2715]
+  // mean = 1016.5215, stddevs should differ from first time
+  expect(stddev.values[1]!.value).toBeGreaterThan(3)
+  expect(stddev.values[1]!.value).toBeLessThan(5)
+})

@@ -1,6 +1,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle } from 'lucide-react'
+import {
+  AssessmentHeaderCard,
+  AssessmentInfoRow,
+  AssessmentUnavailableCard,
+} from './assessment-shared-ui'
 
 type MetricSet = {
   rmse: number
@@ -107,18 +110,11 @@ export function AccuracyAssessmentPanel({
 }: AccuracyAssessmentPanelProps) {
   if (!data.available) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>精度评估</CardTitle>
-          <CardDescription>无法计算精度指标</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Alert>
-            <AlertCircle className="size-4" />
-            <AlertDescription>{data.reason}</AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
+      <AssessmentUnavailableCard
+        title="精度评估"
+        subtitle="无法计算精度指标"
+        reason={data.reason}
+      />
     )
   }
 
@@ -127,35 +123,20 @@ export function AccuracyAssessmentPanel({
   return (
     <div className="space-y-6">
       {/* Header Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>精度评估</CardTitle>
-          <CardDescription>
-            基于 {samples.stationCount} 个独立台站 · {samples.n} 个站时样本 · {method.dataSource}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="text-sm">
-            <div className="font-medium text-foreground">时间覆盖</div>
-            <div className="text-muted-foreground">
-              {samples.timeCoverage.start} 至 {samples.timeCoverage.end}（实际查询{' '}
-              {samples.timeCoverage.actualTimes} 个时刻）
-            </div>
-          </div>
-          <div className="text-sm">
-            <div className="font-medium text-foreground">取样方案</div>
-            <div className="text-muted-foreground">
-              {method.matching} · {sampling.plan}
-            </div>
-          </div>
-          <div className="text-sm">
-            <div className="font-medium text-foreground">单位与数据说明</div>
-            <div className="text-muted-foreground">
-              {method.unit} · 合成台站参考，不代表真实预报能力
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <AssessmentHeaderCard
+        title="精度评估"
+        description={`基于 ${samples.stationCount} 个独立台站 · ${samples.n} 个站时样本 · ${method.dataSource}`}
+      >
+        <AssessmentInfoRow
+          label="时间覆盖"
+          value={`${samples.timeCoverage.start} 至 ${samples.timeCoverage.end}（实际查询 ${samples.timeCoverage.actualTimes} 个时刻）`}
+        />
+        <AssessmentInfoRow label="取样方案" value={`${method.matching} · ${sampling.plan}`} />
+        <AssessmentInfoRow
+          label="单位与数据说明"
+          value={`${method.unit} · 合成台站参考，不代表真实预报能力`}
+        />
+      </AssessmentHeaderCard>
 
       {/* Metrics Grid */}
       <div className="grid gap-4 md:grid-cols-3">

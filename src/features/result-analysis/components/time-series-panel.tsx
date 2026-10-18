@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   LineChart,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -94,12 +95,29 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
 
   // Prepare chart data
   const chartData = data
-    ? data.original.map((originalPoint, index) => ({
-        time: formatTimeSeriesTime(originalPoint.time, data.granularity),
-        original: originalPoint.value,
-        downscaled: data.downscaled[index]?.value ?? null,
-        observation: data.observation?.[index]?.value ?? null,
-      }))
+    ? data.original.map((originalPoint, index) => {
+        const formattedTime = formatTimeSeriesTime(originalPoint.time, data.granularity)
+        const baseData = {
+          time: formattedTime,
+          original: originalPoint.value,
+          downscaled: data.downscaled[index]?.value ?? null,
+          observation: data.observation?.[index]?.value ?? null,
+        }
+
+        // Add ensemble quantile data if available
+        if (data.ensemble) {
+          const quantilePoint = data.ensemble.quantiles[index]
+          return {
+            ...baseData,
+            p10: quantilePoint?.p10 ?? null,
+            p50: quantilePoint?.p50 ?? null,
+            p90: quantilePoint?.p90 ?? null,
+            validCount: quantilePoint?.validCount ?? 0,
+          }
+        }
+
+        return baseData
+      })
     : []
 
   const getTerrainIcon = (terrainType: string) => {
@@ -248,6 +266,7 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
               {data.coordinate.latitude.toFixed(4)}°N, {data.coordinate.longitude.toFixed(4)}°E ·{' '}
               {data.timezone} · {data.unit} · {getSemanticsLabel(data.semantics)} ·{' '}
               {data.granularity === 'daily' ? '按日' : '按小时'}
+              {data.ensemble && <> · 概率式集合 (K={data.ensemble.totalMembers})</>}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -265,11 +284,40 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
                   <YAxis label={{ value: data.unit, angle: -90, position: 'insideLeft' }} />
                   <Tooltip
                     contentStyle={{ backgroundColor: 'hsl(var(--card))' }}
-                    formatter={(value) =>
-                      value !== null && typeof value === 'number' ? value.toFixed(2) : '无数据'
-                    }
+                    formatter={(value, name) => {
+                      if (value !== null && typeof value === 'number') {
+                        return [value.toFixed(2), getTooltipLabel(name as string)]
+                      }
+                      return ['无数据', getTooltipLabel(name as string)]
+                    }}
+                    labelFormatter={(label) => `时间: ${label}`}
                   />
-                  <Legend />
+                  <Legend formatter={(value) => getLegendLabel(value)} />
+
+                  {/* P10-P90 quantile band (80% ensemble quantile interval) */}
+                  {data.ensemble && (
+                    <Area
+                      type="monotone"
+                      dataKey="p90"
+                      stroke="none"
+                      fill="hsl(var(--destructive))"
+                      fillOpacity={0.15}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {data.ensemble && (
+                    <Area
+                      type="monotone"
+                      dataKey="p10"
+                      stroke="none"
+                      fill="hsl(var(--card))"
+                      fillOpacity={1}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  )}
+
                   <Line
                     type="monotone"
                     dataKey="original"
@@ -289,6 +337,20 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
                     dot={false}
                     connectNulls
                   />
+
+                  {/* P50 (median) line for ensemble */}
+                  {data.ensemble && (
+                    <Line
+                      type="monotone"
+                      dataKey="p50"
+                      stroke="hsl(var(--destructive))"
+                      strokeWidth={2}
+                      name="P50 (中位数)"
+                      dot={false}
+                      connectNulls={false}
+                    />
+                  )}
+
                   {data.observation && (
                     <Line
                       type="monotone"
@@ -304,6 +366,18 @@ export function TimeSeriesPanel({ task }: TimeSeriesPanelProps) {
                 </LineChart>
               </ResponsiveContainer>
             </div>
+
+            {data.ensemble && (
+              <div className="mt-4 rounded border border-amber-500 bg-amber-50 p-3 dark:bg-amber-950/20">
+                <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                  80% 集合分位区间 (P10–P90)
+                </p>
+                <p className="mt-1 text-xs text-amber-800 dark:text-amber-300">
+                  阴影区间显示第10至第90百分位数，覆盖80%的集合成员。P50为中位数。此区间基于保存的集合样本计算，不代表已校准的置信区间或正式风险发生率。(Synthetic
+                  Demo)
+                </p>
+              </div>
+            )}
 
             <div className="mt-4 text-sm text-muted-foreground">
               <p>
@@ -435,5 +509,45 @@ function getSemanticsLabel(semantics: string): string {
       return '日最低值'
     default:
       return semantics
+  }
+}
+
+function getLegendLabel(value: string): string {
+  switch (value) {
+    case 'original':
+      return '原始数据'
+    case 'downscaled':
+      return '降尺度数据'
+    case 'observation':
+      return '观测参考'
+    case 'p50':
+      return 'P50 (中位数)'
+    case 'p10':
+      return 'P10–P90 区间'
+    case 'p90':
+      return 'P10–P90 区间'
+    default:
+      return value
+  }
+}
+
+function getTooltipLabel(name: string): string {
+  switch (name) {
+    case 'original':
+      return '原始'
+    case 'downscaled':
+      return '降尺度'
+    case 'observation':
+      return '观测'
+    case 'p10':
+      return 'P10'
+    case 'p50':
+      return 'P50'
+    case 'p90':
+      return 'P90'
+    case 'validCount':
+      return '有效成员数'
+    default:
+      return name
   }
 }
