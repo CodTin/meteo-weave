@@ -45,6 +45,10 @@ export interface ThresholdProbability {
   probability: number | null
   /** List of member IDs that were unavailable */
   unavailableMemberIds: string[]
+  /** List of member IDs with incomplete accumulation intervals (precipitation only) */
+  incompleteMemberIds?: string[]
+  /** List of member IDs with mismatched accumulation intervals (precipitation only) */
+  mismatchedIntervalMemberIds?: string[]
 }
 
 /**

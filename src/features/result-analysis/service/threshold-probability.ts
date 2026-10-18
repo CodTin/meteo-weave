@@ -85,25 +85,102 @@ export function evaluateThresholdProbability(
       )
       .map((u) => u.memberId)
 
+    // For precipitation accumulation, filter members based on interval completeness
+    let validValues = values
+    const incompleteMemberIds: string[] = []
+    const mismatchedIntervalMemberIds: string[] = []
+
+    if (
+      threshold.variable === 'precipitation' &&
+      threshold.interval === 'accumulation' &&
+      result.variable === 'precipitation'
+    ) {
+      // Type narrowing: precipitation results have accumulation property
+      type PrecipValue = ResultValue & {
+        accumulation: {
+          start: string
+          end: string
+          requestedStart: string
+          requestedEnd: string
+          bounds: '[start,end)'
+          sampledHours: number
+          expectedHours: number
+          complete: boolean
+        }
+      }
+
+      // Find the canonical requested interval from complete members
+      let canonicalInterval: { requestedStart: string; requestedEnd: string } | null = null
+      for (const value of values) {
+        if ('accumulation' in value && value.accumulation) {
+          const precipValue = value as PrecipValue
+          const acc = precipValue.accumulation
+          if (acc.complete) {
+            canonicalInterval = {
+              requestedStart: acc.requestedStart,
+              requestedEnd: acc.requestedEnd,
+            }
+            break
+          }
+        }
+      }
+
+      validValues = values.filter((value) => {
+        if (!('accumulation' in value) || !value.accumulation) {
+          return false
+        }
+
+        const precipValue = value as PrecipValue
+        const acc = precipValue.accumulation
+
+        // Exclude incomplete intervals
+        if (!acc.complete) {
+          if (value.memberId) incompleteMemberIds.push(value.memberId)
+          return false
+        }
+
+        // Exclude mismatched intervals
+        if (
+          canonicalInterval &&
+          (acc.requestedStart !== canonicalInterval.requestedStart ||
+            acc.requestedEnd !== canonicalInterval.requestedEnd)
+        ) {
+          if (value.memberId) mismatchedIntervalMemberIds.push(value.memberId)
+          return false
+        }
+
+        return true
+      })
+    }
+
     // Count members meeting threshold
     let exceedingMembers = 0
-    for (const value of values) {
+    for (const value of validValues) {
       const comparableValue = extractComparableValue(value, threshold)
       if (meetsThreshold(comparableValue, threshold)) {
         exceedingMembers++
       }
     }
 
-    const validMembers = values.length
+    const validMembers = validValues.length
     const probability = validMembers > 0 ? exceedingMembers / validMembers : null
 
-    probabilities.push({
+    const prob: ThresholdProbability = {
       ...locationTime,
       exceedingMembers,
       validMembers,
       probability,
       unavailableMemberIds,
-    })
+    }
+
+    if (incompleteMemberIds.length > 0) {
+      prob.incompleteMemberIds = incompleteMemberIds
+    }
+    if (mismatchedIntervalMemberIds.length > 0) {
+      prob.mismatchedIntervalMemberIds = mismatchedIntervalMemberIds
+    }
+
+    probabilities.push(prob)
   }
 
   return probabilities
