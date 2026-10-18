@@ -113,9 +113,18 @@ const average = (values: number[]) =>
     values.reduce((total, value) => total + Math.round(value * 10_000), 0) / values.length,
   ) / 10_000
 
-function means<T extends ResultValue, R extends ResultValue>(
+const populationStddev = (values: number[], mean: number) => {
+  if (values.length === 0) return 0
+  const variance =
+    values.reduce((sum, value) => sum + Math.pow(Math.round(value * 10_000) - Math.round(mean * 10_000), 2), 0) /
+    (values.length * 10_000 * 10_000)
+  return Math.round(Math.sqrt(variance) * 10_000) / 10_000
+}
+
+function aggregateEnsemble<T extends ResultValue, R extends ResultValue>(
   groups: Array<{ point: ResultPoint; time: string; values: T[] }>,
   selection: Selection,
+  aggregateValue: (values: T[]) => number,
   project: (values: T[], scalar: MeanValue) => R,
 ): R[] | Unavailable {
   const rows: R[] = []
@@ -130,7 +139,7 @@ function means<T extends ResultValue, R extends ResultValue>(
       project(group.values, {
         ...group.point,
         time: group.time,
-        value: average(group.values.map((value) => value.value)),
+        value: aggregateValue(group.values),
         ensembleMean: {
           sampleCount: group.values.length,
           validMemberIds,
@@ -147,25 +156,57 @@ function computeValues<T extends ResultValue, R extends ResultValue>(
   selection: Selection,
   meanProjection: (values: T[], scalar: MeanValue) => R,
 ): T[] | R[] | Unavailable {
-  return selection.kind === 'mean' ? means(result.groups, selection, meanProjection) : result.values
+  if (selection.kind === 'mean') {
+    return aggregateEnsemble(
+      result.groups,
+      selection,
+      (values) => average(values.map((v) => v.value)),
+      meanProjection,
+    )
+  }
+  if (selection.kind === 'stddev') {
+    return aggregateEnsemble(
+      result.groups,
+      selection,
+      (values) => {
+        const vals = values.map((v) => v.value)
+        return populationStddev(vals, average(vals))
+      },
+      meanProjection,
+    )
+  }
+  return result.values
 }
 
 function buildEnsembleMetadata(
   selection: Selection,
   result: { failures: EnsembleUnavailable[]; values: EnsembleSample[] },
 ): EnsembleMetadata {
-  return {
+  const base = {
     ...selection,
     unavailable: result.failures,
-    missingPolicy: 'exclude-unavailable-per-location-time',
-    ...(selection.kind === 'mean'
-      ? {
-          samples: result.values,
-          meanDefinition:
-            'Arithmetic available-member scalars and diagnostics: daily.minimum is the mean of member daily minima, not the minimum of the mean field. Wind averages U10/V10 before deriving speed/direction; meanMemberSpeed is the arithmetic mean of member speeds.',
-        }
-      : {}),
+    missingPolicy: 'exclude-unavailable-per-location-time' as const,
   }
+
+  if (selection.kind === 'mean') {
+    return {
+      ...base,
+      samples: result.values,
+      meanDefinition:
+        'Arithmetic available-member scalars and diagnostics: daily.minimum is the mean of member daily minima, not the minimum of the mean field. Wind averages U10/V10 before deriving speed/direction; meanMemberSpeed is the arithmetic mean of member speeds.',
+    }
+  }
+
+  if (selection.kind === 'stddev') {
+    return {
+      ...base,
+      samples: result.values,
+      meanDefinition:
+        'Population standard deviation of available members: sqrt(sum((x - mean)^2) / K). This measures ensemble spread, not validated prediction uncertainty.',
+    }
+  }
+
+  return base
 }
 
 export function queryEnsemble(
