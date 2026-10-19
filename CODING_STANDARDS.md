@@ -42,6 +42,40 @@ the guardrail is missing, bypassed or wrong.
 - **Domain utilities**: Feature-specific helpers stay with their feature.
 - **Cross-domain utilities**: Shared across multiple features go in `src/lib/utils.ts`.
 
+## Shared types
+
+- **Component props/state types**: Stay in-file unless used by 3+ components.
+- **Domain types**: Feature-specific types go in `src/features/[domain]/types/`.
+- **Cross-feature types**: Shared across features go in `src/types/`.
+- **Extraction threshold**: Extract when a type appears in 2+ files, especially if it travels across request/response boundaries.
+
+## Test setup extraction
+
+- **E2E test helpers**: When test setup (login, navigation, resource creation) appears in 3+ tests, extract to `tests/e2e/helpers/`. Helper names describe the end state (`setupExportTab`, `setupCompletedTask`), not the steps.
+- **Unit test factories**: Shared test data factories go in `tests/factories/`.
+- **Keep scenario assertions local**: Extract real repeated coordination, not generic testing frameworks.
+
+## E2E file download tests
+
+When a spec says "parse downloaded file" or "verify file content":
+
+1. Use actual parser library (papaparse for CSV, JSON.parse for JSON/GeoJSON)
+2. Verify record count matches estimation or known bounds
+3. Verify field structure (column names, required fields, data types)
+4. Compare sample records with expected data (not just presence)
+5. Test naming: `downloads and verifies [format] with [data selection]`
+
+Example:
+
+```typescript
+const download = await downloadPromise
+const path = await download.path()
+const csvContent = await fs.readFile(path, 'utf-8')
+const parsed = Papa.parse(csvContent, { header: true })
+expect(parsed.data.length).toBeGreaterThan(0)
+expect(parsed.data[0]).toHaveProperty('latitude')
+```
+
 ## Authority
 
 The originating spec defines scope. `docs/development.md` describes the current framework and
