@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { estimateExportFn } from '@/server/functions/csv-export'
 import type {
   ExportEstimationSuccess,
@@ -17,6 +17,7 @@ type EstimateSnapshot = {
 /** Estimates and downloads share the same full request, validation preview and identity key. */
 export function useExportEstimation(request: ExportRequest, debounceMs = 300) {
   const key = exportRequestKey(request)
+  const [attempt, setAttempt] = useState(0)
   const [scope] = useState(() => new ExportRequestIdentity(request))
   const [snapshot, setSnapshot] = useState<EstimateSnapshot>({
     identity: 0,
@@ -60,7 +61,7 @@ export function useExportEstimation(request: ExportRequest, debounceMs = 300) {
             !Array.isArray(reply.counts) ||
             !Array.isArray(reply.notes)
           )
-            throw new Error('服务器未返回有效估算，请调整选择后重试。')
+            throw new Error('服务器未返回有效估算，请重试。')
           setSnapshot({ ...initial, estimation: reply, isEstimating: false })
         }
       } catch (error) {
@@ -79,7 +80,12 @@ export function useExportEstimation(request: ExportRequest, debounceMs = 300) {
       controller.abort()
       scope.settle(operation)
     }
-  }, [key, scope, debounceMs])
+  }, [key, scope, debounceMs, attempt])
+
+  const retry = useCallback(() => {
+    scope.retire()
+    setAttempt((previous) => previous + 1)
+  }, [scope])
 
   // Clear old records/notes/identity during render, before any debounce or late response.
   const visible =
@@ -99,6 +105,7 @@ export function useExportEstimation(request: ExportRequest, debounceMs = 300) {
       isEstimating: false,
       error: validation.message,
       code: validation.code,
+      retry,
     }
-  return { ...visible, isEstimating: !visible.estimation && !visible.error }
+  return { ...visible, isEstimating: !visible.estimation && !visible.error, retry }
 }

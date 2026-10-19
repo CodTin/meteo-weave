@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
 import type {
+  BinaryExportSuccess,
   ExportEstimationSuccess,
   ExportFailure,
   ExportLayer,
@@ -33,6 +34,7 @@ const PRECISION_NOTE = 'IEEE 754 float32; absolute comparison tolerance 0.001 in
 export type NetCDFExportResult = {
   ok: true
   data: Uint8Array
+  byteLength: number
   filename: string
   mimeType: 'application/x-netcdf'
   recordCount: number
@@ -474,6 +476,7 @@ export async function generateNetCDFPlan(
     return {
       ok: true,
       data,
+      byteLength: data.byteLength,
       filename,
       mimeType: 'application/x-netcdf',
       recordCount: plan.recordCount,
@@ -505,11 +508,12 @@ export async function generateResultExport(input: unknown, signal?: AbortSignal)
     return {
       ok: true as const,
       content: result.data,
+      byteLength: result.byteLength,
       mimeType: result.mimeType,
       filename: result.filename,
       recordCount: result.recordCount,
       notes: result.notes,
-    }
+    } satisfies BinaryExportSuccess
   }
   return plan.request.format === 'geojson'
     ? generateGeoJsonPlan(plan, signal)

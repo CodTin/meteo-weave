@@ -3,6 +3,7 @@ import { queryTaskResult } from '@/features/downscaling-tasks/service/result-que
 import { createExportPlan } from '@/server/services/result-export-plan.server'
 import { readExportRecords } from '@/server/services/result-export-records.server'
 import { exportRequest, exportTask } from '../factories/export-task'
+import { demoCatalogFor } from '@/features/downscaling-tasks/service/demo-catalog'
 
 describe('actual public export records', () => {
   it('returns each planned slot using public query values and exact native/station identity', async () => {
@@ -271,4 +272,57 @@ it('preserves public daily temperature mean/minimum/coverage and complete daily 
       }
     }
   }
+})
+
+it('exports canonical daily rainfall with unavailable members using the actual available-member mean', async () => {
+  const task = demoCatalogFor('researcher').find(
+    (candidate) => candidate.configuration.variable === 'precipitation',
+  )!
+  const selection = exportRequest(task, {
+    bbox: { west: 113, east: 113.001, south: 29, north: 29.001 },
+    timeRange: { start: '2024-01-01T00:00:00.000Z', end: '2024-01-02T00:00:00.000Z' },
+    temporalResolution: 'daily',
+    dataTypes: ['original', 'downscaled', 'observation'],
+  })
+  const mean = queryTaskResult(task, {
+    kind: 'points',
+    layer: 'downscaled',
+    temporalResolution: 'daily',
+    points: [{ longitude: 113, latitude: 29 }],
+    times: [selection.timeRange.start],
+  })
+  if (!mean.ok) throw new Error(mean.error)
+  expect(mean.ensemble?.unavailable).toHaveLength(1)
+  expect(mean.ensemble?.unavailable.every((member) => member.code === 'MISSING_MEMBER')).toBe(true)
+  expect(mean.values[0]!.ensembleMean?.sampleCount).toBe(4)
+  const plan = createExportPlan(selection, task)
+  if (!plan.ok) throw new Error(plan.message)
+  const result = await readExportRecords(plan)
+  expect(result.ok).toBe(true)
+  if (!result.ok) throw new Error(result.message)
+  expect(result.records).toHaveLength(3)
+  expect(result.records.map((record) => record.dataType)).toEqual([
+    'original',
+    'downscaled',
+    'observation',
+  ])
+  for (const record of result.records) {
+    const query = queryTaskResult(task, {
+      kind: 'points',
+      layer: record.dataType,
+      ...(record.dataType === 'observation' ? { observationMode: 'stations' } : {}),
+      temporalResolution: 'daily',
+      points: [{ longitude: record.longitude, latitude: record.latitude }],
+      times: [record.time],
+    })
+    if (!query.ok) throw new Error(query.error)
+    expect(record.value).toBe(query.values[0]!.value)
+    const value = query.values[0]!
+    if (!('accumulation' in value)) throw new Error('Rainfall lacks accumulation coverage')
+    expect(record.accumulation).toEqual(value.accumulation)
+    expect(record.qualityFlag).toBe('valid')
+    expect(record.accumulation?.complete).toBe(true)
+  }
+  expect(result.records[1]!.ensembleMean).toEqual(mean.values[0]!.ensembleMean)
+  expect(result.records[1]!.ensembleMeanDefinition).toBe(mean.ensemble?.meanDefinition)
 })

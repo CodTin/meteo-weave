@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Map, { Layer, Source } from 'react-map-gl/mapbox'
 import type { MapRef } from 'react-map-gl/mapbox'
-import MapboxDraw from '@mapbox/mapbox-gl-draw'
-import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import type { BoundingBox } from './validation'
-import DrawRectangle from './draw-rectangle-mode'
+import { bboxPolygon } from './geometry'
+import { RegionMapPlaceholder } from './region-map-placeholder'
+import { useRectangleDraw } from './use-rectangle-draw'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 interface TerrainMapProps {
@@ -25,7 +25,13 @@ export function TerrainMap({
   const [mapError, setMapError] = useState<string | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const mapRef = useRef<MapRef>(null)
-  const drawRef = useRef<MapboxDraw | null>(null)
+  useRectangleDraw({
+    mapRef,
+    isLoaded,
+    drawingMode,
+    onRectangleDrawn,
+    onDrawingModeChange,
+  })
 
   // Calculate map center and bounds from bbox
   const viewState = bbox
@@ -39,89 +45,6 @@ export function TerrainMap({
         latitude: 0,
         zoom: 1,
       }
-
-  // Initialize MapboxDraw when map loads
-  useEffect(() => {
-    if (!isLoaded || !mapRef.current) return
-
-    const map = mapRef.current.getMap()
-
-    // Initialize draw control if not already done
-    if (!drawRef.current) {
-      const draw = new MapboxDraw({
-        displayControlsDefault: false,
-        modes: {
-          ...MapboxDraw.modes,
-          draw_rectangle: DrawRectangle,
-        },
-      })
-
-      map.addControl(draw)
-      drawRef.current = draw
-
-      // Handle rectangle creation
-      map.on('draw.create', (e: any) => {
-        if (e.features && e.features.length > 0) {
-          const feature = e.features[0]
-          const coords = feature.geometry.coordinates[0]
-
-          // Extract bounds from rectangle coordinates
-          const lngs = coords.map((c: number[]) => c[0])
-          const lats = coords.map((c: number[]) => c[1])
-
-          const west = Math.min(...lngs)
-          const east = Math.max(...lngs)
-          const south = Math.min(...lats)
-          const north = Math.max(...lats)
-
-          const drawnBbox: BoundingBox = { west, south, east, north }
-
-          // Clear the drawn feature
-          draw.deleteAll()
-
-          // Exit drawing mode
-          if (onDrawingModeChange) {
-            onDrawingModeChange(false)
-          }
-
-          // Notify parent component
-          if (onRectangleDrawn) {
-            onRectangleDrawn(drawnBbox)
-          }
-        }
-      })
-    }
-
-    return () => {
-      // Cleanup on unmount
-      if (drawRef.current && map) {
-        try {
-          map.removeControl(drawRef.current)
-          drawRef.current = null
-        } catch {
-          // Control might already be removed
-        }
-      }
-    }
-  }, [isLoaded, onRectangleDrawn, onDrawingModeChange])
-
-  // Handle drawing mode changes
-  useEffect(() => {
-    if (!drawRef.current || !isLoaded) return
-
-    if (drawingMode) {
-      // Enter rectangle drawing mode
-      drawRef.current.changeMode('draw_rectangle')
-    } else {
-      // Exit to simple select mode
-      try {
-        drawRef.current.changeMode('simple_select')
-        drawRef.current.deleteAll()
-      } catch {
-        // Mode change might fail if already in simple_select
-      }
-    }
-  }, [drawingMode, isLoaded])
 
   useEffect(() => {
     if (bbox && mapRef.current && isLoaded) {
@@ -140,44 +63,8 @@ export function TerrainMap({
     }
   }, [bbox, isLoaded])
 
-  // Create GeoJSON for the bbox rectangle
-  const rectangleGeoJSON = bbox
-    ? {
-        type: 'Feature' as const,
-        geometry: {
-          type: 'Polygon' as const,
-          coordinates: [
-            [
-              [bbox.west, bbox.south],
-              [bbox.east, bbox.south],
-              [bbox.east, bbox.north],
-              [bbox.west, bbox.north],
-              [bbox.west, bbox.south],
-            ],
-          ],
-        },
-        properties: {},
-      }
-    : null
-
-  if (!mapboxToken) {
-    return (
-      <div className="rounded-lg border bg-muted/30 p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          地图不可用：未配置 Mapbox 公共访问令牌。您仍可通过坐标输入完成区域选择。
-        </p>
-      </div>
-    )
-  }
-
-  if (mapError) {
-    return (
-      <div className="rounded-lg border bg-muted/30 p-6 text-center">
-        <p className="text-sm text-muted-foreground">地图加载失败：{mapError}</p>
-        <p className="text-sm text-muted-foreground">您仍可通过坐标输入完成区域选择。</p>
-      </div>
-    )
-  }
+  const rectangleGeoJSON = bbox ? bboxPolygon(bbox) : null
+  if (!mapboxToken || mapError) return <RegionMapPlaceholder error={mapError} />
 
   return (
     <div className="h-[400px] w-full rounded-lg overflow-hidden border">

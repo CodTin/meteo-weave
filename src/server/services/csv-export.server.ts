@@ -9,7 +9,7 @@ import type {
   TextExportSuccess,
 } from '@/features/result-analysis/types/export'
 import { authenticateExportPlan, createExportPlan } from './result-export-plan.server'
-import { readExportRecords } from './result-export-records.server'
+import { createExportBaseRecord, readExportRecords } from './result-export-records.server'
 
 export {
   calculateBboxWidthKm,
@@ -293,42 +293,12 @@ function representativeRecord(plan: ExportPlan, layer: ExportPlan['layers'][numb
   const probabilistic =
     layer.dataType === 'downscaled' && plan.task.configuration.resolvedMethod === 'probabilistic'
   const record: ExportRecord = {
-    taskId: plan.task.id,
-    dataType: layer.dataType,
-    sampling: layer.dataType === 'observation' ? 'stations' : 'logical-grid',
-    sourceKind: layer.dataType === 'observation' ? 'synthetic-reference' : 'synthetic-model',
-    resolutionKm: layer.resolutionKm,
-    provenance: 'Synthetic Demo',
-    dataSource: plan.task.configuration.dataSource,
-    generatorVersion: plan.task.generatorVersion,
-    ...(layer.dataType === 'observation'
-      ? {
-          stationId: layer.stations[0]!.id,
-          reference: {
-            referenceSeed: plan.task.referenceSeed ?? 1729,
-            referenceVersion: plan.task.referenceVersion ?? 'synthetic-observations-v1',
-          },
-        }
-      : {}),
-    time,
-    longitude,
-    latitude,
-    variable,
-    unit: { temperature: '°C', wind: 'm/s', pressure: 'hPa', precipitation: 'mm' }[
-      variable
-    ] as ExportRecord['unit'],
+    ...createExportBaseRecord(plan, layer, { longitude, latitude }, time),
     value: { temperature: 20.1234, wind: 5.1234, pressure: 1013.1234, precipitation: 1.1234 }[
       variable
     ],
     qualityFlag: 'valid',
     qualityReason: null,
-    temporalStatistic:
-      variable === 'precipitation'
-        ? 'accumulation'
-        : plan.request.temporalResolution === 'daily'
-          ? 'daily-mean'
-          : 'instantaneous',
-    aggregation: probabilistic ? 'ensemble-mean' : 'none',
     ...(variable === 'wind'
       ? {
           u10: -3.1234,

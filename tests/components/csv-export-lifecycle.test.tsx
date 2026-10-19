@@ -4,6 +4,9 @@ import userEvent from '@testing-library/user-event'
 import { DataExportPanel } from '@/features/result-analysis/components/data-export-panel'
 import type { ExportRequest } from '@/features/result-analysis/types/export'
 import { demoCatalogFor } from '@/features/downscaling-tasks/service/demo-catalog'
+import { exportTaskAsNetCDF } from '@/server/services/netcdf-export.server'
+import { readNetCDF } from '../lib/netcdf-reader'
+import { exportRequest } from '../factories/export-task'
 
 const transport = vi.hoisted(() => ({ generate: vi.fn(), estimate: vi.fn() }))
 vi.mock('@/server/functions/csv-export', () => ({
@@ -52,6 +55,7 @@ beforeEach(() => {
   transport.generate.mockReset().mockResolvedValue({
     ok: true,
     content: bytes,
+    byteLength: bytes.byteLength,
     mimeType: 'application/x-netcdf',
     filename: 'temperature-downscaled.nc',
     recordCount: 12,
@@ -84,6 +88,7 @@ function deferredGeneration() {
 const goodBinary = () => ({
   ok: true,
   content: bytes,
+  byteLength: bytes.byteLength,
   mimeType: 'application/x-netcdf',
   filename: 'temperature-downscaled.nc',
   recordCount: 12,
@@ -114,6 +119,68 @@ describe('Data Export browser download lifecycle', () => {
     expect(urls.revoked.mock.calls).toEqual([['blob:export-1']])
     expect(screen.queryByText(/文件已保存|已撤回|删除.*文件/)).not.toBeInTheDocument()
   })
+  it('rejects a truncated real mixed NetCDF envelope and retries to an independently readable file', async () => {
+    const selection = exportRequest(task, {
+      bbox: { west: 10, east: 10.1, south: 46, north: 46.1 },
+      timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-01T01:00:00Z' },
+      dataTypes: ['original', 'downscaled', 'observation'],
+      format: 'netcdf',
+    })
+    const generated = await exportTaskAsNetCDF(task, selection)
+    if (!generated.ok) throw new Error(generated.error)
+    const truncated = generated.data.slice(0, Math.floor(generated.data.byteLength / 2))
+    expect(truncated.byteLength).toBeGreaterThan(32)
+    expect(() => readNetCDF(truncated)).toThrow()
+    const complete = {
+      ok: true,
+      content: generated.data,
+      byteLength: generated.data.byteLength,
+      filename: generated.filename,
+      mimeType: generated.mimeType,
+      recordCount: generated.recordCount,
+      notes: generated.notes,
+    }
+    transport.generate
+      .mockResolvedValueOnce({ ...complete, content: truncated })
+      .mockResolvedValueOnce(complete)
+    await readyNetCDF()
+    fireEvent.click(screen.getByRole('checkbox', { name: '原始数据（粗网格）' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: '观测数据（实际台站）' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '下载 NetCDF 文件' })).toBeEnabled(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: '下载 NetCDF 文件' }))
+    expect(await screen.findByText(/服务器未返回完整的 NetCDF 二进制文件/)).toBeVisible()
+    expect(downloads).toHaveLength(0)
+    expect(urls.created).not.toHaveBeenCalled()
+    expect(screen.queryByText('已发起浏览器下载')).not.toBeInTheDocument()
+    const firstSelection = transport.generate.mock.calls[0]![0].data
+    expect(firstSelection).toEqual(selection)
+
+    fireEvent.click(screen.getByRole('button', { name: '重试导出' }))
+    expect(await screen.findByText('已发起浏览器下载')).toBeVisible()
+    expect(transport.generate.mock.calls[1]![0].data).toEqual(firstSelection)
+    expect(downloads).toEqual([{ url: 'blob:export-1', filename: generated.filename }])
+    const blob: Blob = urls.created.mock.calls[0]![0]
+    const downloaded = await new Promise<Uint8Array>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer))
+      reader.onerror = () => reject(reader.error)
+      reader.readAsArrayBuffer(blob)
+    })
+    expect(downloaded).toEqual(generated.data)
+    const file = readNetCDF(downloaded)
+    expect(file.globalAttributes.recordCount).toBe(generated.recordCount)
+    expect(file.variables.map((variable) => variable.name)).toEqual(
+      expect.arrayContaining([
+        'temperature_original',
+        'temperature_downscaled',
+        'temperature_observation',
+      ]),
+    )
+    expect(urls.revoked).toHaveBeenCalledWith('blob:export-1')
+  })
+
   it('cancels the transport and never downloads its late result while a retry is still pending', async () => {
     const first = deferredGeneration()
     const second = deferredGeneration()
