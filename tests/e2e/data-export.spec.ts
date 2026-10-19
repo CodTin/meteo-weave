@@ -335,7 +335,10 @@ test.describe('Data Export', () => {
     await expect(page.getByText(/文件大小（约）/i)).toBeVisible()
 
     // Get initial record count
-    const initialRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const initialRecordText = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
     expect(initialRecordText).toContain('条')
 
     // Change data types - add original data
@@ -345,7 +348,10 @@ test.describe('Data Export', () => {
     await page.waitForTimeout(500)
 
     // Verify record count increased
-    const updatedRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const updatedRecordText = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
     expect(updatedRecordText).toContain('条')
     expect(updatedRecordText).not.toBe(initialRecordText)
 
@@ -373,10 +379,13 @@ test.describe('Data Export', () => {
     await expect(page.getByText(/数据量估算/i)).toBeVisible({ timeout: 5000 })
 
     // Extract estimated record count
-    const estimationText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const estimationText = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
     const estimatedCountMatch = estimationText?.match(/(\d[\d,]*)\s*条/)
     expect(estimatedCountMatch).toBeTruthy()
-    const estimatedCount = parseInt(estimatedCountMatch![1].replace(/,/g, ''), 10)
+    const estimatedCount = parseInt(estimatedCountMatch?.[1]?.replace(/,/g, '') ?? '0', 10)
 
     // Download CSV
     const downloadPromise = page.waitForEvent('download')
@@ -416,24 +425,36 @@ test.describe('Data Export', () => {
 
     // Wait for initial CSV estimation
     await expect(page.getByText(/数据量估算/i)).toBeVisible({ timeout: 5000 })
-    const csvSizeText = await page.getByText(/文件大小（约）/).locator('..').textContent()
+    const csvSizeText = await page
+      .getByText(/文件大小（约）/)
+      .locator('..')
+      .textContent()
 
     // Change to GeoJSON format
     await page.getByLabel(/GeoJSON/i).click()
     await page.waitForTimeout(500)
 
     // Verify file size changed (GeoJSON is typically larger)
-    const geojsonSizeText = await page.getByText(/文件大小（约）/).locator('..').textContent()
+    const geojsonSizeText = await page
+      .getByText(/文件大小（约）/)
+      .locator('..')
+      .textContent()
     expect(geojsonSizeText).not.toBe(csvSizeText)
 
     // Record count should stay the same
-    const csvRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const csvRecordText = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
 
     // Switch back to CSV
     await page.getByLabel(/CSV/i).click()
     await page.waitForTimeout(500)
 
-    const csvRecordText2 = await page.getByText(/数据记录数/).locator('..').textContent()
+    const csvRecordText2 = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
     expect(csvRecordText2).toBe(csvRecordText)
   })
 })

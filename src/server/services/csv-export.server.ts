@@ -255,7 +255,8 @@ export function generateCsvContent(
   const startMs = Date.parse(request.timeRange.start)
 
   for (const dataType of request.dataTypes) {
-    const _gridPoints = calculateGridPoints(dataType, request.bbox)
+    // Calculate grid points for this data type (not used in synthetic demo but validates bbox)
+    calculateGridPoints(dataType, request.bbox)
     const { sampling, provenance } = getDataTypeMetadata(dataType)
     const { unit, value } = getVariableMetadata(variable)
 
@@ -327,7 +328,11 @@ export function generateCsvContent(
             ]
           } else {
             const tempValue = value + Math.sin(lon + lat) * 5
-            variableFields = [tempValue.toFixed(2), encodeCsvField(unit), encodeCsvField(qualityFlag)]
+            variableFields = [
+              tempValue.toFixed(2),
+              encodeCsvField(unit),
+              encodeCsvField(qualityFlag),
+            ]
           }
 
           rows.push([...baseFields, ...commonFields, ...variableFields].join(','))
@@ -590,9 +595,7 @@ function estimateBytesPerRecord(
 /**
  * Estimate export metrics (exact record count and approximate file size).
  */
-export function estimateExportMetrics(
-  request: ExportEstimationRequest,
-): ExportEstimationResult {
+export function estimateExportMetrics(request: ExportEstimationRequest): ExportEstimationResult {
   // Validate request first
   const validationError = validateExportRequest(request)
   if (validationError) {
