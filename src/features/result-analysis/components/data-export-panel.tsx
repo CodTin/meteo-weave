@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
 import { ExportRegionMap } from './export-region-map'
 import { useCsvExport } from '@/features/result-analysis/hooks/use-csv-export'
+import { useExportEstimation } from '@/features/result-analysis/hooks/use-export-estimation'
 
 interface DataExportPanelProps {
   task: DownscalingTask
@@ -21,6 +22,19 @@ interface BBox {
   east: number
   south: number
   north: number
+}
+
+/**
+ * Format file size in human-readable format.
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`
+  } else if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  } else {
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  }
 }
 
 export function DataExportPanel({ task }: DataExportPanelProps) {
@@ -74,6 +88,16 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
   })
 
   const { state, progress, error, startExport, cancel, retry, downloadUrl, filename } = exportHook
+
+  // Use estimation hook
+  const { estimation } = useExportEstimation({
+    taskId: task.id,
+    bbox,
+    timeRange,
+    dataTypes,
+    format,
+    variable: configuration.variable,
+  })
 
   // Trigger download when URL is ready
   useEffect(() => {
@@ -262,6 +286,26 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
             GeoJSON 格式包含 Point 几何，坐标严格按 [经度, 纬度] 顺序，适合 GIS 工具导入
           </p>
         </div>
+
+        {/* Estimation Display */}
+        {estimation && dataTypes.length > 0 && (
+          <div className="space-y-2 rounded-md border p-4">
+            <h3 className="text-sm font-medium">数据量估算</h3>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">数据记录数：</span>
+                <span className="font-mono">{estimation.recordCount.toLocaleString()} 条</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">文件大小（约）：</span>
+                <span className="font-mono">{formatFileSize(estimation.approximateSize)}</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              记录数为精确计算；文件大小为近似值，实际大小可能略有差异
+            </p>
+          </div>
+        )}
 
         {/* Validation Info */}
         <Alert>
