@@ -9,10 +9,10 @@
 
 export interface NetCDFVariable {
   name: string
-  type: 'float' | 'double'
+  type: 'float' | 'double' | 'char'
   dimensions: string[]
   attributes: Record<string, string | number>
-  data: Float32Array | Float64Array
+  data: Float32Array | Float64Array | Uint8Array
 }
 
 export interface NetCDFDimension {
@@ -170,8 +170,8 @@ export function encodeNetCDF(encoding: NetCDFEncoding): Uint8Array {
   const variableInfo: Array<{
     offsetPosition: number
     dataSize: number
-    data: Float32Array | Float64Array
-    type: 'float' | 'double'
+    data: Float32Array | Float64Array | Uint8Array
+    type: 'float' | 'double' | 'char'
   }> = []
 
   let cumulativeDataOffset = 0
@@ -196,11 +196,12 @@ export function encodeNetCDF(encoding: NetCDFEncoding): Uint8Array {
     headerWriter.writeAttributes(variable.attributes)
 
     // Variable type
-    const ncType = variable.type === 'float' ? NC_FLOAT : NC_DOUBLE
+    const ncType =
+      variable.type === 'float' ? NC_FLOAT : variable.type === 'double' ? NC_DOUBLE : NC_CHAR
     headerWriter.writeInt32(ncType)
 
     // Variable size in bytes
-    const elementSize = variable.type === 'float' ? 4 : 8
+    const elementSize = variable.type === 'float' ? 4 : variable.type === 'double' ? 8 : 1
     const varSize = variable.data.length * elementSize
     headerWriter.writeInt32(varSize)
 
@@ -230,7 +231,13 @@ export function encodeNetCDF(encoding: NetCDFEncoding): Uint8Array {
   const dataWriter = new NetCDFWriter()
 
   for (const varInfo of variableInfo) {
-    if (varInfo.type === 'float') {
+    if (varInfo.type === 'char') {
+      // Write char data as raw bytes
+      if (!(varInfo.data instanceof Uint8Array)) {
+        throw new Error('Char variable must use Uint8Array')
+      }
+      dataWriter.writeBytes(varInfo.data)
+    } else if (varInfo.type === 'float') {
       for (let j = 0; j < varInfo.data.length; j++) {
         const value = varInfo.data[j]
         if (value === undefined) throw new Error('Data contains undefined values')

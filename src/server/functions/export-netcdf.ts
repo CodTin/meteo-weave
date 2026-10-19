@@ -3,9 +3,9 @@ import { exportTaskAsNetCDF } from '@/server/services/netcdf-export.server'
 import { initializeAndValidateTask } from '@/server/services/shared/assessment-service-helpers'
 
 export const exportNetCDF = createServerFn({ method: 'POST' })
-  .validator((data: { taskId: string; layer: 'downscaled' }) => data)
+  .validator((data: { taskId: string; layers: Array<'downscaled' | 'observation'> }) => data)
   .handler(async ({ data }) => {
-    const { taskId } = data
+    const { taskId, layers } = data
 
     // Get and validate task
     const validation = await initializeAndValidateTask(taskId)
@@ -23,7 +23,7 @@ export const exportNetCDF = createServerFn({ method: 'POST' })
     const { task } = validation
 
     // Generate NetCDF export
-    const result = await exportTaskAsNetCDF(task)
+    const result = await exportTaskAsNetCDF(task, { layers })
 
     if (!result.ok) {
       return new Response(JSON.stringify({ error: result.error }), {

@@ -14,7 +14,7 @@ export interface NetCDFFile {
     type: string
     dimensions: string[]
     attributes: Record<string, string | number>
-    data: Float32Array | Float64Array
+    data: Float32Array | Float64Array | Uint8Array
   }>
 }
 
@@ -167,7 +167,7 @@ function readVarList(
     type: string
     dimensions: string[]
     attributes: Record<string, string | number>
-    data: Float32Array | Float64Array
+    data: Float32Array | Float64Array | Uint8Array
   }>
   nextOffset: number
 } {
@@ -191,7 +191,7 @@ function readVarList(
     type: string
     dimensions: string[]
     attributes: Record<string, string | number>
-    data: Float32Array | Float64Array
+    data: Float32Array | Float64Array | Uint8Array
   }> = []
 
   for (let i = 0; i < count; i++) {
@@ -230,21 +230,28 @@ function readVarList(
     }
 
     // Read data from the specified absolute offset in the file
-    let data: Float32Array | Float64Array
+    let data: Float32Array | Float64Array | Uint8Array
     let typeName: string
 
-    // Validate the data offset is within buffer bounds
-    const elementSize = varType === 5 ? 4 : 8
-    const requiredSize = dataOffset + dataLength * elementSize
-    if (requiredSize > buffer.length) {
-      throw new Error(
-        `Data offset ${dataOffset} + size ${dataLength * elementSize} = ${requiredSize} exceeds buffer length ${buffer.length}`,
-      )
-    }
-
-    if (varType === 5) {
+    if (varType === 2) {
+      // NC_CHAR
+      typeName = 'char'
+      const requiredSize = dataOffset + dataLength
+      if (requiredSize > buffer.length) {
+        throw new Error(
+          `Data offset ${dataOffset} + size ${dataLength} = ${requiredSize} exceeds buffer length ${buffer.length}`,
+        )
+      }
+      data = buffer.slice(dataOffset, dataOffset + dataLength)
+    } else if (varType === 5) {
       // NC_FLOAT
       typeName = 'float'
+      const requiredSize = dataOffset + dataLength * 4
+      if (requiredSize > buffer.length) {
+        throw new Error(
+          `Data offset ${dataOffset} + size ${dataLength * 4} = ${requiredSize} exceeds buffer length ${buffer.length}`,
+        )
+      }
       data = new Float32Array(dataLength)
       for (let j = 0; j < dataLength; j++) {
         data[j] = view.getFloat32(dataOffset + j * 4, false)
@@ -252,6 +259,12 @@ function readVarList(
     } else if (varType === 6) {
       // NC_DOUBLE
       typeName = 'double'
+      const requiredSize = dataOffset + dataLength * 8
+      if (requiredSize > buffer.length) {
+        throw new Error(
+          `Data offset ${dataOffset} + size ${dataLength * 8} = ${requiredSize} exceeds buffer length ${buffer.length}`,
+        )
+      }
       data = new Float64Array(dataLength)
       for (let j = 0; j < dataLength; j++) {
         data[j] = view.getFloat64(dataOffset + j * 8, false)

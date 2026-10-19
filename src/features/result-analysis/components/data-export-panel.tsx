@@ -25,7 +25,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
       const response = await exportNetCDF({
         data: {
           taskId: task.id,
-          layer: 'downscaled',
+          layers: ['downscaled'],
         },
       })
 

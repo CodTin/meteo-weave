@@ -214,6 +214,205 @@ describe('NetCDF CDF-1 Encoding', () => {
     })
   })
 
+  describe('station dimension encoding', () => {
+    it('should encode station dimension separately from grid dimensions', () => {
+      const times = new Float64Array([0, 3600])
+      const stationIds = new Uint8Array([
+        // station-001 (11 chars)
+        0x73, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x2d, 0x30, 0x30, 0x31,
+        // station-002 (11 chars)
+        0x73, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x2d, 0x30, 0x30, 0x32,
+      ])
+      const stationLats = new Float32Array([30.0, 31.0])
+      const stationLons = new Float32Array([120.0, 121.0])
+      const obsTemp = new Float32Array([15.5, 16.0, 16.5, 17.0]) // 2 times × 2 stations
+
+      const encoding = {
+        dimensions: [
+          { name: 'time', size: 2 },
+          { name: 'station', size: 2 },
+          { name: 'stationId_len', size: 11 },
+        ],
+        variables: [
+          {
+            name: 'time',
+            type: 'double' as const,
+            dimensions: ['time'],
+            attributes: {
+              units: 'seconds since 1970-01-01 00:00:00',
+              calendar: 'gregorian',
+            } as Record<string, string | number>,
+            data: times,
+          },
+          {
+            name: 'stationId',
+            type: 'char' as const,
+            dimensions: ['station', 'stationId_len'],
+            attributes: {
+              long_name: 'Station Identifier',
+            } as Record<string, string | number>,
+            data: stationIds,
+          },
+          {
+            name: 'station_latitude',
+            type: 'float' as const,
+            dimensions: ['station'],
+            attributes: {
+              units: 'degrees_north',
+            } as Record<string, string | number>,
+            data: stationLats,
+          },
+          {
+            name: 'station_longitude',
+            type: 'float' as const,
+            dimensions: ['station'],
+            attributes: {
+              units: 'degrees_east',
+            } as Record<string, string | number>,
+            data: stationLons,
+          },
+          {
+            name: 'temperature_observation',
+            type: 'float' as const,
+            dimensions: ['time', 'station'],
+            attributes: {
+              units: 'degrees_celsius',
+              _FillValue: -9999.0,
+            } as Record<string, string | number>,
+            data: obsTemp,
+          },
+        ],
+        globalAttributes: {
+          title: 'Station Temperature Observations',
+          source: 'Synthetic Demo',
+        },
+      }
+
+      const result = encodeNetCDF(encoding)
+
+      // Verify magic bytes
+      expect(result[0]).toBe(0x43) // 'C'
+      expect(result[1]).toBe(0x44) // 'D'
+      expect(result[2]).toBe(0x46) // 'F'
+      expect(result[3]).toBe(0x01) // CDF-1
+
+      // Verify result contains data
+      expect(result.length).toBeGreaterThan(200)
+    })
+
+    it('should encode mixed grid and station data', () => {
+      const times = new Float64Array([0, 3600])
+      const lats = new Float32Array([30.0])
+      const lons = new Float32Array([120.0])
+      const gridTemp = new Float32Array([15.0, 16.0]) // 2 times × 1 lat × 1 lon
+
+      const stationIds = new Uint8Array([0x73, 0x74, 0x61]) // "sta"
+      const stationLats = new Float32Array([30.5])
+      const stationLons = new Float32Array([120.5])
+      const obsTemp = new Float32Array([15.5, 16.5]) // 2 times × 1 station
+
+      const encoding = {
+        dimensions: [
+          { name: 'time', size: 2 },
+          { name: 'latitude', size: 1 },
+          { name: 'longitude', size: 1 },
+          { name: 'station', size: 1 },
+          { name: 'stationId_len', size: 3 },
+        ],
+        variables: [
+          {
+            name: 'time',
+            type: 'double' as const,
+            dimensions: ['time'],
+            attributes: {
+              units: 'seconds since 1970-01-01 00:00:00',
+            } as Record<string, string | number>,
+            data: times,
+          },
+          {
+            name: 'latitude',
+            type: 'float' as const,
+            dimensions: ['latitude'],
+            attributes: {
+              units: 'degrees_north',
+            } as Record<string, string | number>,
+            data: lats,
+          },
+          {
+            name: 'longitude',
+            type: 'float' as const,
+            dimensions: ['longitude'],
+            attributes: {
+              units: 'degrees_east',
+            } as Record<string, string | number>,
+            data: lons,
+          },
+          {
+            name: 'temperature_downscaled',
+            type: 'float' as const,
+            dimensions: ['time', 'latitude', 'longitude'],
+            attributes: {
+              units: 'degrees_celsius',
+              source: 'Downscaled',
+            } as Record<string, string | number>,
+            data: gridTemp,
+          },
+          {
+            name: 'stationId',
+            type: 'char' as const,
+            dimensions: ['station', 'stationId_len'],
+            attributes: {
+              long_name: 'Station Identifier',
+            } as Record<string, string | number>,
+            data: stationIds,
+          },
+          {
+            name: 'station_latitude',
+            type: 'float' as const,
+            dimensions: ['station'],
+            attributes: {
+              units: 'degrees_north',
+            } as Record<string, string | number>,
+            data: stationLats,
+          },
+          {
+            name: 'station_longitude',
+            type: 'float' as const,
+            dimensions: ['station'],
+            attributes: {
+              units: 'degrees_east',
+            } as Record<string, string | number>,
+            data: stationLons,
+          },
+          {
+            name: 'temperature_observation',
+            type: 'float' as const,
+            dimensions: ['time', 'station'],
+            attributes: {
+              units: 'degrees_celsius',
+              source: 'Observation',
+            } as Record<string, string | number>,
+            data: obsTemp,
+          },
+        ],
+        globalAttributes: {
+          title: 'Mixed Grid and Station Data',
+          layers: 'downscaled,observation',
+        },
+      }
+
+      const result = encodeNetCDF(encoding)
+
+      // Verify magic bytes
+      expect(result[0]).toBe(0x43) // 'C'
+      expect(result[1]).toBe(0x44) // 'D'
+      expect(result[2]).toBe(0x46) // 'F'
+      expect(result[3]).toBe(0x01) // CDF-1
+
+      expect(result.length).toBeGreaterThan(300)
+    })
+  })
+
   describe('independent reader verification', () => {
     it('should read back encoded dimensions correctly', () => {
       const encoding = {
@@ -379,6 +578,264 @@ describe('NetCDF CDF-1 Encoding', () => {
       expect(tempVar?.data[1]).toBeCloseTo(16.0, 2)
       expect(tempVar?.data[2]).toBeCloseTo(16.5, 2)
       expect(tempVar?.data[3]).toBeCloseTo(17.0, 2)
+    })
+
+    it('should read back station dimensions and coordinates', () => {
+      const times = new Float64Array([0, 3600])
+      const stationIds = new Uint8Array([
+        // synthetic-station-v1:120:30 (26 chars)
+        ...Array.from('synthetic-station-v1:120:30').map((c) => c.charCodeAt(0)),
+        // synthetic-station-v1:121:31 (26 chars)
+        ...Array.from('synthetic-station-v1:121:31').map((c) => c.charCodeAt(0)),
+      ])
+      const stationLats = new Float32Array([30.0, 31.0])
+      const stationLons = new Float32Array([120.0, 121.0])
+      const obsTemp = new Float32Array([15.5, 16.0, 16.5, 17.0])
+
+      const encoding = {
+        dimensions: [
+          { name: 'time', size: 2 },
+          { name: 'station', size: 2 },
+          { name: 'stationId_len', size: 26 },
+        ],
+        variables: [
+          {
+            name: 'time',
+            type: 'double' as const,
+            dimensions: ['time'],
+            attributes: {
+              units: 'seconds since 1970-01-01 00:00:00',
+              calendar: 'gregorian',
+            } as Record<string, string | number>,
+            data: times,
+          },
+          {
+            name: 'stationId',
+            type: 'char' as const,
+            dimensions: ['station', 'stationId_len'],
+            attributes: {
+              long_name: 'Station Identifier',
+            } as Record<string, string | number>,
+            data: stationIds,
+          },
+          {
+            name: 'station_latitude',
+            type: 'float' as const,
+            dimensions: ['station'],
+            attributes: {
+              units: 'degrees_north',
+              long_name: 'Station Latitude',
+            } as Record<string, string | number>,
+            data: stationLats,
+          },
+          {
+            name: 'station_longitude',
+            type: 'float' as const,
+            dimensions: ['station'],
+            attributes: {
+              units: 'degrees_east',
+              long_name: 'Station Longitude',
+            } as Record<string, string | number>,
+            data: stationLons,
+          },
+          {
+            name: 'temperature_observation',
+            type: 'float' as const,
+            dimensions: ['time', 'station'],
+            attributes: {
+              units: 'degrees_celsius',
+              long_name: 'Observed Temperature',
+              _FillValue: -9999.0,
+              source: 'Synthetic Demo - Observation Reference',
+            } as Record<string, string | number>,
+            data: obsTemp,
+          },
+        ],
+        globalAttributes: {
+          title: 'Station Temperature Observations',
+          source: 'Synthetic Demo',
+        },
+      }
+
+      const encoded = encodeNetCDF(encoding)
+      const decoded = readNetCDF(encoded)
+
+      // Verify dimensions
+      expect(decoded.dimensions).toHaveLength(3)
+      expect(decoded.dimensions.find((d) => d.name === 'time')?.size).toBe(2)
+      expect(decoded.dimensions.find((d) => d.name === 'station')?.size).toBe(2)
+      expect(decoded.dimensions.find((d) => d.name === 'stationId_len')?.size).toBe(26)
+
+      // Verify stationId variable
+      const stationIdVar = decoded.variables.find((v) => v.name === 'stationId')
+      expect(stationIdVar).toBeDefined()
+      expect(stationIdVar?.type).toBe('char')
+      expect(stationIdVar?.dimensions).toEqual(['station', 'stationId_len'])
+      expect(stationIdVar?.attributes.long_name).toBe('Station Identifier')
+
+      // Verify station coordinates
+      const latVar = decoded.variables.find((v) => v.name === 'station_latitude')
+      expect(latVar).toBeDefined()
+      expect(latVar?.type).toBe('float')
+      expect(latVar?.dimensions).toEqual(['station'])
+      expect(latVar?.attributes.units).toBe('degrees_north')
+      expect(latVar?.data[0]).toBeCloseTo(30.0, 2)
+      expect(latVar?.data[1]).toBeCloseTo(31.0, 2)
+
+      const lonVar = decoded.variables.find((v) => v.name === 'station_longitude')
+      expect(lonVar).toBeDefined()
+      expect(lonVar?.type).toBe('float')
+      expect(lonVar?.dimensions).toEqual(['station'])
+      expect(lonVar?.attributes.units).toBe('degrees_east')
+      expect(lonVar?.data[0]).toBeCloseTo(120.0, 2)
+      expect(lonVar?.data[1]).toBeCloseTo(121.0, 2)
+
+      // Verify temperature observation variable
+      const tempVar = decoded.variables.find((v) => v.name === 'temperature_observation')
+      expect(tempVar).toBeDefined()
+      expect(tempVar?.type).toBe('float')
+      expect(tempVar?.dimensions).toEqual(['time', 'station'])
+      expect(tempVar?.attributes.units).toBe('degrees_celsius')
+      expect(tempVar?.attributes._FillValue).toBe(-9999.0)
+      expect(tempVar?.data).toHaveLength(4) // 2 times × 2 stations
+      expect(tempVar?.data[0]).toBeCloseTo(15.5, 2) // time=0, station=0
+      expect(tempVar?.data[1]).toBeCloseTo(16.0, 2) // time=0, station=1
+      expect(tempVar?.data[2]).toBeCloseTo(16.5, 2) // time=3600, station=0
+      expect(tempVar?.data[3]).toBeCloseTo(17.0, 2) // time=3600, station=1
+    })
+
+    it('should distinguish grid and station dimensions in mixed export', () => {
+      const times = new Float64Array([0])
+      const lats = new Float32Array([30.0, 30.5])
+      const lons = new Float32Array([120.0, 120.5])
+      const gridTemp = new Float32Array([15.0, 16.0, 17.0, 18.0]) // 1 time × 2 lats × 2 lons
+
+      const stationIds = new Uint8Array([0x73, 0x31]) // "s1"
+      const stationLats = new Float32Array([30.2])
+      const stationLons = new Float32Array([120.2])
+      const obsTemp = new Float32Array([15.8]) // 1 time × 1 station
+
+      const encoding = {
+        dimensions: [
+          { name: 'time', size: 1 },
+          { name: 'latitude', size: 2 },
+          { name: 'longitude', size: 2 },
+          { name: 'station', size: 1 },
+          { name: 'stationId_len', size: 2 },
+        ],
+        variables: [
+          {
+            name: 'time',
+            type: 'double' as const,
+            dimensions: ['time'],
+            attributes: {
+              units: 'seconds since 1970-01-01 00:00:00',
+            } as Record<string, string | number>,
+            data: times,
+          },
+          {
+            name: 'latitude',
+            type: 'float' as const,
+            dimensions: ['latitude'],
+            attributes: {
+              units: 'degrees_north',
+              long_name: 'Latitude',
+            } as Record<string, string | number>,
+            data: lats,
+          },
+          {
+            name: 'longitude',
+            type: 'float' as const,
+            dimensions: ['longitude'],
+            attributes: {
+              units: 'degrees_east',
+              long_name: 'Longitude',
+            } as Record<string, string | number>,
+            data: lons,
+          },
+          {
+            name: 'temperature_downscaled',
+            type: 'float' as const,
+            dimensions: ['time', 'latitude', 'longitude'],
+            attributes: {
+              units: 'degrees_celsius',
+              long_name: 'Downscaled Temperature',
+              source: 'Synthetic Demo - Downscaled',
+            } as Record<string, string | number>,
+            data: gridTemp,
+          },
+          {
+            name: 'stationId',
+            type: 'char' as const,
+            dimensions: ['station', 'stationId_len'],
+            attributes: {
+              long_name: 'Station Identifier',
+            } as Record<string, string | number>,
+            data: stationIds,
+          },
+          {
+            name: 'station_latitude',
+            type: 'float' as const,
+            dimensions: ['station'],
+            attributes: {
+              units: 'degrees_north',
+              long_name: 'Station Latitude',
+            } as Record<string, string | number>,
+            data: stationLats,
+          },
+          {
+            name: 'station_longitude',
+            type: 'float' as const,
+            dimensions: ['station'],
+            attributes: {
+              units: 'degrees_east',
+              long_name: 'Station Longitude',
+            } as Record<string, string | number>,
+            data: stationLons,
+          },
+          {
+            name: 'temperature_observation',
+            type: 'float' as const,
+            dimensions: ['time', 'station'],
+            attributes: {
+              units: 'degrees_celsius',
+              long_name: 'Observed Temperature',
+              source: 'Synthetic Demo - Observation Reference',
+            } as Record<string, string | number>,
+            data: obsTemp,
+          },
+        ],
+        globalAttributes: {
+          title: 'Mixed Grid and Station Data',
+          layers: 'downscaled,observation',
+        },
+      }
+
+      const encoded = encodeNetCDF(encoding)
+      const decoded = readNetCDF(encoded)
+
+      // Verify all dimensions are present and distinct
+      expect(decoded.dimensions).toHaveLength(5)
+      expect(decoded.dimensions.find((d) => d.name === 'latitude')?.size).toBe(2)
+      expect(decoded.dimensions.find((d) => d.name === 'longitude')?.size).toBe(2)
+      expect(decoded.dimensions.find((d) => d.name === 'station')?.size).toBe(1)
+
+      // Verify grid temperature uses lat/lon dimensions
+      const gridTempVar = decoded.variables.find((v) => v.name === 'temperature_downscaled')
+      expect(gridTempVar?.dimensions).toEqual(['time', 'latitude', 'longitude'])
+      expect(gridTempVar?.data).toHaveLength(4)
+
+      // Verify observation temperature uses station dimension
+      const obsTempVar = decoded.variables.find((v) => v.name === 'temperature_observation')
+      expect(obsTempVar?.dimensions).toEqual(['time', 'station'])
+      expect(obsTempVar?.data).toHaveLength(1)
+
+      // Verify both have correct source attribution
+      expect(gridTempVar?.attributes.source).toContain('Downscaled')
+      expect(obsTempVar?.attributes.source).toContain('Observation')
+
+      // Verify global attributes indicate mixed export
+      expect(decoded.globalAttributes.layers).toBe('downscaled,observation')
     })
   })
 })
