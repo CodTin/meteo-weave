@@ -2,7 +2,7 @@
  * Hook for real-time export estimation with debounced updates.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createServerFn } from '@tanstack/react-start'
 import type { ExportEstimationRequest } from '@/server/services/csv-export.server'
 
@@ -53,7 +53,20 @@ export function useExportEstimation(
   const currentRequestKeyRef = useRef<string | null>(null)
   const timeoutRef = useRef<NodeJS.Timeout | null>(null)
 
+  // Memoize dataTypes string to avoid recreating on every render
+  const dataTypesKey = useMemo(
+    () => request.dataTypes.slice().sort().join(','),
+    [request.dataTypes],
+  )
+
   useEffect(() => {
+    // Skip if no data types selected
+    if (request.dataTypes.length === 0) {
+      setEstimation(null)
+      setError(null)
+      return
+    }
+
     // Clear any pending estimation
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current)
@@ -62,15 +75,7 @@ export function useExportEstimation(
     // Generate request key for this config
     const requestKey = generateRequestKey(request)
 
-    // Skip if no data types selected
-    if (request.dataTypes.length === 0) {
-      setEstimation(null)
-      setError(null)
-      setIsEstimating(false)
-      return
-    }
-
-    // Debounce the estimation
+    // Start estimating (will show loading state)
     setIsEstimating(true)
     timeoutRef.current = setTimeout(async () => {
       currentRequestKeyRef.current = requestKey
@@ -114,7 +119,7 @@ export function useExportEstimation(
     request.bbox.north,
     request.timeRange.start,
     request.timeRange.end,
-    JSON.stringify(request.dataTypes),
+    dataTypesKey,
     request.format,
     request.variable,
     debounceMs,

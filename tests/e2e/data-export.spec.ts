@@ -1,40 +1,11 @@
 import { test, expect } from './browser-guard'
+import { setupExportTab } from './helpers/export-test-helpers'
 
 test.describe('Data Export', () => {
   test('displays export panel for completed temperature task with all data type options', async ({
     page,
   }) => {
-    // Navigate to the app
-    await page.goto('/')
-
-    // Login as researcher
-    await page.getByRole('button', { name: /登录/i }).click()
-    await page.getByRole('button', { name: /研究人员/i }).click()
-
-    // Create a new task
-    await page.getByRole('link', { name: /新建任务/i }).click()
-
-    // Wait for task creation page
-    await expect(page).toHaveURL(/\/tasks\/new/)
-
-    // Fill in basic task details
-    await page.getByLabel(/数据源/i).click()
-    await page.getByRole('option', { name: /ECMWF/i }).click()
-
-    await page.getByLabel(/气象变量/i).click()
-    await page.getByRole('option', { name: /Temperature/i }).click()
-
-    // Submit the task
-    await page.getByRole('button', { name: /提交任务/i }).click()
-
-    // Wait for task to complete (synthetic demo takes ~2.5s)
-    await page.waitForTimeout(3000)
-
-    // Navigate to result analysis
-    await page.getByRole('button', { name: /查看结果分析/i }).click()
-
-    // Click on the export tab
-    await page.getByRole('tab', { name: /数据导出/i }).click()
+    await setupExportTab(page)
 
     // Verify export panel is displayed
     await expect(page.getByRole('heading', { name: /数据导出/i })).toBeVisible()
@@ -335,7 +306,10 @@ test.describe('Data Export', () => {
     await expect(page.getByText(/文件大小（约）/i)).toBeVisible()
 
     // Get initial record count
-    const initialRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const initialRecordText = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
     expect(initialRecordText).toContain('条')
 
     // Change data types - add original data
@@ -345,7 +319,10 @@ test.describe('Data Export', () => {
     await page.waitForTimeout(500)
 
     // Verify record count increased
-    const updatedRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const updatedRecordText = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
     expect(updatedRecordText).toContain('条')
     expect(updatedRecordText).not.toBe(initialRecordText)
 
@@ -373,10 +350,13 @@ test.describe('Data Export', () => {
     await expect(page.getByText(/数据量估算/i)).toBeVisible({ timeout: 5000 })
 
     // Extract estimated record count
-    const estimationText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const estimationText = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
     const estimatedCountMatch = estimationText?.match(/(\d[\d,]*)\s*条/)
     expect(estimatedCountMatch).toBeTruthy()
-    const estimatedCount = parseInt(estimatedCountMatch![1].replace(/,/g, ''), 10)
+    const estimatedCount = parseInt(estimatedCountMatch?.[1]?.replace(/,/g, '') ?? '0', 10)
 
     // Download CSV
     const downloadPromise = page.waitForEvent('download')
@@ -416,24 +396,36 @@ test.describe('Data Export', () => {
 
     // Wait for initial CSV estimation
     await expect(page.getByText(/数据量估算/i)).toBeVisible({ timeout: 5000 })
-    const csvSizeText = await page.getByText(/文件大小（约）/).locator('..').textContent()
+    const csvSizeText = await page
+      .getByText(/文件大小（约）/)
+      .locator('..')
+      .textContent()
 
     // Change to GeoJSON format
     await page.getByLabel(/GeoJSON/i).click()
     await page.waitForTimeout(500)
 
     // Verify file size changed (GeoJSON is typically larger)
-    const geojsonSizeText = await page.getByText(/文件大小（约）/).locator('..').textContent()
+    const geojsonSizeText = await page
+      .getByText(/文件大小（约）/)
+      .locator('..')
+      .textContent()
     expect(geojsonSizeText).not.toBe(csvSizeText)
 
     // Record count should stay the same
-    const csvRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const csvRecordText = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
 
     // Switch back to CSV
     await page.getByLabel(/CSV/i).click()
     await page.waitForTimeout(500)
 
-    const csvRecordText2 = await page.getByText(/数据记录数/).locator('..').textContent()
+    const csvRecordText2 = await page
+      .getByText(/数据记录数/)
+      .locator('..')
+      .textContent()
     expect(csvRecordText2).toBe(csvRecordText)
   })
 })
