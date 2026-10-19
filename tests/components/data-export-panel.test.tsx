@@ -1,143 +1,67 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DataExportPanel } from '@/features/result-analysis/components/data-export-panel'
-import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
+import { demoCatalogFor } from '@/features/downscaling-tasks/service/demo-catalog'
 
-// Mock the map component since we're testing component logic, not map rendering
-vi.mock('@/features/result-analysis/components/export-region-map', () => ({
-  ExportRegionMap: ({
-    taskBounds,
-    onBoundsChange,
-  }: {
-    taskBounds: any
-    exportBounds: any
-    onBoundsChange: (bounds: any) => void
-  }) => (
-    <div data-testid="export-region-map">
-      <button
-        data-testid="mock-draw-rectangle"
-        onClick={() => {
-          // Simulate drawing a rectangle within task bounds
-          onBoundsChange({
-            west: taskBounds.west + 0.1,
-            east: taskBounds.east - 0.1,
-            south: taskBounds.south + 0.1,
-            north: taskBounds.north - 0.1,
-          })
-        }}
-      >
-        Draw Rectangle
-      </button>
-    </div>
-  ),
+const server = vi.hoisted(() => ({ estimate: vi.fn(), generate: vi.fn() }))
+vi.mock('@/server/functions/csv-export', () => ({
+  estimateExportFn: server.estimate,
+  generateExportFn: server.generate,
 }))
+const tasks = demoCatalogFor('researcher')
 
-const mockTask: DownscalingTask = {
-  schemaVersion: 1,
-  id: 'test-task-1',
-  name: 'Test Task',
-  ownerId: 'researcher',
-  status: 'Completed',
-  configuration: {
-    dataSource: 'ecmwf',
-    variable: 'temperature',
-    region: {
-      west: 120.0,
-      east: 121.0,
-      south: 30.0,
-      north: 31.0,
-    },
-    timeRange: {
-      mode: 'historical',
-      start: '2024-01-01T00:00:00Z',
-      end: '2024-01-05T00:00:00Z',
-    },
-    resolution: '3km' as const,
-    method: 'deterministic',
-    resolvedMethod: 'deterministic',
-  },
-  createdAt: '2024-01-01T00:00:00Z',
-  submittedAt: '2024-01-01T00:00:00Z',
-  completionAt: '2024-01-01T00:05:00Z',
-  failureReason: null,
-  dataSeed: 12345,
-  generatorVersion: 'synthetic-temperature-v1',
+beforeEach(() => {
+  server.estimate.mockReset().mockResolvedValue({
+    ok: true,
+    recordCount: 48,
+    approximateSize: 4096,
+    sizeRule: 'CDF-1 header、UTF-8 属性与四字节填充；误差最多 256 字节。',
+    counts: [
+      { dataType: 'original', pointCount: 4, recordCount: 4 },
+      { dataType: 'downscaled', pointCount: 44, recordCount: 44 },
+      { dataType: 'observation', pointCount: 0, recordCount: 0 },
+    ],
+    notes: ['当前选区没有观测台站，观测贡献为 0 条。'],
+    identity: 'authoritative-current-selection',
+  })
+  server.generate.mockReset()
+})
+
+function cropTask() {
+  fireEvent.change(screen.getByLabelText('东经 (°E)'), { target: { value: '10.1' } })
+  fireEvent.change(screen.getByLabelText('北纬 (°N)'), { target: { value: '46.1' } })
 }
 
-describe('DataExportPanel', () => {
-  it('initializes bbox inputs with task bounds', () => {
-    render(<DataExportPanel task={mockTask} />)
-
-    expect(screen.getByLabelText(/西经/i)).toHaveValue(120.0)
-    expect(screen.getByLabelText(/东经/i)).toHaveValue(121.0)
-    expect(screen.getByLabelText(/南纬/i)).toHaveValue(30.0)
-    expect(screen.getByLabelText(/北纬/i)).toHaveValue(31.0)
-  })
-
-  it('updates coordinate inputs when map rectangle is drawn', async () => {
+describe('Data Export selection controls', () => {
+  it('offers all formats and UTC hourly/daily semantics without requiring a map token', async () => {
     const user = userEvent.setup()
-    render(<DataExportPanel task={mockTask} />)
+    render(<DataExportPanel task={tasks[0]!} />)
+    expect(screen.getByLabelText('西经 (°E)')).toHaveValue(10)
+    expect(screen.getByLabelText('东经 (°E)')).toHaveValue(12)
+    expect(screen.getByLabelText('开始时间 (UTC，包含)')).toHaveValue('2024-01-01T00:00')
+    expect(screen.getByLabelText('结束时间 (UTC，不包含)')).toHaveValue('2024-01-04T00:00')
+    expect(screen.getByText(/地图不可用：未配置 Mapbox/)).toBeVisible()
+    expect(screen.getByRole('radio', { name: /CSV/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /GeoJSON/ })).toBeEnabled()
+    expect(screen.getByRole('radio', { name: /NetCDF/ })).toBeEnabled()
+    expect(screen.getByLabelText('时间粒度')).toHaveValue('hourly')
+    expect(screen.getByRole('button', { name: '下载 CSV 文件' })).toBeDisabled()
+    expect(screen.getByText(/BBOX_TOO_LARGE/)).toHaveTextContent(/缩小/)
 
-    // Simulate drawing on map
-    const drawButton = screen.getByTestId('mock-draw-rectangle')
-    await user.click(drawButton)
-
-    // Verify coordinates updated
-    expect(screen.getByLabelText(/西经/i)).toHaveValue(120.1)
-    expect(screen.getByLabelText(/东经/i)).toHaveValue(120.9)
-    expect(screen.getByLabelText(/南纬/i)).toHaveValue(30.1)
-    expect(screen.getByLabelText(/北纬/i)).toHaveValue(30.9)
-  })
-
-  it('updates map when coordinates are manually changed', async () => {
-    const user = userEvent.setup()
-    render(<DataExportPanel task={mockTask} />)
-
-    const westInput = screen.getByLabelText(/西经/i)
-
-    // Clear and type new value
-    await user.clear(westInput)
-    await user.type(westInput, '120.2')
-
-    // The component should maintain the new value
-    expect(westInput).toHaveValue(120.2)
-  })
-
-  it('displays map component', () => {
-    render(<DataExportPanel task={mockTask} />)
-
-    expect(screen.getByTestId('export-region-map')).toBeInTheDocument()
-  })
-
-  it('shows validation alert for export limits', () => {
-    render(<DataExportPanel task={mockTask} />)
-
-    expect(screen.getByText(/导出限制.*100km.*30 天/i)).toBeInTheDocument()
-  })
-
-  it('displays format selector with CSV and GeoJSON options', () => {
-    render(<DataExportPanel task={mockTask} />)
-
-    // Should have format selection radio buttons or selector
-    expect(screen.getByRole('radio', { name: /CSV/i })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /GeoJSON/i })).toBeInTheDocument()
-  })
-
-  it('defaults to CSV format', () => {
-    render(<DataExportPanel task={mockTask} />)
-
-    const csvRadio = screen.getByRole('radio', { name: /CSV/i })
-    expect(csvRadio).toBeChecked()
-  })
-
-  it('allows switching to GeoJSON format', async () => {
-    const user = userEvent.setup()
-    render(<DataExportPanel task={mockTask} />)
-
-    const geojsonRadio = screen.getByRole('radio', { name: /GeoJSON/i })
-    await user.click(geojsonRadio)
-
-    expect(geojsonRadio).toBeChecked()
+    cropTask()
+    await user.selectOptions(screen.getByLabelText('时间粒度'), 'daily')
+    expect(await screen.findByText('48 条')).toBeVisible()
+    expect(screen.getByText(/气温.*逐日.*均值/)).toBeVisible()
+    expect(screen.getByText(/观测贡献为 0 条/)).toBeVisible()
+    expect(screen.getByText(/UTF-8 属性与四字节填充/)).toBeVisible()
+    expect(screen.getByRole('button', { name: '下载 CSV 文件' })).toBeEnabled()
+    const selection = server.estimate.mock.calls.at(-1)?.[0].data
+    expect(selection.task).toEqual(tasks[0]!)
+    expect(selection.temporalResolution).toBe('daily')
+    expect(selection.timeRange).toEqual({
+      start: '2024-01-01T00:00:00Z',
+      end: '2024-01-04T00:00:00Z',
+    })
   })
 })

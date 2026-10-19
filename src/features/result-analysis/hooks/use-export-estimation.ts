@@ -1,133 +1,104 @@
-/**
- * Hook for real-time export estimation with debounced updates.
- */
+import { useEffect, useState } from 'react'
+import { estimateExportFn } from '@/server/functions/csv-export'
+import type {
+  ExportEstimationSuccess,
+  ExportRequest,
+} from '@/features/result-analysis/types/export'
+import { ExportRequestIdentity, exportRequestKey, validateExportSelection } from './use-csv-export'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
-import { createServerFn } from '@tanstack/react-start'
-import type { ExportEstimationRequest } from '@/server/services/csv-export.server'
-
-export interface EstimationResult {
-  recordCount: number
-  approximateSize: number
-}
-
-export interface UseExportEstimationResult {
-  estimation: EstimationResult | null
+type EstimateSnapshot = {
+  identity: number
+  estimation: ExportEstimationSuccess | null
   isEstimating: boolean
   error: string | null
+  code: string | null
 }
 
-// Server function for estimation
-const estimateExportFn = createServerFn({ method: 'POST' })
-  .validator((data: ExportEstimationRequest) => data)
-  .handler(async ({ data }) => {
-    const { estimateExportMetrics } = await import('@/server/services/csv-export.server')
-    return estimateExportMetrics(data)
+/** Estimates and downloads share the same full request, validation preview and identity key. */
+export function useExportEstimation(request: ExportRequest, debounceMs = 300) {
+  const key = exportRequestKey(request)
+  const [scope] = useState(() => new ExportRequestIdentity(request))
+  const [snapshot, setSnapshot] = useState<EstimateSnapshot>({
+    identity: 0,
+    estimation: null,
+    isEstimating: false,
+    error: null,
+    code: null,
   })
-
-/**
- * Generate a request identity key to prevent stale estimates.
- */
-function generateRequestKey(request: ExportEstimationRequest): string {
-  return JSON.stringify({
-    taskId: request.taskId,
-    bbox: request.bbox,
-    timeRange: request.timeRange,
-    dataTypes: request.dataTypes.slice().sort(),
-    format: request.format || 'csv',
-    variable: request.variable,
-  })
-}
-
-/**
- * Hook for real-time export estimation with automatic updates on config changes.
- */
-export function useExportEstimation(
-  request: ExportEstimationRequest,
-  debounceMs = 300,
-): UseExportEstimationResult {
-  const [estimation, setEstimation] = useState<EstimationResult | null>(null)
-  const [isEstimating, setIsEstimating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const currentRequestKeyRef = useRef<string | null>(null)
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  // Memoize dataTypes string to avoid recreating on every render
-  const dataTypesKey = useMemo(
-    () => request.dataTypes.slice().sort().join(','),
-    [request.dataTypes],
-  )
+  scope.select(request)
+  const validation = validateExportSelection(request)
 
   useEffect(() => {
-    // Skip if no data types selected
-    if (request.dataTypes.length === 0) {
-      setEstimation(null)
-      setError(null)
-      return
+    const selection = structuredClone(scope.request)
+    const failure = validateExportSelection(selection)
+    if (failure) return
+    const operation = scope.begin()
+    const { identity, controller } = operation
+    const initial: EstimateSnapshot = {
+      identity,
+      estimation: null,
+      isEstimating: true,
+      error: null,
+      code: null,
     }
-
-    // Clear any pending estimation
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
-
-    // Generate request key for this config
-    const requestKey = generateRequestKey(request)
-
-    // Start estimating (will show loading state)
-    setIsEstimating(true)
-    timeoutRef.current = setTimeout(async () => {
-      currentRequestKeyRef.current = requestKey
-
+    const current = () => scope.owns(operation)
+    const timer = setTimeout(async () => {
       try {
-        const result = await estimateExportFn({ data: request })
-
-        // Only update if this request is still current
-        if (currentRequestKeyRef.current === requestKey) {
-          if (!result.ok) {
-            setError(result.message)
-            setEstimation(null)
-          } else {
-            setEstimation({
-              recordCount: result.recordCount,
-              approximateSize: result.approximateSize,
-            })
-            setError(null)
-          }
-          setIsEstimating(false)
+        const reply = await estimateExportFn({ data: selection, signal: controller.signal })
+        if (!current()) return
+        if (!reply.ok) {
+          setSnapshot({ ...initial, isEstimating: false, error: reply.message, code: reply.code })
+        } else {
+          if (
+            !Number.isSafeInteger(reply.recordCount) ||
+            reply.recordCount <= 0 ||
+            !Number.isFinite(reply.approximateSize) ||
+            reply.approximateSize <= 0 ||
+            typeof reply.identity !== 'string' ||
+            !reply.identity ||
+            typeof reply.sizeRule !== 'string' ||
+            !Array.isArray(reply.counts) ||
+            !Array.isArray(reply.notes)
+          )
+            throw new Error('服务器未返回有效估算，请调整选择后重试。')
+          setSnapshot({ ...initial, estimation: reply, isEstimating: false })
         }
-      } catch (err) {
-        if (currentRequestKeyRef.current === requestKey) {
-          setError(err instanceof Error ? err.message : '估算失败')
-          setEstimation(null)
-          setIsEstimating(false)
-        }
+      } catch (error) {
+        if (!current()) return
+        setSnapshot({
+          ...initial,
+          isEstimating: false,
+          code: 'ESTIMATION_FAILED',
+          error: error instanceof Error ? error.message : '估算失败，请重试。',
+        })
       }
     }, debounceMs)
-
+    operation.dispose = () => clearTimeout(timer)
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
+      clearTimeout(timer)
+      controller.abort()
+      scope.settle(operation)
     }
-  }, [
-    request.taskId,
-    request.bbox.west,
-    request.bbox.east,
-    request.bbox.south,
-    request.bbox.north,
-    request.timeRange.start,
-    request.timeRange.end,
-    dataTypesKey,
-    request.format,
-    request.variable,
-    debounceMs,
-  ])
+  }, [key, scope, debounceMs])
 
-  return {
-    estimation,
-    isEstimating,
-    error,
-  }
+  // Clear old records/notes/identity during render, before any debounce or late response.
+  const visible =
+    snapshot.identity === scope.identity
+      ? snapshot
+      : {
+          identity: scope.identity,
+          estimation: null,
+          isEstimating: true,
+          error: null,
+          code: null,
+        }
+  if (visible !== snapshot) setSnapshot(visible)
+  if (validation)
+    return {
+      estimation: null,
+      isEstimating: false,
+      error: validation.message,
+      code: validation.code,
+    }
+  return { ...visible, isEstimating: !visible.estimation && !visible.error }
 }
