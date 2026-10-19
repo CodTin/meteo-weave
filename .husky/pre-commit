@@ -2,8 +2,18 @@
 if [ -n "$AGENT_COMMIT" ]; then
   bun run format:check && bun run lint && bun run typecheck
 else
-  bun run check:agent
-  bunx --no-install lint-staged
-  bun run typecheck
-  bun run test
+  # Fast checks first (fail fast)
+  bun run check:agent || exit 1
+  bun run lint || exit 1
+
+  # Format and staged files
+  bunx --no-install lint-staged || exit 1
+
+  # Type checking
+  bun run typecheck || exit 1
+
+  # Tests (can be skipped with SKIP_TESTS=1 for WIP commits)
+  if [ -z "$SKIP_TESTS" ]; then
+    bun run test
+  fi
 fi

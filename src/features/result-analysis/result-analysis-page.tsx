@@ -102,6 +102,7 @@ export function ResultAnalysisPage() {
   const variable = task.configuration.variable as Variable
 
   // Load elevation grouping data for spatial analysis tab
+  // oxlint-disable-next-line react-hooks/rules-of-hooks -- enabled option makes this conditional at runtime, not render
   const elevationGroupingQuery = useQuery({
     queryKey: ['elevation-grouping', taskId],
     queryFn: () => getElevationGroupingDataFn({ data: taskId }),
@@ -109,6 +110,7 @@ export function ResultAnalysisPage() {
   })
 
   // Load role summary data for probabilistic tasks
+  // oxlint-disable-next-line react-hooks/rules-of-hooks -- enabled option makes this conditional at runtime, not render
   const roleSummaryQuery = useQuery({
     queryKey: ['role-summary', taskId, userRole],
     queryFn: () =>
