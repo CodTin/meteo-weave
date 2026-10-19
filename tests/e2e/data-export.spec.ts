@@ -1,7 +1,9 @@
 import { test, expect } from './browser-guard'
 
 test.describe('Data Export', () => {
-  test('displays export panel for completed temperature task', async ({ page }) => {
+  test('displays export panel for completed temperature task with all data type options', async ({
+    page,
+  }) => {
     // Navigate to the app
     await page.goto('/')
 
@@ -50,9 +52,10 @@ test.describe('Data Export', () => {
     await expect(page.getByLabel(/开始时间/i)).toBeVisible()
     await expect(page.getByLabel(/结束时间/i)).toBeVisible()
 
-    // Verify data type checkboxes are present
-    await expect(page.getByLabel(/降尺度数据/i)).toBeVisible()
+    // Verify all three data type checkboxes are present
     await expect(page.getByLabel(/原始数据/i)).toBeVisible()
+    await expect(page.getByLabel(/降尺度数据/i)).toBeVisible()
+    await expect(page.getByLabel(/观测数据/i)).toBeVisible()
 
     // Verify download button is present
     await expect(page.getByRole('button', { name: /下载 CSV/i })).toBeVisible()
@@ -83,12 +86,8 @@ test.describe('Data Export', () => {
 
     // Get initial coordinate values
     const westInput = page.getByLabel(/西经/i)
-    const eastInput = page.getByLabel(/东经/i)
-    const southInput = page.getByLabel(/南纬/i)
-    const northInput = page.getByLabel(/北纬/i)
 
     const initialWest = await westInput.inputValue()
-    const initialEast = await eastInput.inputValue()
 
     // Test coordinate input → map sync
     // Change west coordinate
@@ -96,6 +95,42 @@ test.describe('Data Export', () => {
 
     // The map should update (we verify this by checking the state is maintained)
     await expect(westInput).toHaveValue(String(parseFloat(initialWest) + 0.1))
+  })
+
+  test('downloads CSV with selected data types', async ({ page }) => {
+    // Setup: Navigate to a completed task's export tab
+    await page.goto('/')
+    await page.getByRole('button', { name: /登录/i }).click()
+    await page.getByRole('button', { name: /研究人员/i }).click()
+
+    // Create and wait for task
+    await page.getByRole('link', { name: /新建任务/i }).click()
+    await page.getByLabel(/数据源/i).click()
+    await page.getByRole('option', { name: /ECMWF/i }).click()
+    await page.getByLabel(/气象变量/i).click()
+    await page.getByRole('option', { name: /Temperature/i }).click()
+    await page.getByRole('button', { name: /提交任务/i }).click()
+    await page.waitForTimeout(3000)
+    await page.getByRole('button', { name: /查看结果分析/i }).click()
+    await page.getByRole('tab', { name: /数据导出/i }).click()
+
+    // Select original and observation data types
+    await page.getByLabel(/原始数据/i).click()
+    await page.getByLabel(/观测数据/i).click()
+
+    // Set up download listener
+    const downloadPromise = page.waitForEvent('download')
+
+    // Click download button
+    await page.getByRole('button', { name: /下载 CSV/i }).click()
+
+    // Wait for download to complete
+    const download = await downloadPromise
+    const filename = download.suggestedFilename()
+
+    // Verify filename contains data types
+    expect(filename).toContain('.csv')
+    expect(filename).toContain('original-downscaled-observation')
   })
 
   test('validates coordinate and time inputs via keyboard', async ({ page }) => {
@@ -192,4 +227,3 @@ test.describe('Data Export', () => {
     await expect(westInput).toHaveValue('120.5')
   })
 })
-

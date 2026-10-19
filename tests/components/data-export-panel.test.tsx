@@ -8,7 +8,6 @@ import type { DownscalingTask } from '@/features/downscaling-tasks/service/contr
 vi.mock('@/features/result-analysis/components/export-region-map', () => ({
   ExportRegionMap: ({
     taskBounds,
-    exportBounds,
     onBoundsChange,
   }: {
     taskBounds: any
@@ -36,9 +35,9 @@ vi.mock('@/features/result-analysis/components/export-region-map', () => ({
 
 const mockTask: DownscalingTask = {
   id: 'test-task-1',
-  status: 'completed',
+  status: 'Completed',
   configuration: {
-    dataSource: 'ECMWF',
+    dataSource: 'ecmwf',
     variable: 'temperature',
     region: {
       west: 120.0,
@@ -47,10 +46,11 @@ const mockTask: DownscalingTask = {
       north: 31.0,
     },
     timeRange: {
+      mode: 'historical',
       start: '2024-01-01T00:00:00Z',
       end: '2024-01-05T00:00:00Z',
     },
-    targetResolution: '1km',
+    resolution: 1000,
     downscalingMethod: 'deterministic',
   },
   createdAt: '2024-01-01T00:00:00Z',
