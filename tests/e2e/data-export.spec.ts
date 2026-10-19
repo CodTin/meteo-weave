@@ -312,4 +312,128 @@ test.describe('Data Export', () => {
     expect(content).not.toContain('NaN')
     expect(content).not.toContain('Infinity')
   })
+
+  test('displays real-time estimation updates when config changes', async ({ page }) => {
+    // Setup: Navigate to export tab
+    await page.goto('/')
+    await page.getByRole('button', { name: /登录/i }).click()
+    await page.getByRole('button', { name: /研究人员/i }).click()
+
+    await page.getByRole('link', { name: /新建任务/i }).click()
+    await page.getByLabel(/数据源/i).click()
+    await page.getByRole('option', { name: /ECMWF/i }).click()
+    await page.getByLabel(/气象变量/i).click()
+    await page.getByRole('option', { name: /Temperature/i }).click()
+    await page.getByRole('button', { name: /提交任务/i }).click()
+    await page.waitForTimeout(3000)
+    await page.getByRole('button', { name: /查看结果分析/i }).click()
+    await page.getByRole('tab', { name: /数据导出/i }).click()
+
+    // Wait for initial estimation to appear
+    await expect(page.getByText(/数据量估算/i)).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText(/数据记录数/i)).toBeVisible()
+    await expect(page.getByText(/文件大小（约）/i)).toBeVisible()
+
+    // Get initial record count
+    const initialRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+    expect(initialRecordText).toContain('条')
+
+    // Change data types - add original data
+    await page.getByLabel(/原始数据/i).click()
+
+    // Wait for estimation to update (debounced)
+    await page.waitForTimeout(500)
+
+    // Verify record count increased
+    const updatedRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+    expect(updatedRecordText).toContain('条')
+    expect(updatedRecordText).not.toBe(initialRecordText)
+
+    // Verify distinction between exact and approximate
+    await expect(page.getByText(/记录数为精确计算.*文件大小为近似值/i)).toBeVisible()
+  })
+
+  test('compares estimated record count with actual CSV download', async ({ page }) => {
+    // Setup: Navigate to export tab
+    await page.goto('/')
+    await page.getByRole('button', { name: /登录/i }).click()
+    await page.getByRole('button', { name: /研究人员/i }).click()
+
+    await page.getByRole('link', { name: /新建任务/i }).click()
+    await page.getByLabel(/数据源/i).click()
+    await page.getByRole('option', { name: /ECMWF/i }).click()
+    await page.getByLabel(/气象变量/i).click()
+    await page.getByRole('option', { name: /Temperature/i }).click()
+    await page.getByRole('button', { name: /提交任务/i }).click()
+    await page.waitForTimeout(3000)
+    await page.getByRole('button', { name: /查看结果分析/i }).click()
+    await page.getByRole('tab', { name: /数据导出/i }).click()
+
+    // Wait for estimation
+    await expect(page.getByText(/数据量估算/i)).toBeVisible({ timeout: 5000 })
+
+    // Extract estimated record count
+    const estimationText = await page.getByText(/数据记录数/).locator('..').textContent()
+    const estimatedCountMatch = estimationText?.match(/(\d[\d,]*)\s*条/)
+    expect(estimatedCountMatch).toBeTruthy()
+    const estimatedCount = parseInt(estimatedCountMatch![1].replace(/,/g, ''), 10)
+
+    // Download CSV
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: /下载 CSV/i }).click()
+    const download = await downloadPromise
+    const path = await download.path()
+
+    if (!path) {
+      throw new Error('Download path is null')
+    }
+
+    // Parse CSV and count actual records
+    const fs = await import('fs/promises')
+    const content = await fs.readFile(path, 'utf-8')
+    const lines = content.trim().split('\n')
+    const actualRecordCount = lines.length - 1 // Exclude header
+
+    // Verify estimated count matches actual count
+    expect(estimatedCount).toBe(actualRecordCount)
+  })
+
+  test('updates estimation when format changes between CSV and GeoJSON', async ({ page }) => {
+    // Setup: Navigate to export tab
+    await page.goto('/')
+    await page.getByRole('button', { name: /登录/i }).click()
+    await page.getByRole('button', { name: /研究人员/i }).click()
+
+    await page.getByRole('link', { name: /新建任务/i }).click()
+    await page.getByLabel(/数据源/i).click()
+    await page.getByRole('option', { name: /ECMWF/i }).click()
+    await page.getByLabel(/气象变量/i).click()
+    await page.getByRole('option', { name: /Temperature/i }).click()
+    await page.getByRole('button', { name: /提交任务/i }).click()
+    await page.waitForTimeout(3000)
+    await page.getByRole('button', { name: /查看结果分析/i }).click()
+    await page.getByRole('tab', { name: /数据导出/i }).click()
+
+    // Wait for initial CSV estimation
+    await expect(page.getByText(/数据量估算/i)).toBeVisible({ timeout: 5000 })
+    const csvSizeText = await page.getByText(/文件大小（约）/).locator('..').textContent()
+
+    // Change to GeoJSON format
+    await page.getByLabel(/GeoJSON/i).click()
+    await page.waitForTimeout(500)
+
+    // Verify file size changed (GeoJSON is typically larger)
+    const geojsonSizeText = await page.getByText(/文件大小（约）/).locator('..').textContent()
+    expect(geojsonSizeText).not.toBe(csvSizeText)
+
+    // Record count should stay the same
+    const csvRecordText = await page.getByText(/数据记录数/).locator('..').textContent()
+
+    // Switch back to CSV
+    await page.getByLabel(/CSV/i).click()
+    await page.waitForTimeout(500)
+
+    const csvRecordText2 = await page.getByText(/数据记录数/).locator('..').textContent()
+    expect(csvRecordText2).toBe(csvRecordText)
+  })
 })
