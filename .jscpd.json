@@ -3,7 +3,7 @@
   "reporters": ["console"],
   "ignore": [
     "**/*.test.ts",
-    "**/*.spec.ts",
+    "!tests/e2e/**/*.spec.ts",
     "**/node_modules/**",
     "**/.output/**",
     "**/dist/**",
