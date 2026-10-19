@@ -226,4 +226,90 @@ test.describe('Data Export', () => {
     await westInput.fill('120.5')
     await expect(westInput).toHaveValue('120.5')
   })
+
+  test('downloads GeoJSON with valid FeatureCollection and correct coordinate order', async ({
+    page,
+  }) => {
+    // Setup: Navigate to a completed task's export tab
+    await page.goto('/')
+    await page.getByRole('button', { name: /登录/i }).click()
+    await page.getByRole('button', { name: /研究人员/i }).click()
+
+    // Create and wait for task
+    await page.getByRole('link', { name: /新建任务/i }).click()
+    await page.getByLabel(/数据源/i).click()
+    await page.getByRole('option', { name: /ECMWF/i }).click()
+    await page.getByLabel(/气象变量/i).click()
+    await page.getByRole('option', { name: /Temperature/i }).click()
+    await page.getByRole('button', { name: /提交任务/i }).click()
+    await page.waitForTimeout(3000)
+    await page.getByRole('button', { name: /查看结果分析/i }).click()
+    await page.getByRole('tab', { name: /数据导出/i }).click()
+
+    // Select GeoJSON format
+    await page.getByLabel(/GeoJSON/i).click()
+
+    // Verify button text changes
+    await expect(page.getByRole('button', { name: /下载 GeoJSON/i })).toBeVisible()
+
+    // Set up download listener
+    const downloadPromise = page.waitForEvent('download')
+
+    // Click download button
+    await page.getByRole('button', { name: /下载 GeoJSON/i }).click()
+
+    // Wait for download to complete
+    const download = await downloadPromise
+    const filename = download.suggestedFilename()
+
+    // Verify filename has .geojson extension
+    expect(filename).toContain('.geojson')
+
+    // Download and parse the file with independent JSON parser
+    const path = await download.path()
+    if (!path) {
+      throw new Error('Download path is null')
+    }
+
+    const fs = await import('fs/promises')
+    const content = await fs.readFile(path, 'utf-8')
+
+    // Parse with independent JSON.parse (not our code)
+    const geojson = JSON.parse(content)
+
+    // Verify valid FeatureCollection structure
+    expect(geojson.type).toBe('FeatureCollection')
+    expect(Array.isArray(geojson.features)).toBe(true)
+    expect(geojson.features.length).toBeGreaterThan(0)
+
+    // Verify Point features with correct coordinate order [longitude, latitude]
+    const feature = geojson.features[0]
+    expect(feature.type).toBe('Feature')
+    expect(feature.geometry.type).toBe('Point')
+    expect(Array.isArray(feature.geometry.coordinates)).toBe(true)
+    expect(feature.geometry.coordinates.length).toBe(2)
+
+    const [lon, lat] = feature.geometry.coordinates
+    // Longitude should be in valid range
+    expect(typeof lon).toBe('number')
+    expect(lon).toBeGreaterThanOrEqual(-180)
+    expect(lon).toBeLessThanOrEqual(180)
+    // Latitude should be in valid range
+    expect(typeof lat).toBe('number')
+    expect(lat).toBeGreaterThanOrEqual(-90)
+    expect(lat).toBeLessThanOrEqual(90)
+
+    // Verify properties contain same data as CSV would
+    expect(feature.properties.taskId).toBeDefined()
+    expect(feature.properties.dataType).toBeDefined()
+    expect(feature.properties.time).toBeDefined()
+    expect(feature.properties.variable).toBeDefined()
+    expect(feature.properties.value).toBeDefined()
+    expect(feature.properties.unit).toBeDefined()
+    expect(feature.properties.qualityFlag).toBeDefined()
+
+    // Verify no NaN or Infinity in the JSON string
+    expect(content).not.toContain('NaN')
+    expect(content).not.toContain('Infinity')
+  })
 })
