@@ -146,6 +146,12 @@ describe('NetCDF CDF-1 Encoding', () => {
         17.0, // time=3600
         15.0,
         15.5, // time=7200
+        16.2,
+        16.8,
+        17.1,
+        17.6,
+        15.8,
+        16.3,
       ])
 
       const encoding = {
@@ -583,9 +589,9 @@ describe('NetCDF CDF-1 Encoding', () => {
     it('should read back station dimensions and coordinates', () => {
       const times = new Float64Array([0, 3600])
       const stationIds = new Uint8Array([
-        // synthetic-station-v1:120:30 (26 chars)
+        // synthetic-station-v1:120:30 (27 UTF-8 bytes)
         ...Array.from('synthetic-station-v1:120:30').map((c) => c.charCodeAt(0)),
-        // synthetic-station-v1:121:31 (26 chars)
+        // synthetic-station-v1:121:31 (27 UTF-8 bytes)
         ...Array.from('synthetic-station-v1:121:31').map((c) => c.charCodeAt(0)),
       ])
       const stationLats = new Float32Array([30.0, 31.0])
@@ -596,7 +602,7 @@ describe('NetCDF CDF-1 Encoding', () => {
         dimensions: [
           { name: 'time', size: 2 },
           { name: 'station', size: 2 },
-          { name: 'stationId_len', size: 26 },
+          { name: 'stationId_len', size: 27 },
         ],
         variables: [
           {
@@ -664,7 +670,7 @@ describe('NetCDF CDF-1 Encoding', () => {
       expect(decoded.dimensions).toHaveLength(3)
       expect(decoded.dimensions.find((d) => d.name === 'time')?.size).toBe(2)
       expect(decoded.dimensions.find((d) => d.name === 'station')?.size).toBe(2)
-      expect(decoded.dimensions.find((d) => d.name === 'stationId_len')?.size).toBe(26)
+      expect(decoded.dimensions.find((d) => d.name === 'stationId_len')?.size).toBe(27)
 
       // Verify stationId variable
       const stationIdVar = decoded.variables.find((v) => v.name === 'stationId')

@@ -1,27 +1,21 @@
 import { createServerFn } from '@tanstack/react-start'
-import { generateCsvExport } from '../services/csv-export.server'
+import { getRequest, setResponseHeader } from '@tanstack/react-start/server'
+import { generateResultExport, estimateResultExport } from '@/server/services/netcdf-export.server'
 
-export const exportCsv = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => {
-    if (!data || typeof data !== 'object') {
-      throw new Error('Invalid request')
-    }
-    return data as {
-      taskId: string
-      bbox: { west: number; east: number; south: number; north: number }
-      timeRange: { start: string; end: string }
-      dataTypes: string[]
-    }
+/** Text and binary formats share one authenticated generation and estimation seam. */
+export const generateExportFn = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => input)
+  .handler(({ data }) => {
+    setResponseHeader('Cache-Control', 'no-store')
+    return generateResultExport(data, getRequest().signal)
   })
-  .handler(async ({ data }) => {
-    const result = generateCsvExport(data)
 
-    if (!result.ok) {
-      throw new Error(result.message)
-    }
-
-    return {
-      csv: result.csv,
-      filename: result.filename,
-    }
+export const estimateExportFn = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => input)
+  .handler(({ data }) => {
+    setResponseHeader('Cache-Control', 'no-store')
+    return estimateResultExport(data)
   })
+
+// Historical name remains an alias, not a second admission or generation path.
+export const exportCsv = generateExportFn
