@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises'
 import { test, expect } from './browser-guard'
 import { selectSmallExport, setupExportTab } from './helpers/export-test-helpers'
 
@@ -61,7 +60,7 @@ test.describe('Data Export current selection controls', () => {
     for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       test(`readable ${width}px ${reducedMotion} controls and keyboard recovery`, async ({
         page,
-      }) => {
+      }, testInfo) => {
         // Open at desktop width using the common public navigation; then inspect the actual export surface.
         await setupExportTab(page)
         await page.setViewportSize({ width, height: 900 })
@@ -95,22 +94,19 @@ test.describe('Data Export current selection controls', () => {
           const box = await page.getByLabel(label, { exact: true }).boundingBox()
           expect(box?.width).toBeGreaterThan(100)
         }
-        const evidence =
-          '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec13-20261019-review-fixes/visual-final'
-        await fs.mkdir(evidence, { recursive: true })
-        const stem = `${evidence}/export-${width}-${reducedMotion}`
+        const stem = `export-${width}-${reducedMotion}`
         await page.evaluate(() => window.scrollTo(0, 0))
-        await page.screenshot({ path: `${stem}-fullpage.png`, fullPage: true })
-        await page.screenshot({ path: `${stem}-top.png` })
+        await page.screenshot({ path: testInfo.outputPath(`${stem}-fullpage.png`), fullPage: true })
+        await page.screenshot({ path: testInfo.outputPath(`${stem}-top.png`) })
         await page.getByLabel('西经 (°E)', { exact: true }).focus()
         await page.keyboard.press('Tab')
         await expect(page.getByLabel('东经 (°E)', { exact: true })).toBeFocused()
-        await page.screenshot({ path: `${stem}-keyboard.png` })
+        await page.screenshot({ path: testInfo.outputPath(`${stem}-keyboard.png`) })
         await page.getByRole('button', { name: '下载 NetCDF 文件', exact: true }).focus()
         await expect(
           page.getByRole('button', { name: '下载 NetCDF 文件', exact: true }),
         ).toBeFocused()
-        await page.screenshot({ path: `${stem}-bottom.png` })
+        await page.screenshot({ path: testInfo.outputPath(`${stem}-bottom.png`) })
       })
     }
   }
