@@ -1,9 +1,4 @@
-/**
- * Independent NetCDF Classic (CDF-1) reader for verification
- *
- * This reader is intentionally separate from the writer implementation
- * to provide independent verification of encoded files.
- */
+import { NetCDFReader, type Attribute } from 'netcdfjs'
 
 export interface NetCDFFile {
   version: number
@@ -14,298 +9,97 @@ export interface NetCDFFile {
     type: string
     dimensions: string[]
     attributes: Record<string, string | number>
-    data: Float32Array | Float64Array | Uint8Array
+    data: Int32Array | Float32Array | Float64Array | Uint8Array
   }>
 }
 
-/**
- * Read NetCDF Classic (CDF-1) file
- */
+// netcdfjs/iobuffer expose byte strings (signed bytes may be sign-extended).
+function decodeText(value: string): string {
+  return new TextDecoder('utf-8', { fatal: true }).decode(
+    Uint8Array.from(value, (character) => character.charCodeAt(0) & 0xff),
+  )
+}
+
+function attributeDictionary(attributes: Attribute[]): Record<string, string | number> {
+  return Object.fromEntries(
+    attributes.map(({ name, value }) => [
+      decodeText(name),
+      typeof value === 'string' ? decodeText(value) : value,
+    ]),
+  )
+}
+
+/** Test-only adapter: netcdfjs owns all header and data parsing, not the writer. */
 export function readNetCDF(buffer: Uint8Array): NetCDFFile {
-  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-  let offset = 0
-
-  // Read magic bytes
-  const magic = [
-    view.getUint8(offset++),
-    view.getUint8(offset++),
-    view.getUint8(offset++),
-    view.getUint8(offset++),
-  ]
-
-  if (magic[0] !== 0x43 || magic[1] !== 0x44 || magic[2] !== 0x46) {
-    throw new Error('Not a valid NetCDF file')
+  const reader = new NetCDFReader(buffer)
+  if (reader.header.version !== 1) throw new Error('Expected NetCDF Classic (CDF-1)')
+  if (reader.recordDimension.id !== undefined || reader.recordDimension.length !== 0) {
+    throw new Error('Expected a fixed-size NetCDF file')
   }
-
-  const version = magic[3]
-  if (version !== 1) {
-    throw new Error(`Unsupported NetCDF version: ${version}`)
-  }
-
-  // Read numrecs (unused but required for format)
-  offset += 4
-
-  // Read dimensions
-  const dimensions = readDimList(view, buffer, offset)
-  offset = dimensions.nextOffset
-
-  // Read global attributes
-  const globalAttrs = readAttrList(view, buffer, offset)
-  offset = globalAttrs.nextOffset
-
-  // Read variables
-  const variables = readVarList(view, buffer, offset, dimensions.items)
-  offset = variables.nextOffset
+  const headerBytes = reader.buffer.offset
+  const dimensions = (reader.dimensions ?? []).map(({ name, size }) => ({
+    name: decodeText(name),
+    size,
+  }))
 
   return {
-    version,
-    dimensions: dimensions.items,
-    globalAttributes: globalAttrs.items,
-    variables: variables.items,
-  }
-}
-
-function readDimList(
-  view: DataView,
-  buffer: Uint8Array,
-  offset: number,
-): { items: Array<{ name: string; size: number }>; nextOffset: number } {
-  const tag = view.getInt32(offset, false)
-  offset += 4
-
-  if (tag === 0) {
-    return { items: [], nextOffset: offset }
-  }
-
-  if (tag !== 10) {
-    // NC_DIMENSION
-    throw new Error(`Expected NC_DIMENSION tag, got ${tag}`)
-  }
-
-  const count = view.getInt32(offset, false)
-  offset += 4
-
-  const items: Array<{ name: string; size: number }> = []
-
-  for (let i = 0; i < count; i++) {
-    const nameResult = readName(view, buffer, offset)
-    offset = nameResult.nextOffset
-
-    const size = view.getInt32(offset, false)
-    offset += 4
-
-    items.push({ name: nameResult.name, size })
-  }
-
-  return { items, nextOffset: offset }
-}
-
-function readAttrList(
-  view: DataView,
-  buffer: Uint8Array,
-  offset: number,
-): { items: Record<string, string | number>; nextOffset: number } {
-  const tag = view.getInt32(offset, false)
-  offset += 4
-
-  if (tag === 0) {
-    return { items: {}, nextOffset: offset }
-  }
-
-  if (tag !== 12) {
-    // NC_ATTRIBUTE
-    throw new Error(`Expected NC_ATTRIBUTE tag, got ${tag}`)
-  }
-
-  const count = view.getInt32(offset, false)
-  offset += 4
-
-  const items: Record<string, string | number> = {}
-
-  for (let i = 0; i < count; i++) {
-    const nameResult = readName(view, buffer, offset)
-    offset = nameResult.nextOffset
-
-    const attrType = view.getInt32(offset, false)
-    offset += 4
-
-    const attrCount = view.getInt32(offset, false)
-    offset += 4
-
-    if (attrType === 2) {
-      // NC_CHAR - string
-      const decoder = new TextDecoder()
-      const strBytes = buffer.slice(offset, offset + attrCount)
-      items[nameResult.name] = decoder.decode(strBytes)
-      offset += attrCount
-      const padding = (4 - (attrCount % 4)) % 4
-      offset += padding
-    } else if (attrType === 6) {
-      // NC_DOUBLE
-      items[nameResult.name] = view.getFloat64(offset, false)
-      offset += 8
-    } else if (attrType === 5) {
-      // NC_FLOAT
-      items[nameResult.name] = view.getFloat32(offset, false)
-      offset += 4
-    } else {
-      throw new Error(`Unsupported attribute type: ${attrType}`)
-    }
-  }
-
-  return { items, nextOffset: offset }
-}
-
-function readVarList(
-  view: DataView,
-  buffer: Uint8Array,
-  offset: number,
-  dimensions: Array<{ name: string; size: number }>,
-): {
-  items: Array<{
-    name: string
-    type: string
-    dimensions: string[]
-    attributes: Record<string, string | number>
-    data: Float32Array | Float64Array | Uint8Array
-  }>
-  nextOffset: number
-} {
-  const tag = view.getInt32(offset, false)
-  offset += 4
-
-  if (tag === 0) {
-    return { items: [], nextOffset: offset }
-  }
-
-  if (tag !== 11) {
-    // NC_VARIABLE
-    throw new Error(`Expected NC_VARIABLE tag, got ${tag}`)
-  }
-
-  const count = view.getInt32(offset, false)
-  offset += 4
-
-  const items: Array<{
-    name: string
-    type: string
-    dimensions: string[]
-    attributes: Record<string, string | number>
-    data: Float32Array | Float64Array | Uint8Array
-  }> = []
-
-  for (let i = 0; i < count; i++) {
-    const nameResult = readName(view, buffer, offset)
-    offset = nameResult.nextOffset
-
-    const numDims = view.getInt32(offset, false)
-    offset += 4
-
-    const dimIds: number[] = []
-    for (let j = 0; j < numDims; j++) {
-      dimIds.push(view.getInt32(offset, false))
-      offset += 4
-    }
-
-    const attrs = readAttrList(view, buffer, offset)
-    offset = attrs.nextOffset
-
-    const varType = view.getInt32(offset, false)
-    offset += 4
-
-    // Skip variable size (not needed for reading)
-    offset += 4
-
-    const dataOffset = view.getInt32(offset, false)
-    offset += 4
-
-    // Calculate data length
-    let dataLength = 1
-    for (const dimId of dimIds) {
-      const dim = dimensions[dimId]
-      if (!dim) {
-        throw new Error(`Dimension ${dimId} not found`)
+    version: reader.header.version,
+    dimensions,
+    globalAttributes: attributeDictionary(reader.globalAttributes),
+    variables: (reader.variables ?? []).map((variable) => {
+      // Bounds from netcdfjs metadata; no parallel binary-header parser.
+      if (
+        !Number.isSafeInteger(variable.offset) ||
+        variable.offset < headerBytes ||
+        variable.offset % 4 !== 0 ||
+        !Number.isSafeInteger(variable.size) ||
+        variable.size < 0 ||
+        variable.offset + variable.size > buffer.byteLength
+      ) {
+        throw new Error(`Invalid NetCDF data bounds for ${variable.name}`)
       }
-      dataLength *= dim.size
-    }
-
-    // Read data from the specified absolute offset in the file
-    let data: Float32Array | Float64Array | Uint8Array
-    let typeName: string
-
-    if (varType === 2) {
-      // NC_CHAR
-      typeName = 'char'
-      const requiredSize = dataOffset + dataLength
-      if (requiredSize > buffer.length) {
-        throw new Error(
-          `Data offset ${dataOffset} + size ${dataLength} = ${requiredSize} exceeds buffer length ${buffer.length}`,
-        )
+      const dimensionNames = variable.dimensions.map((id) => {
+        const dimension = dimensions[id]
+        if (!dimension) throw new Error(`Unresolved NetCDF dimension ${id}`)
+        return dimension.name
+      })
+      const elementCount = variable.dimensions.reduce((count, id) => {
+        const dimension = dimensions[id]
+        if (!dimension) throw new Error(`Unresolved NetCDF dimension ${id}`)
+        return count * dimension.size
+      }, 1)
+      const width =
+        variable.type === 'char'
+          ? 1
+          : variable.type === 'int' || variable.type === 'float'
+            ? 4
+            : variable.type === 'double'
+              ? 8
+              : 0
+      if (width === 0 || variable.size !== Math.ceil((elementCount * width) / 4) * 4) {
+        throw new Error(`Invalid NetCDF data size for the shape of ${variable.name}`)
       }
-      data = buffer.slice(dataOffset, dataOffset + dataLength)
-    } else if (varType === 5) {
-      // NC_FLOAT
-      typeName = 'float'
-      const requiredSize = dataOffset + dataLength * 4
-      if (requiredSize > buffer.length) {
-        throw new Error(
-          `Data offset ${dataOffset} + size ${dataLength * 4} = ${requiredSize} exceeds buffer length ${buffer.length}`,
-        )
+      const data = reader.getDataVariable(variable)
+      // netcdfjs includes CDF-1 char padding in its returned values.
+      const values = data.slice(0, elementCount).map((value) => {
+        if (typeof value === 'number') return value
+        if (typeof value === 'string') return (value.charCodeAt(0) || 0) & 0xff
+        throw new Error('Expected fixed-size scalar NetCDF values')
+      })
+      return {
+        name: decodeText(variable.name),
+        type: variable.type,
+        dimensions: dimensionNames,
+        attributes: attributeDictionary(variable.attributes),
+        data:
+          variable.type === 'int'
+            ? Int32Array.from(values)
+            : variable.type === 'float'
+              ? Float32Array.from(values)
+              : variable.type === 'double'
+                ? Float64Array.from(values)
+                : Uint8Array.from(values),
       }
-      data = new Float32Array(dataLength)
-      for (let j = 0; j < dataLength; j++) {
-        data[j] = view.getFloat32(dataOffset + j * 4, false)
-      }
-    } else if (varType === 6) {
-      // NC_DOUBLE
-      typeName = 'double'
-      const requiredSize = dataOffset + dataLength * 8
-      if (requiredSize > buffer.length) {
-        throw new Error(
-          `Data offset ${dataOffset} + size ${dataLength * 8} = ${requiredSize} exceeds buffer length ${buffer.length}`,
-        )
-      }
-      data = new Float64Array(dataLength)
-      for (let j = 0; j < dataLength; j++) {
-        data[j] = view.getFloat64(dataOffset + j * 8, false)
-      }
-    } else {
-      throw new Error(`Unsupported variable type: ${varType}`)
-    }
-
-    items.push({
-      name: nameResult.name,
-      type: typeName,
-      dimensions: dimIds.map((id) => {
-        const dim = dimensions[id]
-        if (!dim) {
-          throw new Error(`Dimension ${id} not found`)
-        }
-        return dim.name
-      }),
-      attributes: attrs.items,
-      data,
-    })
+    }),
   }
-
-  return { items, nextOffset: offset }
-}
-
-function readName(
-  view: DataView,
-  buffer: Uint8Array,
-  offset: number,
-): { name: string; nextOffset: number } {
-  const length = view.getInt32(offset, false)
-  offset += 4
-
-  const decoder = new TextDecoder()
-  const nameBytes = buffer.slice(offset, offset + length)
-  const name = decoder.decode(nameBytes)
-  offset += length
-
-  const padding = (4 - (length % 4)) % 4
-  offset += padding
-
-  return { name, nextOffset: offset }
 }
