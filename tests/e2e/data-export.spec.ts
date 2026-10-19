@@ -1,40 +1,11 @@
 import { test, expect } from './browser-guard'
+import { setupExportTab } from './helpers/export-test-helpers'
 
 test.describe('Data Export', () => {
   test('displays export panel for completed temperature task with all data type options', async ({
     page,
   }) => {
-    // Navigate to the app
-    await page.goto('/')
-
-    // Login as researcher
-    await page.getByRole('button', { name: /登录/i }).click()
-    await page.getByRole('button', { name: /研究人员/i }).click()
-
-    // Create a new task
-    await page.getByRole('link', { name: /新建任务/i }).click()
-
-    // Wait for task creation page
-    await expect(page).toHaveURL(/\/tasks\/new/)
-
-    // Fill in basic task details
-    await page.getByLabel(/数据源/i).click()
-    await page.getByRole('option', { name: /ECMWF/i }).click()
-
-    await page.getByLabel(/气象变量/i).click()
-    await page.getByRole('option', { name: /Temperature/i }).click()
-
-    // Submit the task
-    await page.getByRole('button', { name: /提交任务/i }).click()
-
-    // Wait for task to complete (synthetic demo takes ~2.5s)
-    await page.waitForTimeout(3000)
-
-    // Navigate to result analysis
-    await page.getByRole('button', { name: /查看结果分析/i }).click()
-
-    // Click on the export tab
-    await page.getByRole('tab', { name: /数据导出/i }).click()
+    await setupExportTab(page)
 
     // Verify export panel is displayed
     await expect(page.getByRole('heading', { name: /数据导出/i })).toBeVisible()
