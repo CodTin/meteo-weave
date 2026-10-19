@@ -1,62 +1,27 @@
 import '@tanstack/react-start/server-only'
-import { readDownscalingTask } from './downscaling-tasks.server'
+import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
+import type {
+  ExportEstimationSuccess,
+  ExportFailure,
+  ExportPlan,
+  ExportRecord,
+  ExportRequest,
+  TextExportSuccess,
+} from '@/features/result-analysis/types/export'
+import { authenticateExportPlan, createExportPlan } from './result-export-plan.server'
+import { readExportRecords } from './result-export-records.server'
 
-interface ExportRequest {
-  taskId: string
-  bbox: {
-    west: number
-    east: number
-    south: number
-    north: number
-  }
-  timeRange: {
-    start: string
-    end: string
-  }
-  dataTypes: string[]
-  format?: 'csv' | 'geojson'
-}
+export {
+  calculateBboxWidthKm,
+  calculateBboxHeightKm,
+  isBboxWithinBounds,
+} from './result-export-plan.server'
+export type { ExportRequest } from '@/features/result-analysis/types/export'
+export type ExportEstimationRequest = ExportRequest
+export type CsvExportResult = (TextExportSuccess & { csv: string }) | ExportFailure
+export type GeoJsonExportResult = (TextExportSuccess & { geojson: string }) | ExportFailure
 
-// Legacy type alias for backward compatibility
-type CsvExportRequest = ExportRequest
-
-export interface ExportEstimationRequest extends ExportRequest {
-  variable: string
-}
-
-interface CsvExportSuccess {
-  ok: true
-  csv: string
-  filename: string
-}
-
-interface GeoJsonExportSuccess {
-  ok: true
-  geojson: string
-  filename: string
-}
-
-interface CsvExportError {
-  ok: false
-  code: string
-  message: string
-}
-
-interface ExportEstimationSuccess {
-  ok: true
-  recordCount: number
-  approximateSize: number
-}
-
-type CsvExportResult = CsvExportSuccess | CsvExportError
-type GeoJsonExportResult = GeoJsonExportSuccess | CsvExportError
-type ExportEstimationResult = ExportEstimationSuccess | CsvExportError
-
-/**
- * Escape text for CSV to prevent formula injection.
- * If text starts with =, +, -, @, or contains control characters,
- * prefix with a single quote to neutralize it.
- */
+/** Neutralize untrusted spreadsheet text, but never alter numeric scientific fields. */
 export function escapeCsvText(text: string): string {
   // eslint-disable-next-line no-control-regex -- intentional control character detection for CSV safety
   const dangerous = /^[=+\-@]|[\x00-\x1F]/
@@ -69,7 +34,8 @@ export function escapeCsvText(text: string): string {
 /**
  * Encode a CSV field, handling quotes and escaping.
  */
-export function encodeCsvField(value: string | number): string {
+export function encodeCsvField(value: string | number | null): string {
+  if (value === null) return ''
   if (typeof value === 'number') {
     return String(value)
   }
@@ -84,552 +50,387 @@ export function encodeCsvField(value: string | number): string {
   return escaped
 }
 
-/**
- * Calculate the maximum width of a bounding box in kilometers.
- * Takes the larger of the north and south edge distances.
- */
-export function calculateBboxWidthKm(bbox: CsvExportRequest['bbox']): number {
-  const { west, east, south, north } = bbox
-  const R = 6371 // Earth radius in km
-
-  // Calculate distance along north edge
-  const northDistance =
-    R * Math.abs(east - west) * (Math.PI / 180) * Math.cos((north * Math.PI) / 180)
-
-  // Calculate distance along south edge
-  const southDistance =
-    R * Math.abs(east - west) * (Math.PI / 180) * Math.cos((south * Math.PI) / 180)
-
-  return Math.max(northDistance, southDistance)
+function filename(plan: ExportPlan, extension: 'csv' | 'geojson'): string {
+  const id = plan.task.id.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const variable = plan.task.configuration.variable
+  const start = plan.request.timeRange.start.replace(/[:.]/g, '-')
+  return `meteo_${id}_${variable}_${plan.request.dataTypes.join('-')}_${start}.${extension}`
 }
 
-/**
- * Calculate the maximum height of a bounding box in kilometers.
- * Takes the larger of the east and west edge distances per spec requirement.
- */
-export function calculateBboxHeightKm(bbox: CsvExportRequest['bbox']): number {
-  const { south, north } = bbox
-  const R = 6371 // Earth radius in km
-
-  // Spec: "南北高度取东／西边较大者"
-  // For meridians (lines of constant longitude), distance is the same
-  // regardless of longitude, so both edges have equal distance
-  const distance = R * Math.abs(north - south) * (Math.PI / 180)
-
-  return distance
+function csvColumns(plan: ExportPlan): string[] {
+  return [
+    'taskId',
+    'dataType',
+    'sampling',
+    'sourceKind',
+    'resolutionKm',
+    'provenance',
+    'dataSource',
+    'generatorVersion',
+    'time',
+    'longitude',
+    'latitude',
+    'stationId',
+    'variable',
+    'value',
+    'unit',
+    'qualityFlag',
+    'qualityReason',
+    'temporalStatistic',
+    'aggregation',
+    'referenceSeed',
+    'referenceVersion',
+    'sampleCount',
+    'validMemberIds',
+    'unavailableMemberIds',
+    'ensembleMeanDefinition',
+    'meanMemberSpeed',
+    ...(plan.task.configuration.variable === 'wind'
+      ? ['u10', 'v10', 'speed', 'direction', 'directionStatus', 'directionConvention']
+      : []),
+    ...(plan.task.configuration.variable === 'precipitation'
+      ? [
+          'accumulationStart',
+          'accumulationEnd',
+          'requestedStart',
+          'requestedEnd',
+          'bounds',
+          'sampledHours',
+          'expectedHours',
+          'complete',
+        ]
+      : []),
+    ...(plan.request.temporalResolution === 'daily' &&
+    plan.task.configuration.variable === 'temperature'
+      ? [
+          'dailyMean',
+          'dailyMinimum',
+          'dailyStart',
+          'dailyEnd',
+          'bounds',
+          'sampledHours',
+          'expectedHours',
+          'completeDay',
+        ]
+      : []),
+  ]
 }
 
-/**
- * Check if a bbox is fully contained within another bbox (task bounds).
- */
-export function isBboxWithinBounds(
-  exportBbox: CsvExportRequest['bbox'],
-  taskBounds: CsvExportRequest['bbox'],
-): boolean {
-  return (
-    exportBbox.west >= taskBounds.west &&
-    exportBbox.east <= taskBounds.east &&
-    exportBbox.south >= taskBounds.south &&
-    exportBbox.north <= taskBounds.north
-  )
+function csvRow(record: ExportRecord, columns: string[]): string {
+  const fields: Record<string, unknown> = {
+    ...record,
+    referenceSeed: record.reference?.referenceSeed,
+    referenceVersion: record.reference?.referenceVersion,
+    sampleCount: record.ensembleMean?.sampleCount,
+    validMemberIds: record.ensembleMean?.validMemberIds.join('|'),
+    unavailableMemberIds: record.ensembleMean?.unavailableMemberIds.join('|'),
+    meanMemberSpeed: record.ensembleMean?.meanMemberSpeed,
+    accumulationStart: record.accumulation?.start,
+    accumulationEnd: record.accumulation?.end,
+    requestedStart: record.accumulation?.requestedStart,
+    requestedEnd: record.accumulation?.requestedEnd,
+    bounds: record.accumulation?.bounds ?? record.daily?.bounds,
+    sampledHours: record.accumulation?.sampledHours ?? record.daily?.sampledHours,
+    expectedHours: record.accumulation?.expectedHours ?? record.daily?.expectedHours,
+    complete: record.accumulation?.complete,
+    dailyMean: record.daily?.mean,
+    dailyMinimum: record.daily?.minimum,
+    dailyStart: record.daily?.start,
+    dailyEnd: record.daily?.end,
+    completeDay: record.daily?.completeDay,
+  }
+  return columns
+    .map((column) => {
+      const value = fields[column]
+      return encodeCsvField(
+        value === undefined || value === null
+          ? null
+          : typeof value === 'number'
+            ? value
+            : String(value),
+      )
+    })
+    .join(',')
 }
 
-/**
- * Get data type metadata (sampling and provenance).
- */
-function getDataTypeMetadata(dataType: string): { sampling: string; provenance: string } {
-  if (dataType === 'original') {
-    return { sampling: 'coarse-grid-10km', provenance: 'ECMWF-IFS' }
-  } else if (dataType === 'downscaled') {
-    return { sampling: 'target-grid-3km', provenance: 'Downscaled' }
-  } else if (dataType === 'observation') {
-    return { sampling: 'station', provenance: 'Synthetic Demo' }
+function feature(record: ExportRecord) {
+  return {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [record.longitude, record.latitude] },
+    properties: record,
   }
-  return { sampling: '', provenance: '' }
 }
 
-/**
- * Get variable metadata (unit and sample value).
- */
-function getVariableMetadata(variable: string): { unit: string; value: number } {
-  if (variable === 'temperature') {
-    return { unit: '°C', value: 15.5 }
-  } else if (variable === 'precipitation') {
-    return { unit: 'mm', value: 2.5 }
-  } else if (variable === 'wind') {
-    return { unit: 'm/s', value: 3.2 }
-  } else if (variable === 'pressure') {
-    return { unit: 'hPa', value: 1013.25 }
+function geojsonMetadata(plan: ExportPlan) {
+  return {
+    taskId: plan.task.id,
+    provenance: 'Synthetic Demo',
+    variable: plan.task.configuration.variable,
+    dataSource: plan.task.configuration.dataSource,
+    generatorVersion: plan.task.generatorVersion,
+    bbox: plan.request.bbox,
+    timeRange: plan.request.timeRange,
+    temporalResolution: plan.request.temporalResolution,
+    counts: plan.layers.map(({ dataType, pointCount, resolutionKm }) => ({
+      dataType,
+      pointCount,
+      resolutionKm,
+    })),
+    notes: plan.notes,
   }
-  return { unit: '', value: 0 }
 }
 
-/**
- * Generate safe filename for export.
- */
-function generateExportFilename(request: ExportRequest, extension: 'csv' | 'geojson'): string {
-  const startDate = new Date(request.timeRange.start).toISOString().split('T')[0]
-  const endDate = new Date(request.timeRange.end).toISOString().split('T')[0]
-  const safeTaskId = request.taskId.replace(/[^a-zA-Z0-9\-_]/g, '_')
-  const dataTypesStr = request.dataTypes.join('-')
-  return `export_${safeTaskId}_${dataTypesStr}_${startDate}_${endDate}.${extension}`
-}
-
-/**
- * Validate export request parameters.
- * Returns null if valid, or an error result if invalid.
- */
-export function validateExportRequest(request: CsvExportRequest): CsvExportError | null {
-  // Validate bbox width (≤100km)
-  const widthKm = calculateBboxWidthKm(request.bbox)
-  if (widthKm > 100) {
-    return {
-      ok: false,
-      code: 'BBOX_TOO_LARGE',
-      message: `Bounding box width (${widthKm.toFixed(1)}km) exceeds maximum of 100km`,
-    }
-  }
-
-  // Validate bbox height (≤100km)
-  const heightKm = calculateBboxHeightKm(request.bbox)
-  if (heightKm > 100) {
-    return {
-      ok: false,
-      code: 'BBOX_TOO_LARGE',
-      message: `Bounding box height (${heightKm.toFixed(1)}km) exceeds maximum of 100km`,
-    }
-  }
-
-  // Validate duration (≤30 days = 30 * 24 hours)
-  const startMs = Date.parse(request.timeRange.start)
-  const endMs = Date.parse(request.timeRange.end)
-  const durationHours = (endMs - startMs) / (1000 * 60 * 60)
-  const maxHours = 30 * 24
-
-  if (durationHours > maxHours) {
-    return {
-      ok: false,
-      code: 'DURATION_TOO_LONG',
-      message: `Duration (${(durationHours / 24).toFixed(1)} days) exceeds maximum of 30 days`,
-    }
-  }
-
-  return null
-}
-
-/**
- * Generate CSV content from request and task data.
- * Used for testing CSV generation logic independently.
- */
-export function generateCsvContent(
-  request: CsvExportRequest,
-  task: { id: string; configuration: { variable: string } },
-): string {
-  const variable = task.configuration.variable
-
-  // Build CSV header with new fields for multi-type export
-  const baseHeaders = ['taskId', 'dataType', 'sampling', 'provenance']
-
-  // Add stationId column if observation data is requested
-  if (request.dataTypes.includes('observation')) {
-    baseHeaders.push('stationId')
-  }
-
-  baseHeaders.push('time', 'longitude', 'latitude', 'variable')
-
-  // Variable-specific headers
-  let variableHeaders: string[] = []
-  if (variable === 'wind') {
-    variableHeaders = ['u10', 'v10', 'speed', 'direction', 'directionStatus', 'unit', 'qualityFlag']
-  } else if (variable === 'precipitation') {
-    variableHeaders = ['value', 'unit', 'accumulationStart', 'accumulationEnd', 'qualityFlag']
-  } else {
-    variableHeaders = ['value', 'unit', 'qualityFlag']
-  }
-
-  const headers = [...baseHeaders, ...variableHeaders]
-  const rows: string[] = [headers.join(',')]
-
-  // Generate full grid data for each requested data type
-  const timeSteps = calculateTimeSteps(request.timeRange)
-  const startMs = Date.parse(request.timeRange.start)
-
-  for (const dataType of request.dataTypes) {
-    // Calculate grid points for this data type (not used in synthetic demo but validates bbox)
-    calculateGridPoints(dataType, request.bbox)
-    const { sampling, provenance } = getDataTypeMetadata(dataType)
-    const { unit, value } = getVariableMetadata(variable)
-
-    // Generate resolution based on data type
-    let resolution: number
-    if (dataType === 'original') {
-      resolution = 0.1
-    } else if (dataType === 'downscaled') {
-      resolution = 0.03
-    } else {
-      resolution = 0.2
-    }
-
-    // Generate all grid points
-    const lonSteps = Math.ceil((request.bbox.east - request.bbox.west) / resolution) + 1
-    const latSteps = Math.ceil((request.bbox.north - request.bbox.south) / resolution) + 1
-
-    for (let t = 0; t < timeSteps; t++) {
-      const time = new Date(startMs + t * 3600 * 1000).toISOString()
-
-      for (let latIdx = 0; latIdx < latSteps; latIdx++) {
-        for (let lonIdx = 0; lonIdx < lonSteps; lonIdx++) {
-          const lon = request.bbox.west + lonIdx * resolution
-          const lat = request.bbox.south + latIdx * resolution
-
-          const taskIdField = encodeCsvField(request.taskId)
-          const qualityFlag = 'valid'
-
-          const baseFields = [
-            taskIdField,
-            encodeCsvField(dataType),
-            encodeCsvField(sampling),
-            encodeCsvField(provenance),
-          ]
-
-          // Add stationId for observation data
-          if (request.dataTypes.includes('observation')) {
-            const stationId = dataType === 'observation' ? `STN${lonIdx * 100 + latIdx}` : ''
-            baseFields.push(encodeCsvField(stationId))
-          }
-
-          const commonFields = [time, lon.toFixed(6), lat.toFixed(6), encodeCsvField(variable)]
-
-          // Variable-specific fields
-          let variableFields: string[] = []
-          if (variable === 'wind') {
-            const u10 = 2.3 + Math.sin(lon) * 0.5
-            const v10 = 2.2 + Math.cos(lat) * 0.5
-            const speed = Math.sqrt(u10 * u10 + v10 * v10)
-            const direction = Math.round((Math.atan2(v10, u10) * 180) / Math.PI)
-            const directionStatus = 'available'
-            variableFields = [
-              u10.toFixed(2),
-              v10.toFixed(2),
-              speed.toFixed(2),
-              direction.toString(),
-              encodeCsvField(directionStatus),
-              encodeCsvField(unit),
-              encodeCsvField(qualityFlag),
-            ]
-          } else if (variable === 'precipitation') {
-            const precip = value + Math.random() * 2
-            variableFields = [
-              precip.toFixed(2),
-              encodeCsvField(unit),
-              time,
-              new Date(startMs + (t + 1) * 3600 * 1000).toISOString(),
-              encodeCsvField(qualityFlag),
-            ]
-          } else {
-            const tempValue = value + Math.sin(lon + lat) * 5
-            variableFields = [
-              tempValue.toFixed(2),
-              encodeCsvField(unit),
-              encodeCsvField(qualityFlag),
-            ]
-          }
-
-          rows.push([...baseFields, ...commonFields, ...variableFields].join(','))
-        }
-      }
-    }
-  }
-
-  return rows.join('\n')
-}
-
-export function generateCsvExport(request: CsvExportRequest): CsvExportResult {
-  // Validate request
-  const validationError = validateExportRequest(request)
-  if (validationError) {
-    return validationError
-  }
-
-  // Read task to verify ownership and completion status
-  const taskReply = readDownscalingTask({ id: request.taskId })
-  if (!taskReply.ok) {
-    return {
-      ok: false,
-      code: taskReply.code,
-      message: taskReply.error,
-    }
-  }
-
-  return generateCsvFromTask(request, taskReply.task as any)
-}
-
-/**
- * Generate CSV from a validated task (for testing without session context).
- */
-export function generateCsvFromTask(request: CsvExportRequest, task: any): CsvExportSuccess {
-  // Generate CSV content
-  const csvContent = generateCsvContent(request, task)
-
-  // Generate filename using shared helper
-  const filename = generateExportFilename(request, 'csv')
-
+export async function generateCsvPlan(
+  plan: ExportPlan,
+  signal?: AbortSignal,
+): Promise<CsvExportResult> {
+  const result = await readExportRecords(plan, signal)
+  if (!result.ok) return result
+  signal?.throwIfAborted()
+  const columns = csvColumns(plan)
+  const content = [
+    columns.join(','),
+    ...result.records.map((record) => csvRow(record, columns)),
+  ].join('\n')
   return {
     ok: true,
-    csv: csvContent,
-    filename,
+    content,
+    csv: content,
+    mimeType: 'text/csv;charset=utf-8',
+    filename: filename(plan, 'csv'),
+    recordCount: plan.recordCount,
+    notes: plan.notes,
   }
 }
 
-/**
- * Generate GeoJSON from a validated task (for testing without session context).
- */
-export function generateGeoJsonFromTask(request: ExportRequest, task: any): GeoJsonExportSuccess {
-  const variable = task.configuration.variable
-
-  // Generate full grid features for each requested data type
-  const features = []
-  const timeSteps = calculateTimeSteps(request.timeRange)
-  const startMs = Date.parse(request.timeRange.start)
-
-  for (const dataType of request.dataTypes) {
-    const { sampling, provenance } = getDataTypeMetadata(dataType)
-    const { unit, value } = getVariableMetadata(variable)
-
-    // Generate resolution based on data type
-    let resolution: number
-    if (dataType === 'original') {
-      resolution = 0.1
-    } else if (dataType === 'downscaled') {
-      resolution = 0.03
-    } else {
-      resolution = 0.2
-    }
-
-    // Generate all grid points
-    const lonSteps = Math.ceil((request.bbox.east - request.bbox.west) / resolution) + 1
-    const latSteps = Math.ceil((request.bbox.north - request.bbox.south) / resolution) + 1
-
-    for (let t = 0; t < timeSteps; t++) {
-      const time = new Date(startMs + t * 3600 * 1000).toISOString()
-
-      for (let latIdx = 0; latIdx < latSteps; latIdx++) {
-        for (let lonIdx = 0; lonIdx < lonSteps; lonIdx++) {
-          const lon = request.bbox.west + lonIdx * resolution
-          const lat = request.bbox.south + latIdx * resolution
-
-          const qualityFlag = 'valid'
-
-          const properties: Record<string, any> = {
-            taskId: request.taskId,
-            dataType,
-            sampling,
-            provenance,
-            time,
-            variable,
-            unit,
-            qualityFlag,
-          }
-
-          // Add stationId for observation data
-          if (dataType === 'observation') {
-            properties.stationId = `STN${lonIdx * 100 + latIdx}`
-          }
-
-          // Handle wind-specific fields
-          if (variable === 'wind') {
-            const u10 = 2.3 + Math.sin(lon) * 0.5
-            const v10 = 2.2 + Math.cos(lat) * 0.5
-            const speed = Math.sqrt(u10 * u10 + v10 * v10)
-            const direction = Math.round((Math.atan2(v10, u10) * 180) / Math.PI)
-            properties.u10 = parseFloat(u10.toFixed(2))
-            properties.v10 = parseFloat(v10.toFixed(2))
-            properties.speed = parseFloat(speed.toFixed(2))
-            properties.direction = direction
-            properties.directionStatus = 'available'
-            properties.value = properties.speed
-          } else if (variable === 'precipitation') {
-            const precip = value + Math.random() * 2
-            properties.value = parseFloat(precip.toFixed(2))
-            properties.accumulationStart = time
-            properties.accumulationEnd = new Date(startMs + (t + 1) * 3600 * 1000).toISOString()
-          } else {
-            const tempValue = value + Math.sin(lon + lat) * 5
-            properties.value = parseFloat(tempValue.toFixed(2))
-          }
-
-          features.push({
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [parseFloat(lon.toFixed(6)), parseFloat(lat.toFixed(6))], // [longitude, latitude] order
-            },
-            properties,
-          })
-        }
-      }
-    }
-  }
-
-  const featureCollection = {
+export async function generateGeoJsonPlan(
+  plan: ExportPlan,
+  signal?: AbortSignal,
+): Promise<GeoJsonExportResult> {
+  const result = await readExportRecords(plan, signal)
+  if (!result.ok) return result
+  signal?.throwIfAborted()
+  const content = JSON.stringify({
     type: 'FeatureCollection',
-    features,
-  }
-
-  const geojsonContent = JSON.stringify(featureCollection)
-
-  // Generate filename using shared helper
-  const filename = generateExportFilename(request, 'geojson')
-
+    metadata: geojsonMetadata(plan),
+    features: result.records.map(feature),
+  })
   return {
     ok: true,
-    geojson: geojsonContent,
-    filename,
+    content,
+    geojson: content,
+    mimeType: 'application/geo+json',
+    filename: filename(plan, 'geojson'),
+    recordCount: plan.recordCount,
+    notes: plan.notes,
   }
 }
 
-export function generateGeoJsonExport(request: ExportRequest): GeoJsonExportResult {
-  // Validate request
-  const validationError = validateExportRequest(request)
-  if (validationError) {
-    return validationError
-  }
+export async function generateCsvExport(
+  input: unknown,
+  signal?: AbortSignal,
+): Promise<CsvExportResult> {
+  const plan = authenticateExportPlan(input)
+  return plan.ok ? generateCsvPlan(plan, signal) : plan
+}
 
-  // Read task to verify ownership and completion status
-  const taskReply = readDownscalingTask({ id: request.taskId })
-  if (!taskReply.ok) {
+export async function generateGeoJsonExport(
+  input: unknown,
+  signal?: AbortSignal,
+): Promise<GeoJsonExportResult> {
+  const plan = authenticateExportPlan(input)
+  return plan.ok ? generateGeoJsonPlan(plan, signal) : plan
+}
+
+/** Compatibility seams delegate to the same full-task validation and shared records. */
+export async function generateCsvFromTask(
+  input: unknown,
+  task: DownscalingTask,
+  signal?: AbortSignal,
+): Promise<CsvExportResult> {
+  const plan = createExportPlan(input, task)
+  return plan.ok ? generateCsvPlan(plan, signal) : plan
+}
+
+export async function generateGeoJsonFromTask(
+  input: unknown,
+  task: DownscalingTask,
+  signal?: AbortSignal,
+): Promise<GeoJsonExportResult> {
+  const plan = createExportPlan(input, task)
+  return plan.ok ? generateGeoJsonPlan(plan, signal) : plan
+}
+
+export async function generateCsvContent(
+  input: unknown,
+  task: DownscalingTask,
+  signal?: AbortSignal,
+): Promise<string> {
+  const result = await generateCsvFromTask(input, task, signal)
+  if (!result.ok) throw new Error(`${result.code}: ${result.message}`)
+  return result.content
+}
+
+export function validateExportRequest(input: unknown): ExportFailure | null {
+  if (!input || typeof input !== 'object' || !('task' in input))
+    return { ok: false, code: 'INVALID_REQUEST', message: 'The complete saved task is required.' }
+  const task = input.task
+  // The unknown transport record is validated by createExportPlan before any field is read.
+  const plan = createExportPlan(input, task as DownscalingTask)
+  return plan.ok ? null : plan
+}
+
+/** Fixed representative science values, not synthetic generation or preview reads. */
+function representativeRecord(plan: ExportPlan, layer: ExportPlan['layers'][number]): ExportRecord {
+  const { variable } = plan.task.configuration
+  const longitude =
+    layer.dataType === 'observation' ? layer.stations[0]!.longitude : layer.axes.longitudes[0]!
+  const latitude =
+    layer.dataType === 'observation' ? layer.stations[0]!.latitude : layer.axes.latitudes[0]!
+  const time = plan.timeInstants[0]!
+  const duration = plan.request.temporalResolution === 'daily' ? 24 : 1
+  const end = new Date(Date.parse(time) + duration * 3_600_000).toISOString()
+  const probabilistic =
+    layer.dataType === 'downscaled' && plan.task.configuration.resolvedMethod === 'probabilistic'
+  const record: ExportRecord = {
+    taskId: plan.task.id,
+    dataType: layer.dataType,
+    sampling: layer.dataType === 'observation' ? 'stations' : 'logical-grid',
+    sourceKind: layer.dataType === 'observation' ? 'synthetic-reference' : 'synthetic-model',
+    resolutionKm: layer.resolutionKm,
+    provenance: 'Synthetic Demo',
+    dataSource: plan.task.configuration.dataSource,
+    generatorVersion: plan.task.generatorVersion,
+    ...(layer.dataType === 'observation'
+      ? {
+          stationId: layer.stations[0]!.id,
+          reference: {
+            referenceSeed: plan.task.referenceSeed ?? 1729,
+            referenceVersion: plan.task.referenceVersion ?? 'synthetic-observations-v1',
+          },
+        }
+      : {}),
+    time,
+    longitude,
+    latitude,
+    variable,
+    unit: { temperature: '°C', wind: 'm/s', pressure: 'hPa', precipitation: 'mm' }[
+      variable
+    ] as ExportRecord['unit'],
+    value: { temperature: 20.1234, wind: 5.1234, pressure: 1013.1234, precipitation: 1.1234 }[
+      variable
+    ],
+    qualityFlag: 'valid',
+    qualityReason: null,
+    temporalStatistic:
+      variable === 'precipitation'
+        ? 'accumulation'
+        : plan.request.temporalResolution === 'daily'
+          ? 'daily-mean'
+          : 'instantaneous',
+    aggregation: probabilistic ? 'ensemble-mean' : 'none',
+    ...(variable === 'wind'
+      ? {
+          u10: -3.1234,
+          v10: 4.1234,
+          speed: 5.1234,
+          direction: 323.1234,
+          directionStatus: 'available',
+          directionConvention: 'meteorological-from',
+        }
+      : {}),
+    ...(variable === 'precipitation'
+      ? {
+          accumulation: {
+            start: time,
+            end,
+            requestedStart: time,
+            requestedEnd: end,
+            bounds: '[start,end)',
+            sampledHours: duration,
+            expectedHours: duration,
+            complete: true,
+          },
+        }
+      : {}),
+    ...(variable === 'temperature' && plan.request.temporalResolution === 'daily'
+      ? {
+          daily: {
+            mean: 20.1234,
+            minimum: 10.1234,
+            start: time,
+            end,
+            bounds: '[start,end)',
+            sampledHours: 24,
+            expectedHours: 24,
+            completeDay: true,
+          },
+        }
+      : {}),
+  }
+  if (probabilistic && plan.task.configuration.resolvedMethod === 'probabilistic') {
+    record.ensembleMean = {
+      sampleCount: plan.task.configuration.advanced.ensembleMembers,
+      validMemberIds: Array.from(
+        { length: plan.task.configuration.advanced.ensembleMembers },
+        (_, index) => `member-${String(index + 1).padStart(2, '0')}`,
+      ),
+      unavailableMemberIds: [],
+      ...(variable === 'wind' ? { meanMemberSpeed: 5.1234 } : {}),
+    }
+    record.ensembleMeanDefinition =
+      'Arithmetic mean of available member samples per location/time; unavailable member samples are excluded.'
+  }
+  return record
+}
+
+/** Exact plan count with bounded representative serialization, never a full file/science read. */
+export function estimateTextPlan(plan: ExportPlan): ExportEstimationSuccess | ExportFailure {
+  if (plan.request.format === 'netcdf')
     return {
       ok: false,
-      code: taskReply.code,
-      message: taskReply.error,
+      code: 'UNSUPPORTED_FORMAT',
+      message: 'NetCDF sizing belongs to the binary adapter; use its measured descriptor.',
     }
+  const utf8 = (text: string) => new TextEncoder().encode(text).byteLength
+  const columns = csvColumns(plan)
+  let approximateSize =
+    plan.request.format === 'csv'
+      ? utf8(columns.join(','))
+      : utf8(
+          JSON.stringify({
+            type: 'FeatureCollection',
+            metadata: geojsonMetadata(plan),
+            features: [],
+          }),
+        )
+  for (const layer of plan.layers) {
+    if (!layer.pointCount) continue
+    const record = representativeRecord(plan, layer)
+    const bytes =
+      plan.request.format === 'csv'
+        ? utf8(csvRow(record, columns)) + 1
+        : utf8(JSON.stringify(feature(record))) + 1
+    approximateSize += layer.pointCount * plan.timeInstants.length * bytes
   }
-
-  return generateGeoJsonFromTask(request, taskReply.task as any)
-}
-
-/**
- * Calculate grid point count based on data type and bbox.
- */
-function calculateGridPoints(dataType: string, bbox: ExportRequest['bbox']): number {
-  const { west, east, south, north } = bbox
-
-  if (dataType === 'original') {
-    // Original data at ~10km resolution (0.1° ≈ 10km)
-    const lonSteps = Math.ceil((east - west) / 0.1) + 1
-    const latSteps = Math.ceil((north - south) / 0.1) + 1
-    return lonSteps * latSteps
-  } else if (dataType === 'downscaled') {
-    // Downscaled at ~3km resolution (0.03° ≈ 3km)
-    const lonSteps = Math.ceil((east - west) / 0.03) + 1
-    const latSteps = Math.ceil((north - south) / 0.03) + 1
-    return lonSteps * latSteps
-  } else if (dataType === 'observation') {
-    // Observation data: station count (simplified: 1 station per 0.2° for demo)
-    const lonSteps = Math.ceil((east - west) / 0.2) + 1
-    const latSteps = Math.ceil((north - south) / 0.2) + 1
-    return lonSteps * latSteps
-  }
-
-  return 0
-}
-
-/**
- * Calculate time step count based on time range.
- */
-function calculateTimeSteps(timeRange: ExportRequest['timeRange']): number {
-  const startMs = Date.parse(timeRange.start)
-  const endMs = Date.parse(timeRange.end)
-  const durationHours = (endMs - startMs) / (1000 * 60 * 60)
-  // Time steps are hourly, inclusive of both start and end
-  return Math.floor(durationHours) + 1
-}
-
-/**
- * Estimate approximate bytes per record based on format and variable.
- */
-function estimateBytesPerRecord(
-  format: 'csv' | 'geojson',
-  variable: string,
-  hasObservation: boolean,
-): number {
-  if (format === 'csv') {
-    // CSV base fields: taskId, dataType, sampling, provenance, time, lon, lat, variable
-    let baseBytes = 100
-
-    // Add stationId column if observation data is present
-    if (hasObservation) {
-      baseBytes += 10
-    }
-
-    // Variable-specific fields
-    if (variable === 'wind') {
-      // u10, v10, speed, direction, directionStatus, unit, qualityFlag
-      baseBytes += 60
-    } else if (variable === 'precipitation') {
-      // value, unit, accumulationStart, accumulationEnd, qualityFlag
-      baseBytes += 80
-    } else {
-      // value, unit, qualityFlag
-      baseBytes += 30
-    }
-
-    return baseBytes
-  } else {
-    // GeoJSON: Feature with Point geometry and properties
-    let baseBytes = 150
-
-    // Variable-specific properties
-    if (variable === 'wind') {
-      baseBytes += 80
-    } else if (variable === 'precipitation') {
-      baseBytes += 100
-    } else {
-      baseBytes += 50
-    }
-
-    return baseBytes
-  }
-}
-
-/**
- * Estimate export metrics (exact record count and approximate file size).
- */
-export function estimateExportMetrics(request: ExportEstimationRequest): ExportEstimationResult {
-  // Validate request first
-  const validationError = validateExportRequest(request)
-  if (validationError) {
-    return validationError
-  }
-
-  const { dataTypes, timeRange, bbox, format = 'csv', variable } = request
-
-  // Calculate exact record count: sum of (grid points × time steps) for each data type
-  let totalRecords = 0
-  for (const dataType of dataTypes) {
-    const gridPoints = calculateGridPoints(dataType, bbox)
-    const timeSteps = calculateTimeSteps(timeRange)
-    totalRecords += gridPoints * timeSteps
-  }
-
-  // Estimate approximate file size
-  const hasObservation = dataTypes.includes('observation')
-  const bytesPerRecord = estimateBytesPerRecord(format, variable, hasObservation)
-
-  // Add header overhead for CSV
-  let headerOverhead = 0
-  if (format === 'csv') {
-    headerOverhead = 200 // Approximate header line size
-  } else {
-    // GeoJSON FeatureCollection wrapper
-    headerOverhead = 100
-  }
-
-  const approximateSize = headerOverhead + totalRecords * bytesPerRecord
-
+  if (plan.request.format === 'geojson') approximateSize-- // No comma after the final feature.
   return {
     ok: true,
-    recordCount: totalRecords,
+    recordCount: plan.recordCount,
     approximateSize,
+    sizeRule:
+      'Approximate UTF-8 bytes: actual fixed wrapper/header plus one representative valid row per nonempty layer, serialized by the same encoder and multiplied by its exact record count; no scientific reads. Representative scalars use four fractional digits. Actual number widths, missing/coverage status and ensemble details vary; allow 35% or 512 bytes, whichever is larger, for fixed small fixtures (not an exact size guarantee).',
+    counts: plan.layers.map(({ dataType, pointCount }) => ({
+      dataType,
+      pointCount,
+      recordCount: pointCount * plan.timeInstants.length,
+    })),
+    notes: plan.notes,
+    identity: plan.identity,
   }
+}
+
+export function estimateExportMetrics(input: unknown): ExportEstimationSuccess | ExportFailure {
+  const plan = authenticateExportPlan(input)
+  return plan.ok ? estimateTextPlan(plan) : plan
 }

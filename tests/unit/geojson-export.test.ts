@@ -1,135 +1,50 @@
-/**
- * Unit tests for GeoJSON export generation.
- * Tests valid FeatureCollection structure, coordinate order, and data encoding.
- */
+import { describe, expect, it } from 'vitest'
+import Papa from 'papaparse'
+import { generateCsvPlan, generateGeoJsonPlan } from '@/server/services/csv-export.server'
+import { createExportPlan } from '@/server/services/result-export-plan.server'
+import { readExportRecords } from '@/server/services/result-export-records.server'
+import type { ExportRecord } from '@/features/result-analysis/types/export'
+import { exportRequest, exportTask } from '../factories/export-task'
 
-import { describe, it, expect } from 'vitest'
-import { generateGeoJsonFromTask } from '@/server/services/csv-export.server'
-
-describe('GeoJSON Export Generation', () => {
-  it('generates valid FeatureCollection structure', () => {
-    const request = {
-      taskId: 'task-123',
-      bbox: { west: 120, east: 120.5, south: 30, north: 30.5 },
-      timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-      dataTypes: ['downscaled'],
-      format: 'geojson' as const,
+describe('shared CSV / GeoJSON records', () => {
+  it('serializes actual records into Point features and matching unrounded CSV scalars', async () => {
+    const task = exportTask()
+    const plan = createExportPlan(exportRequest(task), task)
+    if (!plan.ok) throw new Error(plan.message)
+    const expected = await readExportRecords(plan)
+    if (!expected.ok) throw new Error(expected.message)
+    const csv = await generateCsvPlan(plan)
+    const geojson = await generateGeoJsonPlan({
+      ...plan,
+      request: { ...plan.request, format: 'geojson' },
+    })
+    if (!csv.ok || !geojson.ok) throw new Error('Expected text exports')
+    const parsed = JSON.parse(geojson.content) as {
+      type: string
+      features: Array<{
+        type: string
+        geometry: { type: string; coordinates: number[] }
+        properties: ExportRecord
+      }>
     }
-
-    const mockTask = {
-      id: 'task-123',
-      configuration: {
-        variable: 'temperature',
-      },
+    expect(parsed.type).toBe('FeatureCollection')
+    expect(parsed.features.map((feature) => feature.properties)).toEqual(expected.records)
+    expect(parsed.features[0]!.geometry).toEqual({ type: 'Point', coordinates: [120, 30] })
+    const rows = Papa.parse<Record<string, string>>(csv.content, {
+      header: true,
+      skipEmptyLines: true,
+    })
+    expect(rows.errors).toEqual([])
+    expect(rows.data).toHaveLength(54)
+    for (const [index, row] of rows.data.entries()) {
+      const record = expected.records[index]!
+      expect(row.value).toBe(String(record.value))
+      expect(row.longitude).toBe(String(record.longitude))
+      expect(row.latitude).toBe(String(record.latitude))
+      expect(row.dataType).toBe(record.dataType)
+      expect(row.provenance).toBe('Synthetic Demo')
     }
-
-    const result = generateGeoJsonFromTask(request, mockTask)
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      const geojson = JSON.parse(result.geojson)
-      expect(geojson.type).toBe('FeatureCollection')
-      expect(geojson.features).toBeInstanceOf(Array)
-    }
-  })
-
-  it('generates Point features with coordinates in [longitude, latitude] order', () => {
-    const request = {
-      taskId: 'task-123',
-      bbox: { west: 120.5, east: 121, south: 30.2, north: 30.8 },
-      timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-      dataTypes: ['downscaled'],
-      format: 'geojson' as const,
-    }
-
-    const mockTask = {
-      id: 'task-123',
-      configuration: {
-        variable: 'temperature',
-      },
-    }
-
-    const result = generateGeoJsonFromTask(request, mockTask)
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      const geojson = JSON.parse(result.geojson)
-      expect(geojson.features.length).toBeGreaterThan(0)
-
-      const feature = geojson.features[0]
-      expect(feature.type).toBe('Feature')
-      expect(feature.geometry.type).toBe('Point')
-      expect(feature.geometry.coordinates).toHaveLength(2)
-
-      const [lon, lat] = feature.geometry.coordinates
-      // Verify longitude is first (within bbox west-east range)
-      expect(lon).toBeGreaterThanOrEqual(120.5)
-      expect(lon).toBeLessThanOrEqual(121)
-      // Verify latitude is second (within bbox south-north range)
-      expect(lat).toBeGreaterThanOrEqual(30.2)
-      expect(lat).toBeLessThanOrEqual(30.8)
-    }
-  })
-
-  it('encodes non-finite values as null with quality flags', () => {
-    const request = {
-      taskId: 'task-123',
-      bbox: { west: 120, east: 120.5, south: 30, north: 30.5 },
-      timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-      dataTypes: ['downscaled'],
-      format: 'geojson' as const,
-    }
-
-    const mockTask = {
-      id: 'task-123',
-      configuration: {
-        variable: 'temperature',
-      },
-    }
-
-    const result = generateGeoJsonFromTask(request, mockTask)
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      const geojsonString = result.geojson
-      // JSON should not contain NaN or Infinity strings
-      expect(geojsonString).not.toContain('NaN')
-      expect(geojsonString).not.toContain('Infinity')
-
-      const geojson = JSON.parse(geojsonString)
-      const feature = geojson.features[0]
-
-      // When value is non-finite, it should be null with appropriate quality flag
-      // For now, test that valid values exist
-      expect(feature.properties.value).toBeDefined()
-      expect(feature.properties.qualityFlag).toBeDefined()
-    }
-  })
-
-  it('generates filename with .geojson extension', () => {
-    const request = {
-      taskId: 'task-abc-123',
-      bbox: { west: 120, east: 120.5, south: 30, north: 30.5 },
-      timeRange: { start: '2024-01-15T00:00:00Z', end: '2024-01-20T00:00:00Z' },
-      dataTypes: ['downscaled'],
-      format: 'geojson' as const,
-    }
-
-    const mockTask = {
-      id: 'task-abc-123',
-      configuration: {
-        variable: 'temperature',
-      },
-    }
-
-    const result = generateGeoJsonFromTask(request, mockTask)
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.filename).toContain('task-abc-123')
-      expect(result.filename).toContain('2024-01-15')
-      expect(result.filename).toContain('2024-01-20')
-      expect(result.filename).toMatch(/\.geojson$/)
-    }
+    expect(csv.csv).toBe(csv.content)
+    expect(geojson.geojson).toBe(geojson.content)
   })
 })

@@ -5,12 +5,17 @@ import {
   calculateBboxHeightKm,
   isBboxWithinBounds,
 } from '@/server/services/csv-export.server'
+import { exportRequest, exportTask } from '../factories/export-task'
 
 describe('Map bbox synchronization', () => {
   describe('bbox validation for map-drawn regions', () => {
     it('accepts valid bbox within 100km limit', () => {
+      const task = exportTask({
+        region: { west: 119, east: 123, south: 29, north: 33 },
+        timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-05' },
+      })
       const request = {
-        taskId: 'test-task',
+        ...exportRequest(task, { dataTypes: ['original'] }),
         bbox: {
           west: 120.0,
           east: 120.8, // ~85km at 30°N
@@ -21,7 +26,6 @@ describe('Map bbox synchronization', () => {
           start: '2024-01-01T00:00:00Z',
           end: '2024-01-05T00:00:00Z',
         },
-        dataTypes: ['downscaled'],
       }
 
       const result = validateExportRequest(request)
@@ -29,8 +33,12 @@ describe('Map bbox synchronization', () => {
     })
 
     it('rejects bbox exceeding 100km width', () => {
+      const task = exportTask({
+        region: { west: 119, east: 123, south: 29, north: 33 },
+        timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-05' },
+      })
       const request = {
-        taskId: 'test-task',
+        ...exportRequest(task, { dataTypes: ['original'] }),
         bbox: {
           west: 120.0,
           east: 122.0, // ~200km at 30°N
@@ -41,7 +49,6 @@ describe('Map bbox synchronization', () => {
           start: '2024-01-01T00:00:00Z',
           end: '2024-01-05T00:00:00Z',
         },
-        dataTypes: ['downscaled'],
       }
 
       const result = validateExportRequest(request)
@@ -51,8 +58,12 @@ describe('Map bbox synchronization', () => {
     })
 
     it('rejects bbox exceeding 100km height', () => {
+      const task = exportTask({
+        region: { west: 119, east: 123, south: 29, north: 33 },
+        timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-05' },
+      })
       const request = {
-        taskId: 'test-task',
+        ...exportRequest(task, { dataTypes: ['original'] }),
         bbox: {
           west: 120.0,
           east: 120.5,
@@ -63,7 +74,6 @@ describe('Map bbox synchronization', () => {
           start: '2024-01-01T00:00:00Z',
           end: '2024-01-05T00:00:00Z',
         },
-        dataTypes: ['downscaled'],
       }
 
       const result = validateExportRequest(request)

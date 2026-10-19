@@ -89,12 +89,8 @@ export function interpolationStations(point: ResultPoint) {
   ].filter(({ weight }) => weight > 0)
 }
 
-/** Select only the requested station window. Counts/strides are computed before allocation. */
-export function stationWindow(
-  window: ResultWindow,
-  timeCount: number,
-  previewBudget?: number,
-): { points: ResultPoint[]; grid: WindowSampling } | Unavailable {
+/** Count the exact reference window before allocating stations or reading their values. */
+export function stationWindowLayout(window: ResultWindow) {
   const firstColumn = Math.max(-180, Math.ceil(window.west)) + 180
   const lastColumn = Math.min(180, Math.floor(window.east)) + 180
   const firstRow = Math.max(-89, Math.ceil(window.south)) + 89
@@ -102,6 +98,17 @@ export function stationWindow(
   const columns = Math.max(0, lastColumn - firstColumn + 1)
   const rows = Math.max(0, lastRow - firstRow + 1)
   const count = columns * rows
+  return { firstColumn, lastColumn, firstRow, lastRow, columns, rows, count }
+}
+
+/** Select only the requested station window. Counts/strides are computed before allocation. */
+export function stationWindow(
+  window: ResultWindow,
+  timeCount: number,
+  previewBudget?: number,
+): { points: ResultPoint[]; grid: WindowSampling } | Unavailable {
+  const { firstColumn, lastColumn, firstRow, lastRow, columns, rows, count } =
+    stationWindowLayout(window)
   if (!count) return unavailable('NO_OBSERVATION', 'This window contains no reference stations.')
   const budget = Math.min(
     previewBudget ?? RESULT_QUERY_LIMITS.gridPoints,

@@ -59,13 +59,12 @@ function axisWindow(
   }
 }
 
-export function windowPoints(
+/** Exact native window geometry, shared by bounded public queries and export preflight. */
+export function gridWindowLayout(
   task: DownscalingTask,
   layer: ResultQuery['layer'],
   window: ResultWindow,
-  timeCount: number,
-  previewBudget?: number,
-): { points: ResultPoint[]; grid: WindowSampling } | Unavailable {
+) {
   const grid = taskGrid(task, layer)
   const longitude = (index: number) =>
     Math.min(grid.extent.east, grid.origin.longitude + index * grid.spacingDegrees.longitude)
@@ -73,9 +72,24 @@ export function windowPoints(
     Math.min(grid.extent.north, grid.origin.latitude + index * grid.spacingDegrees.latitude)
   const x = axisWindow(grid.dimensions.columns, longitude, window.west, window.east)
   const y = axisWindow(grid.dimensions.rows, latitude, window.south, window.north)
-  const columns = x.last - x.first + 1
-  const rows = y.last - y.first + 1
+  const columns = Math.max(0, x.last - x.first + 1)
+  const rows = Math.max(0, y.last - y.first + 1)
   const count = columns * rows
+  return { grid, longitude, latitude, x, y, columns, rows, count }
+}
+
+export function windowPoints(
+  task: DownscalingTask,
+  layer: ResultQuery['layer'],
+  window: ResultWindow,
+  timeCount: number,
+  previewBudget?: number,
+): { points: ResultPoint[]; grid: WindowSampling } | Unavailable {
+  const { grid, longitude, latitude, x, y, columns, rows, count } = gridWindowLayout(
+    task,
+    layer,
+    window,
+  )
   if (!count)
     return unavailable(
       'EMPTY_WINDOW',
