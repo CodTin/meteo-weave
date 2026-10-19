@@ -12,16 +12,10 @@ import type { DownscalingTask } from '@/features/downscaling-tasks/service/contr
 import { ExportRegionMap } from './export-region-map'
 import { useCsvExport } from '@/features/result-analysis/hooks/use-csv-export'
 import { useExportEstimation } from '@/features/result-analysis/hooks/use-export-estimation'
+import type { BBox } from '@/features/result-analysis/types/export'
 
 interface DataExportPanelProps {
   task: DownscalingTask
-}
-
-interface BBox {
-  west: number
-  east: number
-  south: number
-  north: number
 }
 
 /**

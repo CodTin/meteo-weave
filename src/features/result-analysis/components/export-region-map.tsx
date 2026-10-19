@@ -6,12 +6,7 @@ import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css'
 import DrawRectangle from '@/features/spatial-region/draw-rectangle-mode'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
-interface BBox {
-  west: number
-  east: number
-  south: number
-  north: number
-}
+import type { BBox } from '@/features/result-analysis/types/export'
 
 interface ExportRegionMapProps {
   taskBounds: BBox
