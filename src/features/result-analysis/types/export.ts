@@ -93,6 +93,11 @@ export type TextExportSuccess = {
   recordCount: number
   notes: string[]
 }
+/** Exact encoded length travels with the successful binary response, never with an estimate. */
+export type BinaryExportSuccess = Omit<TextExportSuccess, 'content'> & {
+  content: Uint8Array
+  byteLength: number
+}
 export type ExportEstimationSuccess = {
   ok: true
   recordCount: number

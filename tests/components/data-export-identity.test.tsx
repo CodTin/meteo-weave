@@ -143,6 +143,54 @@ describe('Data Export current selection identity', () => {
     expect(screen.getByRole('button', { name: '下载 CSV 文件' })).toBeDisabled()
   })
 
+  it('retries a failed estimate for the unchanged selection and then downloads its file', async () => {
+    const created = vi.fn().mockReturnValue('blob:retried-export')
+    const revoked = vi.fn()
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL = created
+        static revokeObjectURL = revoked
+      },
+    )
+    const downloads: string[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.download)
+    })
+    server.generate.mockResolvedValue({
+      ok: true,
+      content: 'time,value\n2024-01-01T00:00:00Z,12\n',
+      mimeType: 'text/csv;charset=utf-8',
+      filename: 'current-selection.csv',
+      recordCount: 1,
+      notes: [],
+    })
+    renderSmallSelection()
+    await waitFor(() => expect(estimates).toHaveLength(1))
+    const selection = structuredClone(estimates[0]!.data)
+    await act(async () => estimates[0]!.reject(new Error('估算连接中断，请重试。')))
+    expect(await screen.findByText(/ESTIMATION_FAILED：估算连接中断/)).toBeVisible()
+    expect(screen.getByRole('button', { name: '下载 CSV 文件' })).toBeDisabled()
+    expect(screen.queryByRole('region', { name: '数据量估算' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '重试当前选择估算' }))
+    await waitFor(() => expect(estimates).toHaveLength(2))
+    expect(estimates[0]!.signal.aborted).toBe(true)
+    expect(estimates[1]!.data).toEqual(selection)
+    expect(screen.queryByText(/ESTIMATION_FAILED/)).not.toBeInTheDocument()
+    await act(async () => estimates[1]!.resolve(result(12)))
+    expect(await screen.findByText('12 条')).toBeVisible()
+    expect(screen.queryByRole('button', { name: '重试当前选择估算' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '下载 CSV 文件' }))
+    expect(await screen.findByText('已发起浏览器下载')).toBeVisible()
+    expect(server.generate.mock.calls[0]![0].data).toEqual(selection)
+    expect(downloads).toEqual(['current-selection.csv'])
+    expect(created).toHaveBeenCalledTimes(1)
+    expect(revoked).toHaveBeenCalledWith('blob:retried-export')
+  })
+
   it('cancels estimates on unmount and never renders a response afterward', async () => {
     const view = renderSmallSelection()
     await waitFor(() => expect(estimates).toHaveLength(1))

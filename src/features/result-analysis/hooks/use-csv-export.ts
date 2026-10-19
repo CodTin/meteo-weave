@@ -1,3 +1,9 @@
+import {
+  bboxSchema,
+  calculateBboxWidthKm,
+  calculateBboxHeightKm,
+  isBboxWithinBounds,
+} from '@/features/spatial-region/geometry'
 import { useCallback, useEffect, useState } from 'react'
 import { generateExportFn } from '@/server/functions/csv-export'
 import type {
@@ -141,31 +147,13 @@ export function validateExportSelection(request: ExportRequest): ExportFailure |
   const { bbox, task, timeRange } = request
   if (task.status !== 'Completed') return fail('TASK_NOT_COMPLETED', '仅可导出已完成任务。')
   if (request.dataTypes.length === 0) return fail('NO_DATA_TYPES', '请至少选择一种数据类型。')
-  if (
-    !Object.values(bbox).every(Number.isFinite) ||
-    bbox.west < -180 ||
-    bbox.east > 180 ||
-    bbox.south < -90 ||
-    bbox.north > 90 ||
-    bbox.west >= bbox.east ||
-    bbox.south >= bbox.north
-  )
+  if (!bboxSchema.safeParse(bbox).success)
     return fail('INVALID_REGION', '请输入有效坐标：西经必须小于东经，南纬必须小于北纬。')
   const region = task.configuration.region
-  if (
-    bbox.west < region.west ||
-    bbox.east > region.east ||
-    bbox.south < region.south ||
-    bbox.north > region.north
-  )
+  if (!isBboxWithinBounds(bbox, region))
     return fail('REGION_OUTSIDE_TASK', '导出区域必须位于任务范围内；不会自动裁剪。')
-  const radians = Math.PI / 180
-  const width =
-    6371 *
-    (bbox.east - bbox.west) *
-    radians *
-    Math.max(Math.cos(bbox.north * radians), Math.cos(bbox.south * radians))
-  const height = 6371 * (bbox.north - bbox.south) * radians
+  const width = calculateBboxWidthKm(bbox)
+  const height = calculateBboxHeightKm(bbox)
   if (width > 100 + 1e-9 || height > 100 + 1e-9)
     return fail('BBOX_TOO_LARGE', '区域宽度和高度各不得超过 100km，请缩小坐标或地图选区。')
   const start = Date.parse(timeRange.start)
@@ -208,6 +196,7 @@ function readDownload(result: unknown, format: ExportFormat) {
   const reply = result as {
     ok?: boolean
     content?: unknown
+    byteLength?: unknown
     mimeType?: unknown
     filename?: unknown
     recordCount?: unknown
@@ -246,6 +235,8 @@ function readDownload(result: unknown, format: ExportFormat) {
     if (
       !(content instanceof Uint8Array) ||
       content.byteLength < 32 ||
+      !Number.isSafeInteger(reply.byteLength) ||
+      reply.byteLength !== content.byteLength ||
       content[0] !== 67 ||
       content[1] !== 68 ||
       content[2] !== 70 ||

@@ -45,8 +45,9 @@ describe('controlled data-export entry points', () => {
       mimeType: 'application/x-netcdf',
       recordCount: 54,
     })
-    const result = generated.value as { content: Uint8Array }
+    const result = generated.value as { content: Uint8Array; byteLength: number }
     expect(result.content).toBeInstanceOf(Uint8Array)
+    expect(result.byteLength).toBe(result.content.byteLength)
     const file = readNetCDF(result.content)
     expect(file.dimensions).toContainEqual({ name: 'station', size: 1 })
   })

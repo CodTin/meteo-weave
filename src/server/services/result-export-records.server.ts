@@ -22,6 +22,7 @@ const missingCodes = new Set([
   'MISSING_DATA',
   'MISSING_COMPONENT',
   'MISSING_ENSEMBLE',
+  'MISSING_MEMBER',
   'NO_OBSERVATION',
 ])
 type PublicResult = Extract<ResultReply, { ok: true }>
@@ -37,7 +38,7 @@ async function cooperate(signal?: AbortSignal) {
   signal?.throwIfAborted()
 }
 
-function baseRecord(
+export function createExportBaseRecord(
   plan: ExportPlan,
   layer: ExportLayer,
   point: ResultPoint,
@@ -114,7 +115,7 @@ function recordFromValue(
       message: 'A public result contains a nonfinite scientific value.',
     }
   const record: ExportRecord = {
-    ...baseRecord(plan, layer, value, value.time),
+    ...createExportBaseRecord(plan, layer, value, value.time),
     value: value.value,
     unit: reply.unit,
     temporalStatistic: reply.temporalStatistic,
@@ -166,7 +167,7 @@ function missingRecord(
   code: string,
 ): ExportRecord {
   return {
-    ...baseRecord(plan, layer, point, time),
+    ...createExportBaseRecord(plan, layer, point, time),
     qualityReason: code,
     ...(plan.task.configuration.variable === 'wind'
       ? {

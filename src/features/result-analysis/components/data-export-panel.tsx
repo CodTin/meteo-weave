@@ -107,6 +107,7 @@ export function DataExportPanel({ task }: { task: DownscalingTask }) {
     isEstimating,
     error: estimationError,
     code: estimationCode,
+    retry: retryEstimation,
   } = useExportEstimation(request)
   const validation = validateExportSelection(request)
   const isExporting = state === 'validating' || state === 'generating' || state === 'complete'
@@ -314,6 +315,17 @@ export function DataExportPanel({ task }: { task: DownscalingTask }) {
                 ? '当前选择估算已更新。'
                 : '等待当前选择估算。'}
         </output>
+        {estimationError && !validation && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={retryEstimation}
+            aria-label="重试当前选择估算"
+          >
+            <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+            按当前选择重试估算
+          </Button>
+        )}
         {estimation && (
           <section className="space-y-3 rounded-md border p-4" aria-label="数据量估算">
             <h3 className="text-sm font-medium">数据量估算</h3>

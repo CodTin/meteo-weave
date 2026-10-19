@@ -14,6 +14,7 @@ import { RoleSummaryPanel } from './components/role-summary-panel'
 import { DataExportPanel } from './components/data-export-panel'
 import { useTimeSlice } from './hooks/use-time-slice'
 import { useTaskLoader } from '@/features/downscaling-tasks/hooks/use-task-loader'
+import type { DownscalingTask } from '@/features/downscaling-tasks/service'
 import { useUserRole } from './hooks/use-user-role'
 import { createServerFn } from '@tanstack/react-start'
 import { getElevationGroupingData } from '@/server/services/elevation-grouping.server'
@@ -35,19 +36,7 @@ const getRoleSummaryDataFn = createServerFn({ method: 'GET' })
 export function ResultAnalysisPage() {
   const { taskId } = useParams({ from: '/_workspace/tasks/$taskId/result' })
   const navigate = useNavigate()
-  const search = useSearch({ from: '/_workspace/tasks/$taskId/result' })
-  const [activeTab, setActiveTab] = useState<AnalysisTab>((search as any)?.tab || 'map-comparison')
-
   const { task, loading, error } = useTaskLoader({ taskId })
-  const { data: userRole } = useUserRole()
-
-  // Time slice management
-  const timeSliceState = useTimeSlice({
-    taskId,
-    timeRange: task?.configuration.timeRange || { start: '', end: '' },
-    initialTime: task?.configuration.timeRange.start,
-    granularity: 'hourly',
-  })
 
   if (loading) {
     return <TaskLoadingState message="加载结果分析中..." />
@@ -80,6 +69,48 @@ export function ResultAnalysisPage() {
     )
   }
 
+  return <ReadyResultAnalysis key={task.id} task={task} />
+}
+
+function ReadyResultAnalysis({ task }: { task: DownscalingTask }) {
+  const taskId = task.id
+  const navigate = useNavigate()
+  const search = useSearch({ from: '/_workspace/tasks/$taskId/result' })
+  const [activeTab, setActiveTab] = useState<AnalysisTab>((search as any)?.tab || 'map-comparison')
+
+  const { data: userRole } = useUserRole()
+
+  // Time slice management
+  const timeSliceState = useTimeSlice({
+    taskId,
+    timeRange: task.configuration.timeRange,
+    initialTime: task.configuration.timeRange.start,
+    granularity: 'hourly',
+  })
+
+  // Load elevation grouping data for spatial analysis tab
+  const elevationGroupingQuery = useQuery({
+    queryKey: ['elevation-grouping', taskId],
+    queryFn: () => getElevationGroupingDataFn({ data: taskId }),
+    enabled: task?.status === 'Completed' && activeTab === 'spatial',
+  })
+
+  // Load role summary data for probabilistic tasks
+  const roleSummaryQuery = useQuery({
+    queryKey: ['role-summary', taskId, userRole],
+    queryFn: () =>
+      userRole
+        ? getRoleSummaryDataFn({ data: { taskId, role: userRole } })
+        : Promise.resolve({
+            ok: true as const,
+            data: { available: false as const, reason: '未登录' },
+          }),
+    enabled:
+      task?.status === 'Completed' &&
+      task.configuration.resolvedMethod === 'probabilistic' &&
+      !!userRole,
+  })
+
   const handleTabChange = (tab: AnalysisTab) => {
     setActiveTab(tab)
     navigate({
@@ -101,28 +132,6 @@ export function ResultAnalysisPage() {
   }
 
   const variable = task.configuration.variable as Variable
-
-  // Load elevation grouping data for spatial analysis tab
-  // oxlint-disable-next-line react-hooks/rules-of-hooks -- enabled option makes this conditional at runtime, not render
-  const elevationGroupingQuery = useQuery({
-    queryKey: ['elevation-grouping', taskId],
-    queryFn: () => getElevationGroupingDataFn({ data: taskId }),
-    enabled: activeTab === 'spatial',
-  })
-
-  // Load role summary data for probabilistic tasks
-  // oxlint-disable-next-line react-hooks/rules-of-hooks -- enabled option makes this conditional at runtime, not render
-  const roleSummaryQuery = useQuery({
-    queryKey: ['role-summary', taskId, userRole],
-    queryFn: () =>
-      userRole
-        ? getRoleSummaryDataFn({ data: { taskId, role: userRole } })
-        : Promise.resolve({
-            ok: true as const,
-            data: { available: false as const, reason: '未登录' },
-          }),
-    enabled: task?.configuration.resolvedMethod === 'probabilistic' && !!userRole,
-  })
 
   return (
     <div className="space-y-6">

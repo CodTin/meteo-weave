@@ -1,11 +1,21 @@
 import '@tanstack/react-start/server-only'
 import { z } from 'zod'
+import {
+  bboxSchema,
+  calculateBboxWidthKm,
+  calculateBboxHeightKm,
+  isBboxWithinBounds,
+} from '@/features/spatial-region/geometry'
+export {
+  calculateBboxWidthKm,
+  calculateBboxHeightKm,
+  isBboxWithinBounds,
+} from '@/features/spatial-region/geometry'
 import { requireDemoAccount } from './demo-session.server'
 import { readDownscalingTask } from './downscaling-tasks.server'
 import {
   OBSERVATION_REFERENCE,
   type DownscalingTask,
-  type ResultWindow,
 } from '@/features/downscaling-tasks/service/contracts'
 import { validateTaskRecord } from '@/features/downscaling-tasks/service/record-validation'
 import { resultAvailability } from '@/features/downscaling-tasks/service/result-queries'
@@ -30,14 +40,7 @@ const dataTypes: ExportDataType[] = ['original', 'downscaled', 'observation']
 const requestSchema = z.strictObject({
   task: z.unknown().optional(),
   taskId: z.string().min(1).max(128),
-  bbox: z
-    .strictObject({
-      west: z.number().min(-180).max(180),
-      east: z.number().min(-180).max(180),
-      south: z.number().min(-90).max(90),
-      north: z.number().min(-90).max(90),
-    })
-    .refine((box) => box.east > box.west && box.north > box.south),
+  bbox: bboxSchema,
   timeRange: z.strictObject({
     start: z.iso.datetime({ offset: true }),
     end: z.iso.datetime({ offset: true }),
@@ -49,28 +52,6 @@ const requestSchema = z.strictObject({
   format: z.enum(['csv', 'geojson', 'netcdf']).default('csv'),
   temporalResolution: z.enum(['hourly', 'daily']).default('hourly'),
 })
-
-export function calculateBboxWidthKm(bbox: ResultWindow): number {
-  const scale = (6371 * Math.PI) / 180
-  return (
-    scale *
-    (bbox.east - bbox.west) *
-    Math.max(Math.cos((bbox.north * Math.PI) / 180), Math.cos((bbox.south * Math.PI) / 180))
-  )
-}
-
-export function calculateBboxHeightKm(bbox: ResultWindow): number {
-  return ((6371 * Math.PI) / 180) * (bbox.north - bbox.south)
-}
-
-export function isBboxWithinBounds(box: ResultWindow, bounds: ResultWindow): boolean {
-  return (
-    box.west >= bounds.west &&
-    box.east <= bounds.east &&
-    box.south >= bounds.south &&
-    box.north <= bounds.north
-  )
-}
 
 /** Pure public from-task seam: saved metadata is validated, never an id-only lookup. */
 export function createExportPlan(input: unknown, task: DownscalingTask): ExportPlanReply {
