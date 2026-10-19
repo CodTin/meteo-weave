@@ -1,7 +1,7 @@
 import '@tanstack/react-start/server-only'
 import { readDownscalingTask } from './downscaling-tasks.server'
 
-interface CsvExportRequest {
+interface ExportRequest {
   taskId: string
   bbox: {
     west: number
@@ -14,11 +14,21 @@ interface CsvExportRequest {
     end: string
   }
   dataTypes: string[]
+  format?: 'csv' | 'geojson'
 }
+
+// Legacy type alias for backward compatibility
+type CsvExportRequest = ExportRequest
 
 interface CsvExportSuccess {
   ok: true
   csv: string
+  filename: string
+}
+
+interface GeoJsonExportSuccess {
+  ok: true
+  geojson: string
   filename: string
 }
 
@@ -29,6 +39,7 @@ interface CsvExportError {
 }
 
 type CsvExportResult = CsvExportSuccess | CsvExportError
+type GeoJsonExportResult = GeoJsonExportSuccess | CsvExportError
 
 /**
  * Escape text for CSV to prevent formula injection.
@@ -109,6 +120,47 @@ export function isBboxWithinBounds(
     exportBbox.south >= taskBounds.south &&
     exportBbox.north <= taskBounds.north
   )
+}
+
+/**
+ * Get data type metadata (sampling and provenance).
+ */
+function getDataTypeMetadata(dataType: string): { sampling: string; provenance: string } {
+  if (dataType === 'original') {
+    return { sampling: 'coarse-grid-10km', provenance: 'ECMWF-IFS' }
+  } else if (dataType === 'downscaled') {
+    return { sampling: 'target-grid-3km', provenance: 'Downscaled' }
+  } else if (dataType === 'observation') {
+    return { sampling: 'station', provenance: 'Synthetic Demo' }
+  }
+  return { sampling: '', provenance: '' }
+}
+
+/**
+ * Get variable metadata (unit and sample value).
+ */
+function getVariableMetadata(variable: string): { unit: string; value: number } {
+  if (variable === 'temperature') {
+    return { unit: '°C', value: 15.5 }
+  } else if (variable === 'precipitation') {
+    return { unit: 'mm', value: 2.5 }
+  } else if (variable === 'wind') {
+    return { unit: 'm/s', value: 3.2 }
+  } else if (variable === 'pressure') {
+    return { unit: 'hPa', value: 1013.25 }
+  }
+  return { unit: '', value: 0 }
+}
+
+/**
+ * Generate safe filename for export.
+ */
+function generateExportFilename(request: ExportRequest, extension: 'csv' | 'geojson'): string {
+  const startDate = new Date(request.timeRange.start).toISOString().split('T')[0]
+  const endDate = new Date(request.timeRange.end).toISOString().split('T')[0]
+  const safeTaskId = request.taskId.replace(/[^a-zA-Z0-9\-_]/g, '_')
+  const dataTypesStr = request.dataTypes.join('-')
+  return `export_${safeTaskId}_${dataTypesStr}_${startDate}_${endDate}.${extension}`
 }
 
 /**
@@ -193,37 +245,9 @@ export function generateCsvContent(
     const lon = request.bbox.west
     const lat = request.bbox.south
 
-    let sampling = ''
-    let provenance = ''
-    let unit = ''
-    let value: number | string = 0
-    let qualityFlag = 'valid'
-
-    if (dataType === 'original') {
-      sampling = 'coarse-grid-10km'
-      provenance = 'ECMWF-IFS'
-    } else if (dataType === 'downscaled') {
-      sampling = 'target-grid-3km'
-      provenance = 'Downscaled'
-    } else if (dataType === 'observation') {
-      sampling = 'station'
-      provenance = 'Synthetic Demo'
-    }
-
-    // Set unit and value based on variable
-    if (variable === 'temperature') {
-      unit = '°C'
-      value = 15.5
-    } else if (variable === 'precipitation') {
-      unit = 'mm'
-      value = 2.5
-    } else if (variable === 'wind') {
-      unit = 'm/s'
-      value = 3.2
-    } else if (variable === 'pressure') {
-      unit = 'hPa'
-      value = 1013.25
-    }
+    const { sampling, provenance } = getDataTypeMetadata(dataType)
+    const { unit, value } = getVariableMetadata(variable)
+    const qualityFlag = 'valid'
 
     const baseFields = [
       taskIdField,
@@ -302,20 +326,114 @@ export function generateCsvExport(request: CsvExportRequest): CsvExportResult {
 /**
  * Generate CSV from a validated task (for testing without session context).
  */
-export function generateCsvFromTask(request: CsvExportRequest, _task: any): CsvExportSuccess {
+export function generateCsvFromTask(request: CsvExportRequest, task: any): CsvExportSuccess {
   // Generate CSV content
-  const csvContent = generateCsvContent(request, taskReply.task)
+  const csvContent = generateCsvContent(request, task)
 
-  // Generate filename
-  const startDate = new Date(request.timeRange.start).toISOString().split('T')[0]
-  const endDate = new Date(request.timeRange.end).toISOString().split('T')[0]
-  const safeTaskId = request.taskId.replace(/[^a-zA-Z0-9\-_]/g, '_')
-  const dataTypesStr = request.dataTypes.join('-')
-  const filename = `export_${safeTaskId}_${dataTypesStr}_${startDate}_${endDate}.csv`
+  // Generate filename using shared helper
+  const filename = generateExportFilename(request, 'csv')
 
   return {
     ok: true,
     csv: csvContent,
     filename,
   }
+}
+
+/**
+ * Generate GeoJSON from a validated task (for testing without session context).
+ */
+export function generateGeoJsonFromTask(request: ExportRequest, task: any): GeoJsonExportSuccess {
+  const variable = task.configuration.variable
+
+  // Generate sample features for each requested data type
+  const features = []
+
+  for (const dataType of request.dataTypes) {
+    const { sampling, provenance } = getDataTypeMetadata(dataType)
+    const { unit, value } = getVariableMetadata(variable)
+    const qualityFlag = 'valid'
+
+    // Create a Point feature with coordinates in [longitude, latitude] order
+    const lon = request.bbox.west
+    const lat = request.bbox.south
+    const time = request.timeRange.start
+
+    const properties: Record<string, any> = {
+      taskId: request.taskId,
+      dataType,
+      sampling,
+      provenance,
+      time,
+      variable,
+      value,
+      unit,
+      qualityFlag,
+    }
+
+    // Add stationId for observation data
+    if (dataType === 'observation') {
+      properties.stationId = 'STN001'
+    }
+
+    // Handle wind-specific fields
+    if (variable === 'wind') {
+      properties.u10 = 2.3
+      properties.v10 = 2.2
+      properties.speed = 3.2
+      properties.direction = 224
+      properties.directionStatus = 'available'
+    }
+
+    // Handle precipitation-specific fields
+    if (variable === 'precipitation') {
+      properties.accumulationStart = '2024-01-01T00:00:00Z'
+      properties.accumulationEnd = '2024-01-01T01:00:00Z'
+    }
+
+    features.push({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [lon, lat], // [longitude, latitude] order
+      },
+      properties,
+    })
+  }
+
+  const featureCollection = {
+    type: 'FeatureCollection',
+    features,
+  }
+
+  const geojsonContent = JSON.stringify(featureCollection)
+
+  // Generate filename using shared helper
+  const filename = generateExportFilename(request, 'geojson')
+
+  return {
+    ok: true,
+    geojson: geojsonContent,
+    filename,
+  }
+}
+
+export function generateGeoJsonExport(request: ExportRequest): GeoJsonExportResult {
+  // Validate request
+  const validationError = validateExportRequest(request)
+  if (validationError) {
+    return validationError
+  }
+
+  // Read task to verify ownership and completion status
+  const taskReply = readDownscalingTask({ id: request.taskId })
+  if (!taskReply.ok) {
+    return {
+      ok: false,
+      code: taskReply.code,
+      message: taskReply.error,
+    }
+  }
+
+  return generateGeoJsonFromTask(request, taskReply.task as any)
 }

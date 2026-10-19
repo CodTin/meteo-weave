@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Download, AlertCircle, X, RotateCcw } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
@@ -41,6 +42,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
   const [includeDownscaled, setIncludeDownscaled] = useState(true)
   const [includeOriginal, setIncludeOriginal] = useState(false)
   const [includeObservation, setIncludeObservation] = useState(false)
+  const [format, setFormat] = useState<'csv' | 'geojson'>('csv')
 
   // Get Mapbox token from environment
   const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined
@@ -68,6 +70,7 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
     bbox,
     timeRange,
     dataTypes,
+    format,
   })
 
   const { state, progress, error, startExport, cancel, retry, downloadUrl, filename } = exportHook
@@ -235,6 +238,31 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
           </div>
         </div>
 
+        {/* Format Selection */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-medium">导出格式</h3>
+          <RadioGroup
+            value={format}
+            onValueChange={(value) => setFormat(value as 'csv' | 'geojson')}
+          >
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="csv" id="format-csv" />
+              <Label htmlFor="format-csv" className="cursor-pointer">
+                CSV（表格数据）
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="geojson" id="format-geojson" />
+              <Label htmlFor="format-geojson" className="cursor-pointer">
+                GeoJSON（地理要素集合）
+              </Label>
+            </div>
+          </RadioGroup>
+          <p className="text-xs text-muted-foreground">
+            GeoJSON 格式包含 Point 几何，坐标严格按 [经度, 纬度] 顺序，适合 GIS 工具导入
+          </p>
+        </div>
+
         {/* Validation Info */}
         <Alert>
           <AlertCircle className="size-4" />
@@ -289,10 +317,10 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
               onClick={handleDownload}
               disabled={dataTypes.length === 0}
               className="flex-1"
-              aria-label="下载 CSV 文件"
+              aria-label={`下载 ${format === 'csv' ? 'CSV' : 'GeoJSON'} 文件`}
             >
               <Download className="mr-2 size-4" aria-hidden="true" />
-              下载 CSV
+              下载 {format === 'csv' ? 'CSV' : 'GeoJSON'}
             </Button>
           )}
 

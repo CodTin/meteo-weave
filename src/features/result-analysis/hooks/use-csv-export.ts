@@ -35,6 +35,7 @@ export interface ExportRequest {
     end: string
   }
   dataTypes: string[]
+  format?: 'csv' | 'geojson'
 }
 
 export interface UseCsvExportResult {
@@ -49,12 +50,17 @@ export interface UseCsvExportResult {
   filename: string | null
 }
 
-// Server function for CSV generation
-const generateCsvFn = createServerFn({ method: 'POST' })
+// Server function for CSV/GeoJSON generation
+const generateExportFn = createServerFn({ method: 'POST' })
   .validator((data: ExportRequest) => data)
   .handler(async ({ data }) => {
-    const { generateCsvExport } = await import('@/server/services/csv-export.server')
-    return generateCsvExport(data)
+    if (data.format === 'geojson') {
+      const { generateGeoJsonExport } = await import('@/server/services/csv-export.server')
+      return generateGeoJsonExport(data)
+    } else {
+      const { generateCsvExport } = await import('@/server/services/csv-export.server')
+      return generateCsvExport(data)
+    }
   })
 
 /**
@@ -66,6 +72,7 @@ function generateRequestId(request: ExportRequest): string {
     bbox: request.bbox,
     timeRange: request.timeRange,
     dataTypes: request.dataTypes.slice().sort(),
+    format: request.format || 'csv',
   })
   return `${Date.now()}-${params.slice(0, 50)}`
 }
@@ -157,13 +164,14 @@ export function useCsvExport(request: ExportRequest): UseCsvExportResult {
 
       // Generation stage - call server function
       setState('generating')
+      const formatLabel = request.format === 'geojson' ? 'GeoJSON' : 'CSV'
       setProgress({
         stage: 'reading',
-        message: '正在生成 CSV 文件',
+        message: `正在生成 ${formatLabel} 文件`,
         percent: 50,
       })
 
-      const result = await generateCsvFn({ data: request })
+      const result = await generateExportFn({ data: request })
 
       if (cancelledRef.current) {
         setState('cancelled')
@@ -175,8 +183,13 @@ export function useCsvExport(request: ExportRequest): UseCsvExportResult {
         throw new Error(result.message)
       }
 
-      // Create blob URL for download
-      const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' })
+      // Create blob URL for download with appropriate content type
+      const contentType =
+        request.format === 'geojson'
+          ? 'application/geo+json;charset=utf-8;'
+          : 'text/csv;charset=utf-8;'
+      const content = 'geojson' in result ? result.geojson : result.csv
+      const blob = new Blob([content], { type: contentType })
       const url = URL.createObjectURL(blob)
 
       setDownloadUrl(url)

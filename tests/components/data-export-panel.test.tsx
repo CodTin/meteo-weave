@@ -34,7 +34,10 @@ vi.mock('@/features/result-analysis/components/export-region-map', () => ({
 }))
 
 const mockTask: DownscalingTask = {
+  schemaVersion: 1,
   id: 'test-task-1',
+  name: 'Test Task',
+  ownerId: 'researcher',
   status: 'Completed',
   configuration: {
     dataSource: 'ecmwf',
@@ -50,11 +53,16 @@ const mockTask: DownscalingTask = {
       start: '2024-01-01T00:00:00Z',
       end: '2024-01-05T00:00:00Z',
     },
-    resolution: 1000,
-    downscalingMethod: 'deterministic',
+    resolution: '3km' as const,
+    method: 'deterministic',
+    resolvedMethod: 'deterministic',
   },
   createdAt: '2024-01-01T00:00:00Z',
-  completedAt: '2024-01-01T00:05:00Z',
+  submittedAt: '2024-01-01T00:00:00Z',
+  completionAt: '2024-01-01T00:05:00Z',
+  failureReason: null,
+  dataSeed: 12345,
+  generatorVersion: 'synthetic-temperature-v1',
 }
 
 describe('DataExportPanel', () => {
@@ -106,5 +114,30 @@ describe('DataExportPanel', () => {
     render(<DataExportPanel task={mockTask} />)
 
     expect(screen.getByText(/导出限制.*100km.*30 天/i)).toBeInTheDocument()
+  })
+
+  it('displays format selector with CSV and GeoJSON options', () => {
+    render(<DataExportPanel task={mockTask} />)
+
+    // Should have format selection radio buttons or selector
+    expect(screen.getByRole('radio', { name: /CSV/i })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /GeoJSON/i })).toBeInTheDocument()
+  })
+
+  it('defaults to CSV format', () => {
+    render(<DataExportPanel task={mockTask} />)
+
+    const csvRadio = screen.getByRole('radio', { name: /CSV/i })
+    expect(csvRadio).toBeChecked()
+  })
+
+  it('allows switching to GeoJSON format', async () => {
+    const user = userEvent.setup()
+    render(<DataExportPanel task={mockTask} />)
+
+    const geojsonRadio = screen.getByRole('radio', { name: /GeoJSON/i })
+    await user.click(geojsonRadio)
+
+    expect(geojsonRadio).toBeChecked()
   })
 })
