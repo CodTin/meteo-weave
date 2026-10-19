@@ -146,23 +146,19 @@ function watchPage(
 }
 
 export const test = base.extend<BrowserGuard>({
-  // oxlint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
-  // oxlint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture uses `use` API, not React Hook
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
   expectedModuleFailures: async ({}, use) => {
     await use(new Set<string>())
   },
-  // oxlint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
-  // oxlint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture uses `use` API, not React Hook
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
   expectedFontFailures: async ({}, use) => {
     await use(new Set<string>())
   },
-  // oxlint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
-  // oxlint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture uses `use` API, not React Hook
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
   expectedDocument404s: async ({}, use) => {
     await use(new Set<string>())
   },
-  // oxlint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
-  // oxlint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture uses `use` API, not React Hook
+  // eslint-disable-next-line no-empty-pattern -- Playwright requires fixture dependency destructuring.
   expectedSessionTransportFailures: async ({}, use) => {
     await use(new Set<string>())
   },
