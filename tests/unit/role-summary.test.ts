@@ -66,12 +66,8 @@ describe('Role Summary', () => {
         agricultureResponse.data.available
       ) {
         // Same task ID
-        expect(researcherResponse.data.metadata.taskId).toBe(
-          policyResponse.data.metadata.taskId,
-        )
-        expect(policyResponse.data.metadata.taskId).toBe(
-          agricultureResponse.data.metadata.taskId,
-        )
+        expect(researcherResponse.data.metadata.taskId).toBe(policyResponse.data.metadata.taskId)
+        expect(policyResponse.data.metadata.taskId).toBe(agricultureResponse.data.metadata.taskId)
 
         // Same variable
         expect(researcherResponse.data.metadata.variable).toBe(

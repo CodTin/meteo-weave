@@ -141,11 +141,15 @@ function PolicySummary({ task, summaryData }: Omit<RoleSummaryPanelProps, 'role'
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">超阈值概率</span>
-                <span className="font-medium">{(summaryData.threshold.probability * 100).toFixed(1)}%</span>
+                <span className="font-medium">
+                  {(summaryData.threshold.probability * 100).toFixed(1)}%
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">影响范围</span>
-                <span className="font-medium">{summaryData.threshold.affectedArea.toFixed(0)} km²</span>
+                <span className="font-medium">
+                  {summaryData.threshold.affectedArea.toFixed(0)} km²
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -198,11 +202,15 @@ function AgricultureSummary({ task, summaryData }: Omit<RoleSummaryPanelProps, '
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">日积温 (≥10°C)</span>
-                <span className="font-medium">{summaryData.agriculture.accumulatedDegreeDay.toFixed(1)} °C·d</span>
+                <span className="font-medium">
+                  {summaryData.agriculture.accumulatedDegreeDay.toFixed(1)} °C·d
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">霜冻风险 (&lt;0°C)</span>
-                <span className="font-medium">{(summaryData.agriculture.frostRisk * 100).toFixed(1)}%</span>
+                <span className="font-medium">
+                  {(summaryData.agriculture.frostRisk * 100).toFixed(1)}%
+                </span>
               </div>
               <p className="text-xs text-muted-foreground">
                 基于时间序列完整日数据计算，不适用于单时刻预览
@@ -219,11 +227,11 @@ function AgricultureSummary({ task, summaryData }: Omit<RoleSummaryPanelProps, '
             <CardContent className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">≥10mm 概率</span>
-                <span className="font-medium">{(summaryData.agriculture.precipitationProbability * 100).toFixed(1)}%</span>
+                <span className="font-medium">
+                  {(summaryData.agriculture.precipitationProbability * 100).toFixed(1)}%
+                </span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                有效降水阈值，用于灌溉决策参考
-              </p>
+              <p className="text-xs text-muted-foreground">有效降水阈值，用于灌溉决策参考</p>
             </CardContent>
           </Card>
         )}
