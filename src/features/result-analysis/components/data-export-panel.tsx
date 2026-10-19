@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Download, AlertCircle } from 'lucide-react'
+import { Download, AlertCircle, X, RotateCcw } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Progress } from '@/components/ui/progress'
 import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
+import { useCsvExport } from '@/features/result-analysis/hooks/use-csv-export'
 
 interface DataExportPanelProps {
   task: DownscalingTask
@@ -30,33 +32,46 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
 
   const [includeDownscaled, setIncludeDownscaled] = useState(true)
   const [includeOriginal, setIncludeOriginal] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [isDownloading, setIsDownloading] = useState(false)
 
-  const handleDownload = async () => {
-    setError(null)
-    setIsDownloading(true)
+  // Build data types array
+  const dataTypes = useMemo(() => {
+    const types = []
+    if (includeDownscaled) types.push('downscaled')
+    if (includeOriginal) types.push('original')
+    return types
+  }, [includeDownscaled, includeOriginal])
 
-    try {
-      const dataTypes = []
-      if (includeDownscaled) dataTypes.push('downscaled')
-      if (includeOriginal) dataTypes.push('original')
+  // Use export hook
+  const exportHook = useCsvExport({
+    taskId: task.id,
+    bbox,
+    timeRange,
+    dataTypes,
+  })
 
-      if (dataTypes.length === 0) {
-        setError('请至少选择一种数据类型')
-        setIsDownloading(false)
-        return
-      }
+  const { state, progress, error, startExport, cancel, retry, downloadUrl, filename } = exportHook
 
-      // TODO: Call server function to generate CSV
-      // For now, show a placeholder message
-      setError('CSV 下载功能正在实现中')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '下载失败')
-    } finally {
-      setIsDownloading(false)
+  // Trigger download when URL becomes available
+  useEffect(() => {
+    if (downloadUrl && filename && state === 'complete') {
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      link.click()
     }
+  }, [downloadUrl, filename, state])
+
+  const handleDownload = () => {
+    if (dataTypes.length === 0) {
+      return
+    }
+    startExport()
   }
+
+  const isExporting = state === 'validating' || state === 'generating'
+  const canDownload = dataTypes.length > 0 && (state === 'idle' || state === 'failed')
+  const canCancel = isExporting
+  const canRetry = state === 'failed'
 
   return (
     <Card>
@@ -180,6 +195,37 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
           </AlertDescription>
         </Alert>
 
+        {/* Progress Display */}
+        {progress && (
+          <output className="space-y-2" aria-live="polite">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">{progress.message}</span>
+              {progress.percent !== undefined && (
+                <span className="text-muted-foreground">{progress.percent}%</span>
+              )}
+            </div>
+            {progress.percent !== undefined && (
+              <Progress value={progress.percent} className="h-2" aria-label="导出进度" />
+            )}
+          </output>
+        )}
+
+        {/* Success Message */}
+        {state === 'complete' && !error && (
+          <Alert>
+            <AlertCircle className="size-4" />
+            <AlertDescription>导出完成，文件已开始下载</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Cancelled Message */}
+        {state === 'cancelled' && (
+          <Alert>
+            <AlertCircle className="size-4" />
+            <AlertDescription>导出已取消</AlertDescription>
+          </Alert>
+        )}
+
         {/* Error Display */}
         {error && (
           <Alert variant="destructive">
@@ -188,11 +234,34 @@ export function DataExportPanel({ task }: DataExportPanelProps) {
           </Alert>
         )}
 
-        {/* Download Button */}
-        <Button onClick={handleDownload} disabled={isDownloading} className="w-full">
-          <Download className="mr-2 size-4" />
-          {isDownloading ? '正在生成...' : '下载 CSV'}
-        </Button>
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          {canDownload && (
+            <Button
+              onClick={handleDownload}
+              disabled={dataTypes.length === 0}
+              className="flex-1"
+              aria-label="下载 CSV 文件"
+            >
+              <Download className="mr-2 size-4" aria-hidden="true" />
+              下载 CSV
+            </Button>
+          )}
+
+          {canCancel && (
+            <Button onClick={cancel} variant="outline" className="flex-1" aria-label="取消导出">
+              <X className="mr-2 size-4" aria-hidden="true" />
+              取消
+            </Button>
+          )}
+
+          {canRetry && (
+            <Button onClick={retry} variant="outline" className="flex-1" aria-label="重试导出">
+              <RotateCcw className="mr-2 size-4" aria-hidden="true" />
+              重试
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   )

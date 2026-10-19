@@ -184,6 +184,13 @@ export function generateCsvExport(request: CsvExportRequest): CsvExportResult {
     }
   }
 
+  return generateCsvFromTask(request, taskReply.task as any)
+}
+
+/**
+ * Generate CSV from a validated task (for testing without session context).
+ */
+export function generateCsvFromTask(request: CsvExportRequest, _task: any): CsvExportSuccess {
   // Generate CSV content
   const csvContent = generateCsvContent(request)
 
