@@ -1,386 +1,137 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import Papa from 'papaparse'
 import {
-  validateExportRequest,
-  generateCsvContent,
   encodeCsvField,
+  escapeCsvText,
+  generateCsvContent,
+  generateCsvFromTask,
+  validateExportRequest,
 } from '@/server/services/csv-export.server'
-import type { DownscalingTask } from '@/features/downscaling-tasks/service/contracts'
+import { queryTaskResult } from '@/features/downscaling-tasks/service/result-queries'
+import { exportRequest, exportTask } from '../factories/export-task'
 
-const mockTask: DownscalingTask = {
-  schemaVersion: 1,
-  id: 'test-task',
-  name: 'Test Task',
-  ownerId: 'researcher',
-  configuration: {
-    dataSource: 'ecmwf',
-    variable: 'temperature',
-    region: { west: 119.5, east: 120.5, south: 29.5, north: 30.5 },
-    timeRange: { mode: 'forecast', start: '2024-01-01T00:00:00Z', end: '2024-01-03T00:00:00Z' },
-    method: 'recommended',
-    resolvedMethod: 'deterministic',
-    resolution: '3km',
-  },
-  createdAt: '2024-01-01T00:00:00Z',
-  submittedAt: '2024-01-01T00:00:00Z',
-  completionAt: '2024-01-01T00:00:10Z',
-  status: 'Completed',
-  failureReason: null,
-  dataSeed: 12345,
-  generatorVersion: 'synthetic-temperature-v1',
-  referenceSeed: 1729,
-  referenceVersion: 'synthetic-observations-v1',
-}
+describe('CSV public from-task export', () => {
+  it.each(['original', 'downscaled', 'observation'] as const)(
+    'exports only selected native %s locations and metadata',
+    async (dataType) => {
+      const task = exportTask()
+      const request = exportRequest(task, { dataTypes: [dataType] })
+      const csv = await generateCsvContent(request, task)
+      const parsed = Papa.parse<Record<string, string>>(csv, { header: true, skipEmptyLines: true })
+      expect(parsed.errors).toEqual([])
+      expect(parsed.data).toHaveLength({ original: 12, downscaled: 40, observation: 2 }[dataType])
+      for (const row of parsed.data) {
+        expect(row.dataType).toBe(dataType)
+        expect(row.provenance).toBe('Synthetic Demo')
+        expect(row.resolutionKm).toBe(
+          { original: '10', downscaled: '3', observation: '' }[dataType],
+        )
+        if (dataType === 'observation') {
+          expect(row.stationId).toBe('synthetic-station-v1:120:30')
+          expect(row.sampling).toBe('stations')
+          expect(row.referenceVersion).toBe('synthetic-observations-v1')
+        }
+      }
+    },
+  )
 
-describe('CSV Export', () => {
-  describe('data type selection', () => {
-    it('exports downscaled data type with proper metadata', () => {
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['downscaled'],
-        },
-        mockTask,
-      )
+  it.each(['temperature', 'wind', 'pressure', 'precipitation'] as const)(
+    'preserves public %s quantities and units without export rounding',
+    async (variable) => {
+      const task = exportTask({ variable })
+      const result = await generateCsvFromTask(exportRequest(task), task)
+      if (!result.ok) throw new Error(result.message)
+      const rows = Papa.parse<Record<string, string>>(result.csv, {
+        header: true,
+        skipEmptyLines: true,
+      }).data
+      expect(rows).toHaveLength(54)
+      for (const row of rows) {
+        const reply = queryTaskResult(task, {
+          kind: 'points',
+          layer: row.dataType,
+          ...(row.dataType === 'observation' ? { observationMode: 'stations' } : {}),
+          temporalResolution: 'hourly',
+          points: [{ longitude: Number(row.longitude), latitude: Number(row.latitude) }],
+          times: [row.time],
+        })
+        if (!reply.ok) throw new Error(reply.error)
+        expect(row.value).toBe(String(reply.values[0]!.value))
+        expect(row.unit).toBe(reply.unit)
+        if (reply.variable === 'wind') {
+          const sample = reply.values[0]!
+          expect(row.u10).toBe(String(sample.u10))
+          expect(row.v10).toBe(String(sample.v10))
+          expect(row.speed).toBe(String(sample.speed))
+          expect(row.direction).toBe(
+            sample.fromDirection === null ? '' : String(sample.fromDirection),
+          )
+          expect(row.directionConvention).toBe('meteorological-from')
+        }
+        if (reply.variable === 'precipitation') {
+          expect(row.accumulationStart).toBe(reply.values[0]!.accumulation.start)
+          expect(row.requestedEnd).toBe(reply.values[0]!.accumulation.requestedEnd)
+          expect(row.bounds).toBe('[start,end)')
+          expect(row.complete).toBe('true')
+        }
+      }
+    },
+  )
 
-      const lines = csv.split('\n')
-      expect(lines[0]).toContain('dataType')
-      expect(lines[0]).toContain('sampling')
-      expect(lines[0]).toContain('provenance')
-
-      // Check that at least one data row has downscaled type
-      const dataRows = lines.slice(1).filter((line) => line.trim())
-      const hasDownscaled = dataRows.some((row) => row.includes('downscaled'))
-      expect(hasDownscaled).toBe(true)
+  it('combines independent native layer counts instead of a shared crop lattice', async () => {
+    const task = exportTask({ resolution: '1km' })
+    const result = await generateCsvFromTask(exportRequest(task), task)
+    if (!result.ok) throw new Error(result.message)
+    const parsed = Papa.parse<Record<string, string>>(result.content, {
+      header: true,
+      skipEmptyLines: true,
     })
-
-    it('exports original data type with coarse grid metadata', () => {
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['original'],
-        },
-        mockTask,
-      )
-
-      const lines = csv.split('\n')
-      const dataRows = lines.slice(1).filter((line) => line.trim())
-      const hasOriginal = dataRows.some((row) => row.includes('original'))
-      expect(hasOriginal).toBe(true)
-    })
-
-    it('exports observation data type with station metadata', () => {
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['observation'],
-        },
-        mockTask,
-      )
-
-      const lines = csv.split('\n')
-      expect(lines[0]).toContain('stationId')
-
-      const dataRows = lines.slice(1).filter((line) => line.trim())
-      const hasObservation = dataRows.some((row) => row.includes('observation'))
-      expect(hasObservation).toBe(true)
-    })
-
-    it('exports combined data types with distinct metadata', () => {
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['original', 'downscaled', 'observation'],
-        },
-        mockTask,
-      )
-
-      const lines = csv.split('\n')
-      const dataRows = lines.slice(1).filter((line) => line.trim())
-
-      const hasOriginal = dataRows.some((row) => row.includes('original'))
-      const hasDownscaled = dataRows.some((row) => row.includes('downscaled'))
-      const hasObservation = dataRows.some((row) => row.includes('observation'))
-
-      expect(hasOriginal).toBe(true)
-      expect(hasDownscaled).toBe(true)
-      expect(hasObservation).toBe(true)
-    })
+    expect(parsed.errors).toEqual([])
+    expect(parsed.data.filter((row) => row.dataType === 'original')).toHaveLength(12)
+    expect(parsed.data.filter((row) => row.dataType === 'downscaled')).toHaveLength(260)
+    expect(parsed.data.filter((row) => row.dataType === 'observation')).toHaveLength(2)
+    expect(result.recordCount).toBe(274)
   })
 
-  describe('variable support', () => {
-    it('exports temperature with °C unit', () => {
-      const tempTask = {
-        ...mockTask,
-        configuration: { ...mockTask.configuration, variable: 'temperature' },
-      }
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['downscaled'],
-        },
-        tempTask,
-      )
-
-      expect(csv).toContain('temperature')
-      expect(csv).toContain('°C')
-    })
-
-    it('exports precipitation with mm unit and accumulation metadata', () => {
-      const precipTask = {
-        ...mockTask,
-        configuration: { ...mockTask.configuration, variable: 'precipitation' },
-      }
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['downscaled'],
-        },
-        precipTask,
-      )
-
-      const lines = csv.split('\n')
-      expect(lines[0]).toContain('accumulationStart')
-      expect(lines[0]).toContain('accumulationEnd')
-      expect(csv).toContain('precipitation')
-      expect(csv).toContain('mm')
-    })
-
-    it('exports wind with u10, v10, speed, direction fields and m/s unit', () => {
-      const windTask = {
-        ...mockTask,
-        configuration: { ...mockTask.configuration, variable: 'wind' },
-      }
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['downscaled'],
-        },
-        windTask,
-      )
-
-      const lines = csv.split('\n')
-      expect(lines[0]).toContain('u10')
-      expect(lines[0]).toContain('v10')
-      expect(lines[0]).toContain('speed')
-      expect(lines[0]).toContain('direction')
-      expect(csv).toContain('m/s')
-    })
-
-    it('exports pressure with hPa unit', () => {
-      const pressureTask = {
-        ...mockTask,
-        configuration: { ...mockTask.configuration, variable: 'pressure' },
-      }
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['downscaled'],
-        },
-        pressureTask,
-      )
-
-      expect(csv).toContain('pressure')
-      expect(csv).toContain('hPa')
-    })
-
-    it('handles wind direction null for calm conditions', () => {
-      const windTask = {
-        ...mockTask,
-        configuration: { ...mockTask.configuration, variable: 'wind' },
-      }
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['downscaled'],
-        },
-        windTask,
-      )
-
-      // Wind direction can be null for calm conditions (speed ~0)
-      // Verify the CSV structure allows for null direction
-      const lines = csv.split('\n')
-      expect(lines[0]).toContain('directionStatus')
-    })
+  it('rejects a partial fake task rather than generating invented rows', async () => {
+    const result = await generateCsvFromTask(exportRequest(), { id: 'export-task' } as never)
+    expect(result).toMatchObject({ ok: false, code: 'INVALID_RECORD' })
+    expect(
+      validateExportRequest({ ...exportRequest(), task: { id: 'export-task' } }),
+    ).toMatchObject({ ok: false, code: 'INVALID_RECORD' })
   })
 
-  describe('missing data handling', () => {
-    it('preserves missing data as empty value with quality indicator', () => {
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['downscaled'],
-        },
-        mockTask,
-      )
-
-      const lines = csv.split('\n')
-      expect(lines[0]).toContain('qualityFlag')
+  it('encodes untrusted identity text safely while retaining scientific negative numbers', async () => {
+    const task = exportTask({ id: '=danger,"quoted"' })
+    const result = await generateCsvFromTask(exportRequest(task), task)
+    if (!result.ok) throw new Error(result.message)
+    const parsed = Papa.parse<Record<string, string>>(result.csv, {
+      header: true,
+      skipEmptyLines: true,
     })
-
-    it('distinguishes scientific missing data from generation failures', () => {
-      const csv = generateCsvContent(
-        {
-          taskId: 'test-task',
-          bbox: { west: 120.0, east: 120.1, south: 30.0, north: 30.1 },
-          timeRange: { start: '2024-01-01T00:00:00Z', end: '2024-01-02T00:00:00Z' },
-          dataTypes: ['observation'],
-        },
-        mockTask,
-      )
-
-      // Quality flags should allow distinguishing missing observations from system failures
-      const lines = csv.split('\n')
-      expect(lines[0]).toContain('qualityFlag')
-    })
+    expect(parsed.errors).toEqual([])
+    expect(parsed.data[0]!.taskId).toBe('\'=danger,"quoted"')
+    expect(result.filename).not.toMatch(/[=",/:]/)
+    expect(encodeCsvField(-4.123456789)).toBe('-4.123456789')
   })
+})
 
-  describe('validation', () => {
-    it('rejects export request when bbox width exceeds 100km', () => {
-      // 1.1 degrees at 30°N latitude is ~106km
-      const result = validateExportRequest({
-        taskId: 'test-task-id',
-        bbox: {
-          west: 120.0,
-          east: 121.1, // ~106km at 30°N
-          south: 30.0,
-          north: 30.1,
-        },
-        timeRange: {
-          start: '2024-01-01T00:00:00Z',
-          end: '2024-01-02T00:00:00Z',
-        },
-        dataTypes: ['downscaled'],
-      })
-
-      expect(result).not.toBeNull()
-      expect(result?.code).toBe('BBOX_TOO_LARGE')
-    })
-
-    it('rejects export request when bbox height exceeds 100km', () => {
-      // 0.91 degrees latitude is ~101km
-      const result = validateExportRequest({
-        taskId: 'test-task-id',
-        bbox: {
-          west: 120.0,
-          east: 120.5,
-          south: 30.0,
-          north: 30.91, // ~101km height
-        },
-        timeRange: {
-          start: '2024-01-01T00:00:00Z',
-          end: '2024-01-02T00:00:00Z',
-        },
-        dataTypes: ['downscaled'],
-      })
-
-      expect(result).not.toBeNull()
-      expect(result?.code).toBe('BBOX_TOO_LARGE')
-    })
-
-    it('rejects export request when duration exceeds 30 days', () => {
-      const result = validateExportRequest({
-        taskId: 'test-task-id',
-        bbox: {
-          west: 120.0,
-          east: 120.5,
-          south: 30.0,
-          north: 30.5,
-        },
-        timeRange: {
-          start: '2024-01-01T00:00:00Z',
-          end: '2024-02-01T00:00:00Z', // 31 days
-        },
-        dataTypes: ['downscaled'],
-      })
-
-      expect(result).not.toBeNull()
-      expect(result?.code).toBe('DURATION_TOO_LONG')
-    })
-
-    it('accepts valid export request within limits', () => {
-      const result = validateExportRequest({
-        taskId: 'test-task-id',
-        bbox: {
-          west: 120.0,
-          east: 120.5, // ~43km at 30°N
-          south: 30.0,
-          north: 30.5, // ~55km
-        },
-        timeRange: {
-          start: '2024-01-01T00:00:00Z',
-          end: '2024-01-15T00:00:00Z', // 14 days
-        },
-        dataTypes: ['downscaled'],
-      })
-
-      expect(result).toBeNull()
-    })
+describe('CSV field safety', () => {
+  it.each(['=1+1', '+SUM(A1)', '-malicious', '@cmd', '\tcommand', 'safe\u0000unsafe'])(
+    'neutralizes spreadsheet text %j',
+    (text) => {
+      expect(escapeCsvText(text)).toBe(`'${text}`)
+    },
+  )
+  it('quotes commas, double quotes, newlines and control-text correctly', () => {
+    expect(encodeCsvField('a,b')).toBe('"a,b"')
+    expect(encodeCsvField('say "hi"')).toBe('"say ""hi"""')
+    expect(encodeCsvField('line1\nline2')).toBe('"\'line1\nline2"')
+    expect(encodeCsvField('plain')).toBe('plain')
   })
-
-  describe('CSV encoding', () => {
-    it('protects against formula injection in text fields', () => {
-      const csv = generateCsvContent(
-        {
-          taskId: '=cmd|something',
-          bbox: {
-            west: 120.0,
-            east: 120.5,
-            south: 30.0,
-            north: 30.5,
-          },
-          timeRange: {
-            start: '2024-01-01T00:00:00Z',
-            end: '2024-01-02T00:00:00Z',
-          },
-          dataTypes: ['downscaled'],
-        },
-        mockTask,
-      )
-
-      // CSV should not contain the raw formula - it should be escaped
-      expect(csv).not.toMatch(/^=cmd\|something/)
-      expect(csv).not.toMatch(/,=cmd\|something,/)
-      // It should be escaped with a leading single quote
-      expect(csv).toContain("'=cmd|something")
-    })
-
-    it('escapes dangerous formula characters', () => {
-      expect(encodeCsvField('=SUM(A1:A10)')).toBe("'=SUM(A1:A10)")
-      expect(encodeCsvField('+1234')).toBe("'+1234")
-      expect(encodeCsvField('-5678')).toBe("'-5678")
-      expect(encodeCsvField('@cell')).toBe("'@cell")
-    })
-
-    it('handles negative numbers correctly', () => {
-      expect(encodeCsvField(-15.5)).toBe('-15.5')
-    })
-
-    it('quotes fields with commas', () => {
-      expect(encodeCsvField('hello, world')).toBe('"hello, world"')
-    })
-
-    it('escapes quotes in quoted fields', () => {
-      expect(encodeCsvField('say "hello"')).toBe('"say ""hello"""')
-    })
+  it('keeps numeric zero, full precision and missing null distinct', () => {
+    expect(encodeCsvField(0)).toBe('0')
+    expect(encodeCsvField(-12.123456789)).toBe('-12.123456789')
+    expect(encodeCsvField(null)).toBe('')
   })
 })
