@@ -478,6 +478,12 @@ export async function queryTaskComparison(
       code: 'NO_TEMPORAL_OVERLAP',
       message: 'No shared task-aligned native instants.',
     })
+  const fallback = { remaining: 32 }
+  const referenceA = taskReference(a.task)
+  const referenceB = taskReference(b.task)
+  const differentTaskReferences =
+    referenceA.referenceSeed !== referenceB.referenceSeed ||
+    referenceA.referenceVersion !== referenceB.referenceVersion
   if (configurationReasons.length) {
     // Planned samples were not queried when the pair was rejected before any result RPC.
     sampling.queriedSamples = 0
@@ -485,6 +491,18 @@ export async function queryTaskComparison(
     exclusions.candidates = 0
     exclusions.excluded = 0
     exclusions.counts = {}
+    const stats = differentTaskReferences
+      ? await Promise.all([
+          individualStats(service, a.task, fallback),
+          individualStats(service, b.task, fallback),
+        ])
+      : null
+    if (differentTaskReferences)
+      configurationReasons.push({
+        code: 'REFERENCE_MISMATCH',
+        message:
+          'Reference seed, version or source differs. Individual statistics are not a fair ranking.',
+      })
     const current = await Promise.all([service.get(selection.a), service.get(selection.b)])
     const lateFailures = pairFailures(selection, current, [a.task, b.task])
     if (lateFailures.length) return unavailablePair(selection, lateFailures)
@@ -492,7 +510,7 @@ export async function queryTaskComparison(
       ok: true,
       selection,
       tasks: [a.task, b.task],
-      individual: null,
+      individual: stats ? { a: stats[0], b: stats[1] } : null,
       common: {
         available: false,
         rankingAllowed: false,
@@ -504,7 +522,6 @@ export async function queryTaskComparison(
       },
     }
   }
-  const fallback = { remaining: 32 }
   const reads = await Promise.all([
     valuesAt(service, a.task, 'observation', points, times, fallback),
     valuesAt(service, b.task, 'observation', points, times, fallback),
@@ -526,11 +543,8 @@ export async function queryTaskComparison(
   if (lateFailures.length) return unavailablePair(selection, lateFailures)
 
   const [observationA, observationB, predictionA, predictionB] = reads.map((read) => read.result)
-  const referenceA = taskReference(a.task)
-  const referenceB = taskReference(b.task)
   if (
-    referenceA.referenceSeed !== referenceB.referenceSeed ||
-    referenceA.referenceVersion !== referenceB.referenceVersion ||
+    differentTaskReferences ||
     (observationA?.reference &&
       observationB?.reference &&
       !sameReference(observationA, observationB))
