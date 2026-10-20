@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useRouteContext } from '@tanstack/react-router'
 import {
   ArrowRight,
   Eye,
@@ -41,10 +41,20 @@ import {
 import { useTaskList } from './hooks/use-task-list'
 import { useTaskActions } from './hooks/use-task-actions'
 import { TaskCard } from './components/task-card'
+import {
+  useComparisonSelection,
+  type TaskComparisonControl,
+} from './hooks/use-comparison-selection'
 import type { DownscalingTask } from './service'
 import { dataSourceLabels, variableLabels, methodLabels, formatDate } from './utils/formatters'
 
-function TaskRow({ task }: { task: DownscalingTask }) {
+function TaskRow({
+  task,
+  comparison,
+}: {
+  task: DownscalingTask
+  comparison: TaskComparisonControl
+}) {
   const { viewTask, deleteTask } = useTaskActions()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -87,6 +97,17 @@ function TaskRow({ task }: { task: DownscalingTask }) {
     <>
       <tr className="border-b hover:bg-muted/50">
         <td className="px-4 py-3 font-medium">{task.name}</td>
+        <td className="px-4 py-3">
+          <input
+            type="checkbox"
+            checked={comparison.selected}
+            disabled={comparison.disabled}
+            onChange={comparison.onToggle}
+            aria-label={`选择任务 ${task.name} 进行对比`}
+            aria-describedby="comparison-instructions"
+            className="size-5 cursor-pointer accent-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </td>
         <td className="px-4 py-3 text-muted-foreground">
           {dataSourceLabels[config.dataSource] || config.dataSource}
         </td>
@@ -172,6 +193,7 @@ export function TaskListPage() {
   const {
     state,
     tasks,
+    allTasks,
     filteredCount,
     totalCount,
     issues,
@@ -186,6 +208,9 @@ export function TaskListPage() {
   } = useTaskList()
 
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table')
+  const { account } = useRouteContext({ from: '/_workspace' })
+  const { selectedTasks, selectionError, controlFor, comparisonHref, removeTask, clearSelection } =
+    useComparisonSelection(allTasks, account.id)
 
   const hasActiveFilters =
     filters.nameSearch.trim() !== '' ||
@@ -196,7 +221,13 @@ export function TaskListPage() {
     filters.timeRangeEnd
 
   return (
-    <div className="space-y-6">
+    <div
+      className={
+        comparisonHref
+          ? 'min-w-0 max-w-full space-y-6 pb-64 sm:pb-36'
+          : 'min-w-0 max-w-full space-y-6'
+      }
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
           查看和管理降尺度任务，根据状态查看结果或重新配置失败任务。
@@ -213,7 +244,7 @@ export function TaskListPage() {
             任务列表显示所有已创建的降尺度任务，包括配置详情、执行状态和结果访问入口。
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0 max-w-full">
           {state.status === 'loading' && (
             <div className="flex min-h-[20rem] items-center justify-center">
               <div className="text-center">
@@ -237,6 +268,56 @@ export function TaskListPage() {
 
           {state.status === 'success' && (
             <>
+              <section
+                aria-label="任务对比选择"
+                className="mb-6 space-y-3 rounded-lg border bg-muted/30 p-4"
+              >
+                <output
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="block text-sm font-semibold"
+                >
+                  已选择 {selectedTasks.length} / 2 个任务
+                </output>
+                <p id="comparison-instructions" className="text-xs leading-6 text-muted-foreground">
+                  选择两个当前账号的已完成任务进行对比。运行中、失败或不可用的任务不能选择。
+                </p>
+                {selectedTasks.length > 0 && (
+                  <ol aria-label="已选择的对比任务" className="space-y-2 text-sm">
+                    {selectedTasks.map((task, index) => (
+                      <li key={task.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="min-w-0 flex-1 break-all">
+                          {index === 0 ? 'A' : 'B'} · {task.name}
+                          {!tasks.some((visible) => visible.id === task.id) && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              当前筛选或分页隐藏
+                            </span>
+                          )}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeTask(task.id)}
+                          aria-label={`移除对比任务 ${task.name}`}
+                        >
+                          <X className="size-4" aria-hidden="true" /> 移除
+                        </Button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                {selectedTasks.length > 0 && (
+                  <Button variant="outline" size="sm" onClick={clearSelection}>
+                    清除对比选择
+                  </Button>
+                )}
+                {selectionError && (
+                  <p role="alert" className="text-sm leading-6 text-destructive">
+                    {selectionError}
+                  </p>
+                )}
+              </section>
+
               {/* Filter Controls */}
               <div className="mb-6 space-y-4">
                 {/* View Toggle */}
@@ -264,7 +345,7 @@ export function TaskListPage() {
                   </Button>
                 </fieldset>
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-5 [&>div]:min-w-0">
                   {/* Name Search */}
                   <div className="space-y-2">
                     <Label htmlFor="name-search">任务名称搜索</Label>
@@ -354,7 +435,7 @@ export function TaskListPage() {
                 </div>
 
                 {/* Time Range Filter - Second Row */}
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2 [&>div]:min-w-0">
                   <div className="space-y-2">
                     <Label htmlFor="time-range-start">分析时间范围（起始）</Label>
                     <Input
@@ -450,7 +531,7 @@ export function TaskListPage() {
                         aria-describedby="task-table-scroll-hint"
                         // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- Keyboard users need focus to scroll this table region horizontally.
                         tabIndex={0}
-                        className="overflow-x-auto rounded-sm border bg-background"
+                        className="relative min-w-0 max-w-full overflow-x-auto rounded-sm border bg-background"
                       >
                         <table
                           aria-describedby="task-fields-description"
@@ -461,6 +542,7 @@ export function TaskListPage() {
                             <tr>
                               {[
                                 { label: '任务名称', field: 'name' as const },
+                                { label: '对比选择', field: null },
                                 { label: '数据源', field: null },
                                 { label: '气象变量', field: null },
                                 { label: '经纬范围', field: null },
@@ -499,7 +581,7 @@ export function TaskListPage() {
                           </thead>
                           <tbody>
                             {tasks.map((task) => (
-                              <TaskRow key={task.id} task={task} />
+                              <TaskRow key={task.id} task={task} comparison={controlFor(task)} />
                             ))}
                           </tbody>
                         </table>
@@ -516,10 +598,10 @@ export function TaskListPage() {
                           <>共 {totalCount} 个任务</>
                         )}
                       </p>
-                      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      <ul className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                         {tasks.map((task) => (
-                          <li key={task.id} className="list-none">
-                            <TaskCard task={task} />
+                          <li key={task.id} className="min-w-0 list-none">
+                            <TaskCard task={task} comparison={controlFor(task)} />
                           </li>
                         ))}
                       </ul>
@@ -578,6 +660,41 @@ export function TaskListPage() {
           )}
         </CardContent>
       </Card>
+      {comparisonHref && (
+        <section
+          aria-label="任务对比操作"
+          className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-3xl flex-col gap-3 rounded-xl border bg-background p-4 shadow-lg sm:flex-row sm:items-center"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">已选择 2 / 2 个任务</p>
+            <ol className="mt-1 space-y-1 text-xs leading-5">
+              {selectedTasks.map((task, index) => (
+                <li key={task.id} className="break-all">
+                  {index === 0 ? 'A' : 'B'} · {task.name}
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div className="flex flex-col gap-2">
+            {selectionError && (
+              <p className="max-w-xs text-sm leading-6 text-destructive">{selectionError}</p>
+            )}
+            <a href={comparisonHref} className={buttonVariants()}>
+              对比所选任务 <ArrowRight aria-hidden="true" />
+            </a>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (selectedTasks[1]) removeTask(selectedTasks[1].id)
+              }}
+              aria-label={`取消第二个对比任务 ${selectedTasks[1]?.name}`}
+            >
+              取消第二个选择
+            </Button>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

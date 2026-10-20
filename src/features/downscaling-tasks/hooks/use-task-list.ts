@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useRouteContext } from '@tanstack/react-router'
 import { createTaskService, type DownscalingTask } from '../service'
 import type { TaskRecordIssue } from '../service'
 
@@ -24,7 +25,9 @@ export type SortConfig = {
 
 export function useTaskList() {
   const queryClient = useQueryClient()
-  const [state, setState] = useState<TaskListState>({ status: 'loading' })
+  const { account } = useRouteContext({ from: '/_workspace' })
+  const [taskService, setTaskService] = useState<ReturnType<typeof createTaskService> | null>(null)
+  const [initializationError, setInitializationError] = useState<string | null>(null)
   const [filters, setFilters] = useState<TaskFilters>({ nameSearch: '' })
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'createdAt',
@@ -35,39 +38,42 @@ export function useTaskList() {
 
   useEffect(() => {
     let mounted = true
-    const taskService = createTaskService({ queryClient })
-
-    const loadTasks = async () => {
-      try {
-        await taskService.initialize()
-
-        if (!mounted) return
-
-        const result = await taskService.list()
-
-        if (!mounted) return
-
-        setState({
-          status: 'success',
-          tasks: result.tasks,
-          issues: result.issues,
-        })
-      } catch (error) {
-        if (!mounted) return
-        setState({
-          status: 'error',
-          error: error instanceof Error ? error.message : '加载任务列表失败',
-        })
-      }
-    }
-
-    loadTasks()
-
+    const service = createTaskService({ queryClient })
+    service.initialize().then(
+      () => {
+        if (mounted) setTaskService(service)
+      },
+      (error: unknown) => {
+        if (mounted)
+          setInitializationError(error instanceof Error ? error.message : '加载任务列表失败')
+      },
+    )
     return () => {
       mounted = false
-      taskService.close()
+      service.close()
     }
   }, [queryClient])
+
+  // Observe the public list call so the existing task-action invalidation reloads it.
+  // The service is created only after hydration; SSR never opens browser storage.
+  const listQuery = useQuery({
+    queryKey: ['downscaling-tasks', 'management', account.id],
+    enabled: taskService !== null,
+    retry: false,
+    staleTime: 0,
+    queryFn: async () => {
+      if (!taskService) throw new Error('任务列表尚未初始化')
+      return taskService.list()
+    },
+  })
+
+  const state = useMemo<TaskListState>(() => {
+    if (initializationError) return { status: 'error', error: initializationError }
+    if (listQuery.status === 'error')
+      return { status: 'error', error: listQuery.error.message || '加载任务列表失败' }
+    if (!taskService || listQuery.status === 'pending') return { status: 'loading' }
+    return { status: 'success', tasks: listQuery.data.tasks, issues: listQuery.data.issues }
+  }, [initializationError, taskService, listQuery.status, listQuery.error, listQuery.data])
 
   const filteredAndSortedTasks = useMemo(() => {
     if (state.status !== 'success') return []
