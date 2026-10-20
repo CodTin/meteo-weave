@@ -1,5 +1,6 @@
 import { RESULT_QUERY_LIMITS } from '@/features/downscaling-tasks/service'
 import { OBSERVATION_REFERENCE } from '@/features/downscaling-tasks/service/contracts'
+import { sameTaskMetadata } from '@/features/downscaling-tasks/service/record-validation'
 import type {
   DownscalingTask,
   ObservationStation,
@@ -344,12 +345,17 @@ async function individualStats(
       }
 }
 
-function pairFailures(selection: TaskComparisonSelection, replies: [TaskReply, TaskReply]) {
+function pairFailures(
+  selection: TaskComparisonSelection,
+  replies: [TaskReply, TaskReply],
+  expected?: [DownscalingTask, DownscalingTask],
+) {
   return replies.flatMap((reply, index) => {
     const side = index === 0 ? ('a' as const) : ('b' as const)
     const taskId = selection[side]
     if (!reply.ok) return [{ side, taskId, code: reply.code, error: reply.error }]
-    if (reply.task.id !== taskId)
+    const original = expected?.[index]
+    if (reply.task.id !== taskId || (original && !sameTaskMetadata(original, reply.task)))
       return [{ side, taskId, code: 'INVALID_RECORD', error: 'The task identity changed.' }]
     if (reply.task.status !== 'Completed')
       return [
@@ -479,6 +485,9 @@ export async function queryTaskComparison(
     exclusions.candidates = 0
     exclusions.excluded = 0
     exclusions.counts = {}
+    const current = await Promise.all([service.get(selection.a), service.get(selection.b)])
+    const lateFailures = pairFailures(selection, current, [a.task, b.task])
+    if (lateFailures.length) return unavailablePair(selection, lateFailures)
     return {
       ok: true,
       selection,
@@ -504,7 +513,7 @@ export async function queryTaskComparison(
   ])
   sampling.fallbackRequests = reads.reduce((sum, read) => sum + read.fallbackRequests, 0)
   const current = await Promise.all([service.get(selection.a), service.get(selection.b)])
-  const lateFailures = pairFailures(selection, current)
+  const lateFailures = pairFailures(selection, current, [a.task, b.task])
   reads.forEach((read, index) => {
     if (read.fatal)
       lateFailures.push({
@@ -531,7 +540,7 @@ export async function queryTaskComparison(
       individualStats(service, b.task, fallback),
     ])
     const revalidated = await Promise.all([service.get(selection.a), service.get(selection.b)])
-    const lateIndividualFailures = pairFailures(selection, revalidated)
+    const lateIndividualFailures = pairFailures(selection, revalidated, [a.task, b.task])
     if (lateIndividualFailures.length) return unavailablePair(selection, lateIndividualFailures)
     return {
       ok: true,

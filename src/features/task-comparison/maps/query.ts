@@ -1,4 +1,5 @@
 import { RESULT_QUERY_LIMITS } from '@/features/downscaling-tasks/service'
+import { sameTaskMetadata } from '@/features/downscaling-tasks/service/record-validation'
 import { getAbsoluteColorScale } from '@/features/result-analysis/service/color-scales'
 import {
   computeSharedScale,
@@ -62,37 +63,6 @@ function sameAccumulations(a: ComparisonMapResult, b: ComparisonMapResult): bool
 }
 
 /** Compare exposed task identity/configuration, not private store/cache representation. */
-function sameFieldTask(a: ComparisonMapTasks['a'], b: ComparisonMapTasks['a']): boolean {
-  const x = a.configuration
-  const y = b.configuration
-  return (
-    a.id === b.id &&
-    a.ownerId === b.ownerId &&
-    a.schemaVersion === b.schemaVersion &&
-    a.dataSeed === b.dataSeed &&
-    a.generatorVersion === b.generatorVersion &&
-    a.createdAt === b.createdAt &&
-    a.submittedAt === b.submittedAt &&
-    a.completionAt === b.completionAt &&
-    a.referenceSeed === b.referenceSeed &&
-    a.referenceVersion === b.referenceVersion &&
-    x.dataSource === y.dataSource &&
-    x.variable === y.variable &&
-    x.method === y.method &&
-    x.resolvedMethod === y.resolvedMethod &&
-    x.resolution === y.resolution &&
-    x.timeRange.mode === y.timeRange.mode &&
-    x.timeRange.start === y.timeRange.start &&
-    x.timeRange.end === y.timeRange.end &&
-    x.region.west === y.region.west &&
-    x.region.east === y.region.east &&
-    x.region.south === y.region.south &&
-    x.region.north === y.region.north &&
-    x.advanced?.ensembleMembers === y.advanced?.ensembleMembers &&
-    x.advanced?.uncertaintyQuantification === y.advanced?.uncertaintyQuantification
-  )
-}
-
 async function validatePair(service: ComparisonMapService, tasks: ComparisonMapTasks) {
   const expected = [tasks.a, tasks.b]
   const replies = await Promise.all(expected.map((task) => service.get(task.id)))
@@ -105,7 +75,7 @@ async function validatePair(service: ComparisonMapService, tasks: ComparisonMapT
         error: '只有已完成任务可以显示对比地图。',
       }
     }
-    if (!sameFieldTask(reply.task, expected[index]!)) {
+    if (!sameTaskMetadata(reply.task, expected[index]!)) {
       return {
         ok: false as const,
         code: 'TASK_CHANGED',

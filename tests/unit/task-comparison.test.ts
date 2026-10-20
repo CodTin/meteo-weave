@@ -3,10 +3,17 @@ import type { Page } from '../e2e/browser-guard'
 import { queryConfiguration, startQueryBrowser } from './task-query-browser'
 import { browserTaskTransport } from './task-test-transport'
 import type { queryTaskComparison } from '@/features/task-comparison/service'
+import type { createTaskService, TaskTransport } from '@/features/downscaling-tasks/service'
 
 declare global {
   interface Window {
     compareTaskQuery: typeof queryTaskComparison
+    comparisonEnvironmentReady: Promise<void>
+    completeComparisonEnvironment: () => void
+    failComparisonEnvironment: (error: unknown) => void
+    comparisonTaskService: (
+      configure?: (transport: TaskTransport) => void,
+    ) => ReturnType<typeof createTaskService>
   }
 }
 
@@ -21,6 +28,13 @@ beforeEach(async () => {
     type: 'module',
     content: `
       import { queryTaskComparison } from '/src/features/task-comparison/service/index.ts'
+      import { createTaskService } from '/src/features/downscaling-tasks/service/index.ts'
+      import { createQueryClient } from '/src/lib/query/client.ts'
+      window.comparisonTaskService = (configure = () => {}) => {
+        const transport = ${browserTaskTransport('queryRpc')}
+        configure(transport)
+        return createTaskService({ queryClient: createQueryClient(), transport })
+      }
       window.compareTaskQuery = queryTaskComparison
     `,
   })
@@ -65,11 +79,18 @@ async function withSampleReplies(
       | 'station-coordinates'
   },
 ) {
+  await page.evaluate(() => {
+    window.comparisonEnvironmentReady = new Promise<void>((resolve, reject) => {
+      window.completeComparisonEnvironment = resolve
+      window.failComparisonEnvironment = reject
+    })
+  })
   await page.addScriptTag({
     type: 'module',
     content: `
       import { createTaskService } from '/src/features/downscaling-tasks/service/index.ts'
       import { createQueryClient } from '/src/lib/query/client.ts'
+      try {
       window.queryTasks.close()
       const transport = ${browserTaskTransport('queryRpc')}
       const rpcResult = transport.result
@@ -106,10 +127,48 @@ async function withSampleReplies(
       }
       window.queryTasks = createTaskService({ queryClient: createQueryClient(), transport })
       await window.queryTasks.initialize()
+      window.completeComparisonEnvironment()
+      } catch (error) {
+        window.failComparisonEnvironment(error)
+      }
     `,
   })
-  await page.waitForFunction(() => window.queryTasks.getState() === 'ready')
+  await page.evaluate(() => window.comparisonEnvironmentReady)
 }
+
+it('rejects a same-id replacement after the first task result completes instead of publishing old metrics', async () => {
+  const a = await browser.seed(configuration)
+  const b = await browser.seed(configuration)
+  const result = await page.evaluate(
+    async ({ a, b }) => {
+      const original = window.queryTasks
+      let replaced = false
+      const service = window.comparisonTaskService((transport) => {
+        const rawResult = transport.result
+        transport.result = async (input) => {
+          const reply = await rawResult(input)
+          if (input.task.id === b.id && !replaced) {
+            replaced = true
+            await original.delete(a.id)
+            const restored = await original.restore({ ...a, dataSeed: a.dataSeed + 1 })
+            if (!restored.ok) throw new Error(restored.error)
+          }
+          return reply
+        }
+      })
+      try {
+        await service.initialize()
+        return await window.compareTaskQuery(service, { a: a.id, b: b.id })
+      } finally {
+        service.close()
+      }
+    },
+    { a, b },
+  )
+  expect(result.ok).toBe(false)
+  expect(result).not.toHaveProperty('tasks')
+  expect(result).not.toHaveProperty('common')
+}, 30_000)
 
 it('recalculates both metrics on the exact same station reference samples with honest bounded coverage', async () => {
   const a = await browser.seed(configuration)
