@@ -1,6 +1,7 @@
 import type { ResultMapData } from '../types/result-map'
 import { useResultMapDisplay } from '../hooks/use-result-map-display'
 import { ResultMapGrid } from './result-map-grid'
+import { ResultMapPaletteControls } from './result-map-palette-controls'
 import { ResultMapRangeControls } from './result-map-range-controls'
 
 type ResultMapDisplayGroupProps = { data: ResultMapData; onRetry: () => void }
@@ -11,7 +12,8 @@ export function ResultMapDisplayGroup(props: ResultMapDisplayGroupProps) {
 }
 
 function TaskMapDisplayGroup({ data, onRetry }: ResultMapDisplayGroupProps) {
-  const { display, applyRange, restoreAutomatic } = useResultMapDisplay(data)
+  const { display, applyRange, restoreAutomatic, applyPalette, restoreStandard } =
+    useResultMapDisplay(data)
   const groups = new Set<string>()
   const controls = (['original', 'downscaled', 'observation', 'difference'] as const).filter(
     (kind) => {
@@ -36,6 +38,19 @@ function TaskMapDisplayGroup({ data, onRetry }: ResultMapDisplayGroupProps) {
               display={display[kind]}
               onApply={(input) => applyRange(kind, input)}
               onAutomatic={() => restoreAutomatic(kind)}
+            />
+          ))}
+        </div>
+      </section>
+      <section aria-label="Map palettes" className="space-y-3">
+        <h3 className="text-sm font-medium">配色 / Map palettes</h3>
+        <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-2">
+          {controls.map((kind) => (
+            <ResultMapPaletteControls
+              key={display[kind].rangeGroup}
+              display={display[kind]}
+              onApply={(input) => applyPalette(kind, input)}
+              onRestore={() => restoreStandard(kind)}
             />
           ))}
         </div>

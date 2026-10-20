@@ -50,11 +50,14 @@ export type ResultMapData = {
 /** Geographic camera only; never part of the task or scientific query. */
 export type ResultMapViewport = { longitude: number; latitude: number; zoom: number }
 
+export type ResultMapColorStop = { position: number; color: string }
+
 /** Presentation only. Values and native identities remain untouched. */
 export type ResultMapDisplaySettings = {
   min: number
   max: number
   colors: string[]
+  colorStops?: readonly ResultMapColorStop[]
   description: string
   unit: string
   mode?: 'automatic' | 'manual'

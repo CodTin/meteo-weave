@@ -1,4 +1,5 @@
 import type {
+  ResultMapColorStop,
   ResultMapData,
   ResultMapDisplaySettings,
   ResultMapKind,
@@ -14,7 +15,7 @@ export const resultMapTitles: Record<ResultMapKind, string> = {
   difference: 'Difference (Downscaled - Original)',
 }
 
-/** Immutable current standards; palette editing is a separate ticket. */
+/** Immutable project standards, never replaced by a custom draft. */
 export function resultMapStandardPalette(variable: Variable, kind: ResultMapKind = 'original') {
   const palette =
     kind === 'difference' ? getDifferenceColorScale() : getAbsoluteColorScale(variable)
@@ -173,6 +174,8 @@ export function formatResultMapBound(value: number) {
 
 /** The same sign-preserving palette segment is used by scalar coloring and the legend. */
 export function resultMapRangeColors(display: ResultMapDisplaySettings) {
+  const stops = resultMapRangeStops(display)
+  if (stops) return stops.map((stop) => stop.color)
   if (display.kind !== 'difference') return display.colors
   const middle = Math.floor(display.colors.length / 2)
   if (display.min >= 0 && display.max > 0)
@@ -182,9 +185,71 @@ export function resultMapRangeColors(display: ResultMapDisplaySettings) {
   return display.colors
 }
 
+/** Effective display-domain stops: one rule shared by scalar interpolation and the legend. */
+export function resultMapRangeStops(
+  display: ResultMapDisplaySettings,
+): readonly ResultMapColorStop[] | undefined {
+  const stops = display.colorStops
+  if (!stops || display.kind !== 'difference' || display.min === display.max) return stops
+  const crossesZero = display.min < 0 && display.max > 0
+  const start = display.min >= 0 ? 0.5 + (0.5 * display.min) / display.max : 0
+  const end = display.max <= 0 ? 0.5 * (1 - display.max / display.min) : 1
+  const positions = [
+    start,
+    ...stops
+      .filter((stop) => stop.position > start && stop.position < end)
+      .map((stop) => stop.position),
+    end,
+  ]
+  const effective: ResultMapColorStop[] = []
+  const zero = normalizedRangePosition(0, display)
+  function append(position: number) {
+    effective.push({
+      position: crossesZero
+        ? position <= 0.5
+          ? 2 * position * zero
+          : zero + (2 * position - 1) * (1 - zero)
+        : (position - start) / (end - start),
+      color: interpolateStopColor(position, stops!),
+    })
+  }
+  for (const [index, position] of positions.entries()) {
+    if (index > 0 && positions[index - 1]! < 0.5 && position > 0.5) append(0.5)
+    append(position)
+  }
+  return effective
+}
+
+function normalizedRangePosition(value: number, display: ResultMapDisplaySettings) {
+  const scale = Math.max(Math.abs(display.min), Math.abs(display.max))
+  return (value / scale - display.min / scale) / (display.max / scale - display.min / scale)
+}
+
+function interpolateStopColor(position: number, stops: readonly ResultMapColorStop[]) {
+  const upper = stops.findIndex((stop) => stop.position >= position)
+  if (upper <= 0) return stops[upper === 0 ? 0 : stops.length - 1]!.color
+  const left = stops[upper - 1]!
+  const right = stops[upper]!
+  const fraction = (position - left.position) / (right.position - left.position)
+  return (
+    '#' +
+    [1, 3, 5]
+      .map((offset) => {
+        const from = Number.parseInt(left.color.slice(offset, offset + 2), 16)
+        const to = Number.parseInt(right.color.slice(offset, offset + 2), 16)
+        return Math.round(from + (to - from) * fraction)
+          .toString(16)
+          .padStart(2, '0')
+      })
+      .join('')
+  )
+}
+
 export function resultSampleColor(value: number | null, display: ResultMapDisplaySettings) {
   if (value === null || !Number.isFinite(value)) return '#64748b'
   if (display.domain === 'empty') return '#64748b'
+  if (display.min === display.max && display.colorStops)
+    return interpolateStopColor(0.5, display.colorStops)
   if (display.min === display.max)
     return display.colors[Math.floor(display.colors.length / 2)] ?? '#64748b'
   const clipped = Math.max(display.min, Math.min(display.max, value))
@@ -198,6 +263,11 @@ export function resultSampleColor(value: number | null, display: ResultMapDispla
           ? (0.5 * (clipped - display.min)) / -display.min
           : 0.5 + (0.5 * clipped) / display.max
       : (clipped / scale - display.min / scale) / (display.max / scale - display.min / scale)
+  if (display.colorStops)
+    return interpolateStopColor(
+      normalizedRangePosition(clipped, display),
+      resultMapRangeStops(display)!,
+    )
   return colors[Math.min(colors.length - 1, Math.floor(fraction * colors.length))] ?? '#64748b'
 }
 

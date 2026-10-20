@@ -1,11 +1,15 @@
+import { useId } from 'react'
 import {
   formatResultMapBound,
   resultMapRangeColors,
+  resultMapRangeStops,
   resultSampleColor,
 } from '../service/result-map-display'
 import type { ResultMapDisplaySettings } from '../types/result-map'
 
 export function ResultMapLegend({ display }: { display: ResultMapDisplaySettings }) {
+  const gradientId = useId()
+  const stops = resultMapRangeStops(display)
   const empty = display.domain === 'empty'
   const constant = display.domain === 'constant'
   const zero = display.kind === 'difference' && display.min <= 0 && display.max >= 0
@@ -21,17 +25,30 @@ export function ResultMapLegend({ display }: { display: ResultMapDisplaySettings
         <p>No finite values · no numeric color scale.</p>
       ) : (
         <>
-          <div className="flex h-3 overflow-hidden rounded-sm border" aria-hidden="true">
-            {colors.map((color, index) => (
-              <span key={index} className="flex-1" style={{ backgroundColor: color }} />
-            ))}
-          </div>
+          {stops && !constant ? (
+            <svg className="block h-3 w-full rounded-sm border" aria-hidden="true">
+              <defs>
+                <linearGradient id={gradientId} colorInterpolation="sRGB">
+                  {stops.map((stop, index) => (
+                    <stop key={index} offset={stop.position} stopColor={stop.color} />
+                  ))}
+                </linearGradient>
+              </defs>
+              <rect width="100%" height="100%" fill={`url(#${gradientId})`} />
+            </svg>
+          ) : (
+            <div className="flex h-3 overflow-hidden rounded-sm border" aria-hidden="true">
+              {colors.map((color, index) => (
+                <span key={index} className="flex-1" style={{ backgroundColor: color }} />
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap justify-between gap-2 font-mono">
             <span>
               {formatResultMapBound(constant ? (display.dataMin ?? display.min) : display.min)}{' '}
               {display.unit}
             </span>
-            {!constant && zero && display.min < 0 && display.max > 0 && (
+            {!constant && !display.colorStops && zero && display.min < 0 && display.max > 0 && (
               <span>0 {display.unit}</span>
             )}
             {!constant && (
@@ -62,9 +79,22 @@ export function ResultMapLegend({ display }: { display: ResultMapDisplaySettings
       {display.kind === 'difference' && (
         <p>
           Zero: 0 {display.unit}
-          {!empty && !zero ? ' (outside display range)' : ''} · Negative (blue): downscaled lower ·
-          Positive (red): downscaled higher · Downscaled − Original, not accuracy improvement
-          {display.symmetricZero ? ' · symmetric around zero' : ''}.
+          {!empty && !zero ? ' (outside display range)' : ''} ·{' '}
+          {display.colorStops ? 'Negative' : 'Negative (blue)'}: downscaled lower ·
+          {display.colorStops ? 'Positive' : 'Positive (red)'}: downscaled higher · Downscaled −
+          Original, not accuracy improvement
+          {display.symmetricZero ? ' · symmetric around zero' : ''}
+          {display.colorStops ? ' · signs are numeric meanings, independent of custom hue' : ''}.
+        </p>
+      )}
+      {display.kind === 'difference' && display.colorStops && zero && !empty && (
+        <p>
+          <span
+            aria-hidden="true"
+            className="mr-1 inline-block h-3 w-5 rounded-sm border"
+            style={{ backgroundColor: resultSampleColor(0, display) }}
+          />
+          Zero color: {resultSampleColor(0, display)} · 0 {display.unit} (not missing).
         </p>
       )}
       {display.mode === 'manual' && (
