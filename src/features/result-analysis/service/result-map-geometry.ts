@@ -77,3 +77,36 @@ export function nativeSampleBounds(point: ResultPoint, grid: LogicalGrid): Resul
   )
   return { west: x.low, east: x.high, south: y.low, north: y.high }
 }
+
+/** Current responsive SVG bounds, xMidYMid meet letterboxing and viewBox, never captured size. */
+export function resultPointAtClientPosition(
+  svg: SVGSVGElement,
+  client: { x: number; y: number },
+  viewport: ResultMapViewport,
+): ResultPoint | null {
+  const box = svg.getBoundingClientRect()
+  const style = getComputedStyle(svg)
+  const left = parseFloat(style.borderLeftWidth) || 0
+  const right = parseFloat(style.borderRightWidth) || 0
+  const top = parseFloat(style.borderTopWidth) || 0
+  const bottom = parseFloat(style.borderBottomWidth) || 0
+  const width = box.width - left - right
+  const height = box.height - top - bottom
+  const viewBox = svg.viewBox.baseVal
+  if (width <= 0 || height <= 0 || viewBox.width <= 0 || viewBox.height <= 0) return null
+  const scale = Math.min(width / viewBox.width, height / viewBox.height)
+  const x = (client.x - box.left - left - (width - viewBox.width * scale) / 2) / scale + viewBox.x
+  const y = (client.y - box.top - top - (height - viewBox.height * scale) / 2) / scale + viewBox.y
+  if (
+    x < viewBox.x ||
+    x > viewBox.x + viewBox.width ||
+    y < viewBox.y ||
+    y > viewBox.y + viewBox.height
+  )
+    return null
+  const degrees = degreesPerPixel(viewport.zoom)
+  return {
+    longitude: viewport.longitude + (x - MAP_WIDTH / 2) * degrees,
+    latitude: viewport.latitude - (y - MAP_HEIGHT / 2) * degrees,
+  }
+}

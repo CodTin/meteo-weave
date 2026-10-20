@@ -7,7 +7,14 @@ import type {
   ResultMapViewport,
 } from '../types/result-map'
 import { resultMapTitles } from '../service/result-map-display'
-import { MAP_HEIGHT, MAP_WIDTH, projectResultPoint } from '../service/result-map-geometry'
+import {
+  MAP_HEIGHT,
+  MAP_WIDTH,
+  projectResultPoint,
+  resultPointAtClientPosition,
+} from '../service/result-map-geometry'
+import { ResultMapCrosshair } from './result-map-crosshair'
+import { useResultMapPointContext } from './result-map-point-context'
 import { ResultMapMarks } from './result-map-marks'
 
 interface ControlledResultMapProps {
@@ -28,6 +35,17 @@ export function ControlledResultMap({
   region,
   display,
 }: ControlledResultMapProps) {
+  const pointContext = useResultMapPointContext()
+  const point = pointContext?.point ?? null
+  const pointPixel = point ? projectResultPoint(point, viewport) : null
+  const pointVisible =
+    pointPixel &&
+    Number.isFinite(pointPixel.x) &&
+    Number.isFinite(pointPixel.y) &&
+    pointPixel.x >= 0 &&
+    pointPixel.x <= MAP_WIDTH &&
+    pointPixel.y >= 0 &&
+    pointPixel.y <= MAP_HEIGHT
   const title = resultMapTitles[data.kind]
   const patternId = `${mapId}-missing`
   const { zoom, pan, ...cameraEvents } = useResultMapCamera(viewport, (next) =>
@@ -37,10 +55,34 @@ export function ControlledResultMap({
     <section id={mapId} aria-label={`${title} map`} className="space-y-2">
       <svg
         viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+        preserveAspectRatio="xMidYMid meet"
         className="block w-full cursor-grab touch-none rounded-md border bg-slate-950 focus:outline-2 focus:outline-primary"
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- This geographic surface implements keyboard pan and zoom.
         tabIndex={0}
         {...cameraEvents}
+        onPointerDown={(event) => {
+          pointContext?.clearHover(mapId)
+          cameraEvents.onPointerDown(event)
+        }}
+        onPointerMove={(event) => {
+          cameraEvents.onPointerMove(event)
+          if (event.buttons || event.currentTarget.hasPointerCapture(event.pointerId)) {
+            pointContext?.clearHover(mapId)
+            return
+          }
+          const next = resultPointAtClientPosition(
+            event.currentTarget,
+            { x: event.clientX, y: event.clientY },
+            viewport,
+          )
+          if (next) pointContext?.hoverPoint(next, mapId)
+          else pointContext?.clearHover(mapId)
+        }}
+        onPointerLeave={() => pointContext?.clearHover(mapId)}
+        onPointerCancel={() => {
+          cameraEvents.onPointerCancel()
+          pointContext?.clearHover(mapId)
+        }}
         onWheel={(event) => {
           if (event.ctrlKey || event.currentTarget === document.activeElement) {
             event.preventDefault()
@@ -84,7 +126,19 @@ export function ControlledResultMap({
             </g>
           )
         })}
+        <ResultMapCrosshair point={point} viewport={viewport} />
       </svg>
+      {point && (
+        <output
+          aria-label={`${title} point position`}
+          className="block break-all font-mono text-xs"
+        >
+          longitude {String(point.longitude)} · latitude {String(point.latitude)} ·{' '}
+          {pointVisible
+            ? 'visible in this viewport'
+            : 'outside this viewport; marker hidden; camera unchanged'}
+        </output>
+      )}
       <div className="flex flex-wrap gap-1" aria-label={`${title} camera controls`}>
         <Button
           size="sm"
