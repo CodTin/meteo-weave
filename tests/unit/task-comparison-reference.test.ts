@@ -142,3 +142,49 @@ it('keeps retired reference statistics explicitly unavailable and independent ra
     },
   })
 }, 30_000)
+
+it('preserves bounded own-reference statistics for different seeds and disjoint space and time', async () => {
+  const a = await browser.seed({
+    ...queryConfiguration,
+    region: { west: 110, east: 111, south: 30, north: 31 },
+    timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-01' },
+  })
+  const seedB = await browser.seed({
+    ...queryConfiguration,
+    region: { west: 112, east: 113, south: 30, north: 31 },
+    timeRange: { mode: 'historical', start: '2024-01-02', end: '2024-01-02' },
+  })
+  const b = { ...seedB, id: `${seedB.id}-reference`, referenceSeed: 1730 }
+  const restored = await page.evaluate((task) => window.queryTasks.restore(task), b)
+  if (!restored.ok) throw new Error(restored.error)
+  const result = await compare(a.id, b.id)
+  expect(result).toMatchObject({
+    ok: true,
+    common: { available: false, rankingAllowed: false, metrics: null },
+    individual: {
+      a: {
+        available: true,
+        rankingAllowed: false,
+        reference: { referenceSeed: 1729 },
+        coverage: { n: 4, stationCount: 4, times: ['2024-01-01T00:00:00.000Z'] },
+        metrics: { n: 4 },
+      },
+      b: {
+        available: true,
+        rankingAllowed: false,
+        reference: { referenceSeed: 1730 },
+        coverage: { n: 4, stationCount: 4, times: ['2024-01-02T00:00:00.000Z'] },
+        metrics: { n: 4 },
+      },
+    },
+  })
+  if (!result.ok) throw new Error(result.error)
+  expect(result.common.reasons.map((reason) => reason.code)).toEqual([
+    'NO_SPATIAL_OVERLAP',
+    'NO_TEMPORAL_OVERLAP',
+    'REFERENCE_MISMATCH',
+  ])
+  expect(result.common.sampling.queriedSamples).toBe(0)
+  expect(result.individual?.a.sampling.queriedSamples).toBe(4)
+  expect(result.individual?.b.sampling.queriedSamples).toBe(4)
+}, 30_000)
