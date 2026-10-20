@@ -212,8 +212,14 @@ export type ResultMetadata = {
     crs: 'EPSG:4326'
   } & ({ sampling: 'requested-points' } | WindowSampling)
 }
+/** Native sampling was planned successfully; a scientific gap does not erase its identity. */
+export type PlannedResultMetadata = Omit<ResultMetadata, 'ok'> & {
+  variable?: DownscalingTask['configuration']['variable']
+  quantity?: 'T2M' | 'U10/V10' | 'MSL' | 'TP'
+  unit?: '°C' | 'm/s' | 'hPa' | 'mm'
+}
 export type ResultReply =
-  | Unavailable
+  | (Unavailable & { planned?: PlannedResultMetadata })
   | (ResultMetadata &
       (
         | {

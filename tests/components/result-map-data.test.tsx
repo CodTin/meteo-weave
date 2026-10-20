@@ -140,3 +140,79 @@ it('explains transport failure and retries the actual failed read without perman
   expect(await screen.findByRole('region', { name: 'Original Data map' })).toBeVisible()
   expect(screen.queryByText('Network unavailable', { exact: false })).not.toBeInTheDocument()
 })
+
+it('shows the actual partial daily temperature interval instead of an unexplained ready Difference', async () => {
+  const task = exportTask({
+    variable: 'temperature',
+    timeRange: {
+      mode: 'forecast',
+      start: '2024-01-01T10:00:00.000Z',
+      end: '2024-01-01T12:00:00.000Z',
+    },
+  })
+  const maps = await readResultMapData(
+    { result: async (_id: string, query: ResultQuery) => queryTaskResult(task, query) },
+    task,
+    {
+      time: '2024-01-01T00:00:00.000Z',
+      observationMode: 'interpolated',
+      temporalResolution: 'daily',
+    },
+  )
+  const { ResultMapCard } = await import('@/features/result-analysis/components/result-map-card')
+  const { resultMapDisplaySettings } =
+    await import('@/features/result-analysis/service/result-map-display')
+  render(
+    <ResultMapCard
+      data={maps.layers.original}
+      context={maps}
+      display={resultMapDisplaySettings(maps).original}
+      onRetry={() => {}}
+    />,
+  )
+  expect(screen.getByText(/daily.mean.*interval.*UTC/i)).toHaveTextContent('3/24 hours')
+  expect(screen.getByText(/daily.mean.*interval.*UTC/i)).toHaveTextContent(
+    'partial, not the full requested interval',
+  )
+})
+
+it('renders the recovered initial-frame native 3.237 mm sample and an independent missing hatch', async () => {
+  const fixture = exportTask({
+    variable: 'precipitation',
+    resolution: '1km',
+    ensembleMembers: 5,
+    dataSeed: 211,
+    region: { west: 20, east: 26, south: 65, north: 71 },
+    timeRange: { mode: 'historical', start: '2024-01-01', end: '2024-01-03' },
+  })
+  const task = {
+    ...fixture,
+    configuration: { ...fixture.configuration, dataSource: 'fusion' as const },
+  }
+  const maps = await readResultMapData(
+    { result: async (_id: string, query: ResultQuery) => queryTaskResult(task, query) },
+    task,
+    { time: '2024-01-01T00:00:00.000Z', observationMode: 'interpolated' },
+  )
+  const { resultMapDisplaySettings } =
+    await import('@/features/result-analysis/service/result-map-display')
+  render(
+    <ControlledResultMap
+      mapId="initial-rain-gap"
+      data={maps.layers.original}
+      region={maps.region}
+      viewport={{ longitude: 23, latitude: 68, zoom: 5 }}
+      onViewportChange={() => {}}
+      display={resultMapDisplaySettings(maps).original}
+    />,
+  )
+  const map = screen.getByRole('region', { name: 'Original Data map' })
+  expect(
+    within(map).getByRole('img', {
+      name: /longitude 25.755229240145198, latitude 70.65936040244341.*3.237 mm/,
+    }),
+  ).toBeVisible()
+  const missing = within(map).getAllByRole('img', { name: /missing \(MISSING_DATA\)/i })
+  expect(missing.length).toBeGreaterThan(0)
+  expect(missing[0]?.querySelector('rect')).toHaveAttribute('fill', expect.stringContaining('url('))
+})

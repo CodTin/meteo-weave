@@ -1,19 +1,5 @@
-import type { EnsembleSample } from '@/features/downscaling-tasks/service/contracts'
+import { resultMapCompatibility } from './result-map-compatibility'
 import type { ResultMapPointImprovement, ResultMapPointResult } from '../types/result-map-point'
-
-function interval(sample: EnsembleSample) {
-  const bounds = sample.accumulation ?? sample.daily
-  if (!bounds) return undefined
-  return [
-    bounds.start,
-    bounds.end,
-    bounds.bounds,
-    bounds.sampledHours,
-    bounds.expectedHours,
-    sample.accumulation?.requestedStart,
-    sample.accumulation?.requestedEnd,
-  ]
-}
 
 /** Reference-error reduction is a fraction; Difference is a separate field-value change. */
 export function calculateResultMapPointImprovement(
@@ -50,21 +36,14 @@ export function calculateResultMapPointImprovement(
       code: 'NONFINITE_INPUT',
       reason: 'Original, downscaled and reference samples must all be finite; missing is not zero.',
     }
-  if (
-    [downscaled, observation].some(
-      (value) =>
-        value.metadata.variable !== original.metadata.variable ||
-        value.metadata.quantity !== original.metadata.quantity ||
-        value.metadata.unit !== original.metadata.unit ||
-        value.metadata.temporalStatistic !== original.metadata.temporalStatistic,
-    )
+  const incompatible = resultMapCompatibility(
+    [original, downscaled, observation].map((value) => ({
+      context: value.metadata,
+      samples: [value.sample],
+      ensemble: value.metadata.ensemble,
+    })),
   )
-    return {
-      status: 'unavailable',
-      code: 'INCOMPATIBLE_STATISTIC',
-      reason:
-        'Reference-error comparison requires the same physical quantity, unit and temporal statistic.',
-    }
+  if (incompatible) return incompatible
   if (
     [original, downscaled, observation].some(
       (value, index) =>
@@ -80,26 +59,6 @@ export function calculateResultMapPointImprovement(
       status: 'unavailable',
       code: 'RESULT_CONTEXT_MISMATCH',
       reason: 'Reference-error inputs must match the requested point, task and UTC time.',
-    }
-  if (
-    [original, downscaled, observation].some(
-      (value) =>
-        value.sample.accumulation?.complete === false || value.sample.daily?.completeDay === false,
-    )
-  )
-    return {
-      status: 'unavailable',
-      code: 'INCOMPLETE_INTERVAL',
-      reason:
-        'Reference-error comparison requires the complete requested interval; partial accumulation or daily mean is unavailable.',
-    }
-  const intervals = [original, downscaled, observation].map((value) => interval(value.sample))
-  if (intervals.some((value) => JSON.stringify(value) !== JSON.stringify(intervals[0])))
-    return {
-      status: 'unavailable',
-      code: 'INTERVAL_MISMATCH',
-      reason:
-        'Actual and requested interval bounds and sampled/expected hour counts must match for all three inputs.',
     }
   const support = observation.sample.observation
   if (

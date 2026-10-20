@@ -2,27 +2,12 @@ import type {
   DownscalingTask,
   ResultPoint,
   ResultQuery,
-  Accumulation,
 } from '@/features/downscaling-tasks/service/contracts'
 import type { ResultMapSelection, ResultMapSource } from './result-map-data'
 import type { ResultMapPointResult, ResultMapPointValue } from '../types/result-map-point'
 
-function accumulationMatches(a?: Accumulation, b?: Accumulation) {
-  if (!a || !b) return a === b
-  return (
-    [
-      'start',
-      'end',
-      'requestedStart',
-      'requestedEnd',
-      'bounds',
-      'sampledHours',
-      'expectedHours',
-    ] as const
-  ).every((key) => a[key] === b[key])
-}
+import { resultMapCompatibility } from './result-map-compatibility'
 
-/** Public result composition: never reverse color mapping or relocate model sampling. */
 export async function readResultMapPointQuery(
   source: ResultMapSource,
   task: DownscalingTask,
@@ -134,10 +119,12 @@ export async function readResultMapPointQuery(
             'Wind Standard Deviation is unavailable: the public result projects mean-vector speed, not member-speed spread.',
         }
       : queriedDownscaled
-  const incomplete = [original, downscaled].some(
-    (value) =>
-      value.status === 'available' &&
-      (value.sample.accumulation?.complete === false || value.sample.daily?.completeDay === false),
+  const incompatible = resultMapCompatibility(
+    [original, downscaled].flatMap((value) =>
+      value.status === 'available'
+        ? [{ context: value.metadata, samples: [value.sample], ensemble: value.metadata.ensemble }]
+        : [],
+    ),
   )
   const difference: ResultMapPointValue =
     selected.ensemble?.kind === 'stddev'
@@ -147,57 +134,33 @@ export async function readResultMapPointQuery(
           reason:
             'Ensemble spread is not a prediction. Difference is unavailable in Standard Deviation view.',
         }
-      : incomplete
-        ? {
-            status: 'unavailable',
-            code: 'INCOMPLETE_INTERVAL',
-            reason:
-              'Partial accumulation or daily mean cannot represent the complete requested interval.',
-          }
-        : original.status === 'available' &&
-            downscaled.status === 'available' &&
-            (original.metadata.quantity !== downscaled.metadata.quantity ||
-              original.metadata.unit !== downscaled.metadata.unit ||
-              original.metadata.temporalStatistic !== downscaled.metadata.temporalStatistic)
+      : incompatible
+        ? incompatible
+        : original.status === 'available' && downscaled.status === 'available'
           ? {
-              status: 'unavailable',
-              code: 'INCOMPATIBLE_STATISTIC',
-              reason:
-                'Difference requires the same scalar quantity, unit and temporal statistic; directions are not subtracted.',
+              status: 'available',
+              sample: {
+                ...downscaled.sample,
+                value: downscaled.sample.value - original.sample.value,
+              },
+              metadata: downscaled.metadata,
+              reason: 'Downscaled − Original at the same point; not accuracy improvement.',
             }
-          : original.status === 'available' &&
-              downscaled.status === 'available' &&
-              !accumulationMatches(original.sample.accumulation, downscaled.sample.accumulation)
+          : original.status !== 'available'
             ? {
-                status: 'unavailable',
-                code: 'INTERVAL_MISMATCH',
-                reason: 'Actual and requested accumulation bounds and hour counts must match.',
+                ...original,
+                reason: `Original unavailable; Difference cannot be compared: ${original.reason}`,
               }
-            : original.status === 'available' && downscaled.status === 'available'
+            : downscaled.status !== 'available'
               ? {
-                  status: 'available',
-                  sample: {
-                    ...downscaled.sample,
-                    value: downscaled.sample.value - original.sample.value,
-                  },
-                  metadata: downscaled.metadata,
-                  reason: 'Downscaled − Original at the same point; not accuracy improvement.',
+                  ...downscaled,
+                  reason: `Downscaled unavailable; Difference cannot be compared: ${downscaled.reason}`,
                 }
-              : original.status !== 'available'
-                ? {
-                    ...original,
-                    reason: `Original unavailable; Difference cannot be compared: ${original.reason}`,
-                  }
-                : downscaled.status !== 'available'
-                  ? {
-                      ...downscaled,
-                      reason: `Downscaled unavailable; Difference cannot be compared: ${downscaled.reason}`,
-                    }
-                  : {
-                      status: 'unavailable',
-                      code: 'MISSING_DATA',
-                      reason: 'Difference inputs unavailable.',
-                    }
+              : {
+                  status: 'unavailable',
+                  code: 'MISSING_DATA',
+                  reason: 'Difference inputs unavailable.',
+                }
   return {
     identity,
     taskId: task.id,

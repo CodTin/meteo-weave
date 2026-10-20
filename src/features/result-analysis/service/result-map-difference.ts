@@ -1,8 +1,9 @@
 import { RESULT_QUERY_LIMITS, type DownscalingTask } from '@/features/downscaling-tasks/service'
 import type { ResultMapLayer } from '../types/result-map'
 import type { ResultMapSource, ResultMapSelection } from './result-map-data'
-import { computeDifference, intervalsMatch } from './comparison-data'
-import { MapQueryUnavailable, readMapPoints } from './result-map-query'
+import { computeDifference } from './comparison-data'
+import { resultMapCompatibility } from './result-map-compatibility'
+import { MapQueryUnavailable, readMapPoints, mapReplySamples } from './result-map-query'
 
 /** Compare at the target preview coordinates through the public scientific sampling rule. */
 export async function readMapDifference(
@@ -38,6 +39,15 @@ export async function readMapDifference(
         points: chunk.map(({ longitude, latitude }) => ({ longitude, latitude })),
         times: [selection.time],
       })
+      const incompatible = resultMapCompatibility([
+        { context: downscaled.displayContext ?? {}, samples: chunk, ensemble: downscaled.ensemble },
+        ...result.replies.map((reply) => ({
+          context: reply,
+          samples: mapReplySamples(reply),
+          ensemble: reply.ensemble,
+        })),
+      ])
+      if (incompatible) return { ...downscaled, kind: 'difference', samples: [], ...incompatible }
       const original = new Map(
         result.samples.map((point) => [
           `${point.longitude},${point.latitude},${point.time}`,
@@ -46,35 +56,13 @@ export async function readMapDifference(
       )
       for (const point of chunk) {
         const value = original.get(`${point.longitude},${point.latitude},${point.time}`)
-        if (point.accumulation?.complete === false || value?.accumulation?.complete === false)
-          return {
-            kind: 'difference',
-            status: 'unavailable',
-            samples: [],
-            code: 'INCOMPLETE_INTERVAL',
-            reason:
-              'Accumulation coverage is partial; Difference cannot represent the full requested interval.',
-          }
-        if (
-          point.value !== null &&
-          value?.value !== null &&
-          !intervalsMatch(
-            point.accumulation,
-            value && 'accumulation' in value ? value.accumulation : undefined,
-          )
-        )
-          return {
-            kind: 'difference',
-            status: 'unavailable',
-            samples: [],
-            code: 'INTERVAL_MISMATCH',
-            reason: 'Accumulation intervals do not match; Difference is unavailable.',
-          }
         samples.push({
           longitude: point.longitude,
           latitude: point.latitude,
           time: point.time,
           accumulation: point.accumulation,
+          daily: point.daily,
+          memberId: point.memberId,
           value: computeDifference(point.value, value?.value ?? null),
           unavailable: point.unavailable ?? value?.unavailable,
         })
@@ -98,6 +86,7 @@ export async function readMapDifference(
   }
   return {
     kind: 'difference',
+    displayContext: downscaled.displayContext,
     status: 'ready',
     samples,
     grid: downscaled.grid,

@@ -226,6 +226,13 @@ export function queryEnsemble(
         'Versioned Synthetic Demo members reconstructed from pinned temperature-v1/variables-v2 fields and stable member seeds. Not a trained model or actual provider run. Original/reference data are shared, not member-randomized.',
     },
   }
+  function withPlan(
+    reply: Unavailable,
+    result: { failures: EnsembleUnavailable[]; values: EnsembleSample[] },
+  ): ResultReply {
+    const { ok: _ok, ...planned } = modelMetadata
+    return { ...reply, planned: { ...planned, ensemble: buildEnsembleMetadata(selection, result) } }
+  }
   if (task.configuration.variable === 'wind') {
     const result = collect(task, query, selection, (member, point, time) =>
       windAt(member, 'downscaled', point, time),
@@ -239,7 +246,7 @@ export function queryEnsemble(
         ensembleMean: { ...scalar.ensembleMean, meanMemberSpeed: scalar.value },
       }
     })
-    if (!Array.isArray(values)) return values
+    if (!Array.isArray(values)) return withPlan(values, result)
     return {
       ...modelMetadata,
       variable: 'wind',
@@ -268,7 +275,7 @@ export function queryEnsemble(
         complete: members.every((value) => value.accumulation.complete),
       },
     }))
-    if (!Array.isArray(values)) return values
+    if (!Array.isArray(values)) return withPlan(values, result)
     return {
       ...modelMetadata,
       variable: 'precipitation',
@@ -292,7 +299,7 @@ export function queryEnsemble(
         completeDay: members.every((value) => value.daily.completeDay),
       },
     }))
-    if (!Array.isArray(values)) return values
+    if (!Array.isArray(values)) return withPlan(values, result)
     return {
       ...modelMetadata,
       variable: 'temperature',
@@ -308,7 +315,7 @@ export function queryEnsemble(
       value: temperatureAt(member, 'downscaled', point.longitude, point.latitude, time),
     }))
     const values = computeValues(result, selection, (_members, scalar) => scalar)
-    if (!Array.isArray(values)) return values
+    if (!Array.isArray(values)) return withPlan(values, result)
     return {
       ...modelMetadata,
       variable: 'temperature',

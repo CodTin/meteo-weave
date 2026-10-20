@@ -1,11 +1,9 @@
-import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { resultMapEvidence } from './helpers/result-map-evidence'
 import { fromJSON } from 'seroval'
 import type { ResultQuery } from '@/features/downscaling-tasks/service'
 import { test, expect, type Page } from './browser-guard'
 import { resultMap, setupResultMapPage, selectResultFrame } from './helpers/result-map-page'
 
-const evidence = '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec-15-20261020/ticket-04'
 const titles = [
   'Original Data',
   'Downscaled Data',
@@ -22,14 +20,10 @@ async function keyboardPoint(page: Page, longitude: string, latitude: string) {
   await query.getByRole('textbox', { name: 'Latitude', exact: true }).press('Enter')
 }
 
-async function capture(page: Page, name: string) {
-  await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: join(evidence, `${name}.png`), fullPage: true })
-}
-
 test('real geographic hover gives the same four values and point as keyboard entry without forcing independent cameras', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 1440, height: 1050 })
   await setupResultMapPage(page)
   await page.getByRole('button', { name: 'Switch to Station View', exact: true }).click()
@@ -92,7 +86,7 @@ test('real geographic hover gives the same four values and point as keyboard ent
       query.getByRole('region', { name: `${title} point value`, exact: true }),
     ).toContainText(expected[index]!)
   await expect(query.getByLabel('Canonical point')).toHaveText('longitude 11 · latitude 47')
-  await capture(page, 'point-1440-hover-keyboard-independent')
+  await evidence.capture(page, 'point-1440-hover-keyboard-independent')
 })
 
 function pointRequest(body: string | null) {
@@ -113,7 +107,8 @@ function pointRequest(body: string | null) {
 test('real delayed and failed result HTTP never restores a stale point or frame and pending refresh preserves camera', async ({
   page,
   expectedSessionTransportFailures,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await setupResultMapPage(page)
   await page.getByRole('button', { name: 'Switch to Station View', exact: true }).click()
   let release: () => void = () => {}
@@ -220,7 +215,7 @@ test('real delayed and failed result HTTP never restores a stale point or frame 
       }),
     ).toContainText('°C')
     await expect(query).not.toContainText('-0.7484 °C')
-    await capture(page, 'point-real-http-delay-failure-frame')
+    await evidence.capture(page, 'point-real-http-delay-failure-frame')
     await page.getByRole('link', { name: '任务管理', exact: true }).first().click()
     await expect(query).toHaveCount(0)
     await page
@@ -240,7 +235,8 @@ test('real delayed and failed result HTTP never restores a stale point or frame 
 
 test('responsive current bounds support keyboard and hover at the same point at 390px without querying during drag', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await setupResultMapPage(page)
@@ -262,7 +258,7 @@ test('responsive current bounds support keyboard and hover at the same point at 
   await expect(
     queryRegion(page).getByRole('region', { name: 'Downscaled Data point value', exact: true }),
   ).toContainText('17.2749 °C')
-  await capture(page, 'point-390-keyboard-reduced-motion')
+  await evidence.capture(page, 'point-390-keyboard-reduced-motion')
   await queryRegion(page).getByRole('button', { name: 'Clear point', exact: true }).click()
   await surface.scrollIntoViewIfNeeded()
   const current = await surface.boundingBox()

@@ -33,7 +33,10 @@ export function ResultMapCard({
   const valid = data.samples.filter(
     (sample) => sample.value !== null && Number.isFinite(sample.value),
   ).length
-  const interval = data.samples.find((sample) => sample.accumulation)?.accumulation
+  const accumulation = data.samples.find((sample) => sample.accumulation)?.accumulation
+  const daily = data.samples.find((sample) => sample.daily)?.daily
+  const interval = accumulation ?? daily
+  const complete = accumulation?.complete ?? daily?.completeDay
   const counts = data.samples.flatMap((sample) =>
     sample.ensembleMean ? [sample.ensembleMean.sampleCount] : [],
   )
@@ -128,9 +131,15 @@ export function ResultMapCard({
         )}
         {interval && (
           <p className="text-xs text-muted-foreground">
-            Accumulation Interval (UTC): [{interval.start}, {interval.end}) ·{' '}
-            {interval.sampledHours}/{interval.expectedHours} hours ·{' '}
-            {interval.complete ? 'complete' : 'partial, not the full requested interval'}
+            {daily ? 'Daily mean' : 'Accumulation'} Interval (UTC): [{interval.start},{' '}
+            {interval.end}) · {interval.sampledHours}/{interval.expectedHours} hours ·{' '}
+            {complete ? 'complete' : 'partial, not the full requested interval'}
+            {accumulation && (
+              <>
+                {' '}
+                · requested [{accumulation.requestedStart}, {accumulation.requestedEnd})
+              </>
+            )}
           </p>
         )}
         {data.provenance && (

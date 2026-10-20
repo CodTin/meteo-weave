@@ -35,12 +35,7 @@ async function readLayer(
     let result = await source.result(task.id, query)
     let samples
     if (!result.ok && missingMapCodes.has(result.code) && query.kind === 'preview') {
-      const recovered = await recoverMapPreview(
-        source,
-        task.id,
-        query,
-        new Date(task.configuration.timeRange.start).toISOString(),
-      )
+      const recovered = await recoverMapPreview(source, task.id, query, result.planned)
       if (recovered) {
         result = recovered.metadata
         samples = recovered.samples
@@ -53,9 +48,19 @@ async function readLayer(
         samples: [],
         code: result.code,
         reason: result.error,
+        grid: result.planned?.grid,
+        reference: result.planned?.reference,
+        provenance: result.planned?.provenance,
+        ensemble: result.planned?.ensemble,
       }
     return {
       kind: query.layer,
+      displayContext: {
+        variable: result.variable,
+        quantity: result.quantity,
+        unit: result.unit,
+        temporalStatistic: result.temporalStatistic,
+      },
       status: 'ready',
       samples: samples ?? mapReplySamples(result),
       grid: result.grid,

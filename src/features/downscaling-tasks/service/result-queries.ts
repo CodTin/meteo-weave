@@ -263,7 +263,12 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
     taskId: task.id,
     layer: query.layer,
     displayTimezone: 'UTC',
-    temporalStatistic: 'instantaneous',
+    temporalStatistic:
+      task.configuration.variable === 'precipitation'
+        ? 'accumulation'
+        : daily && task.configuration.variable === 'temperature'
+          ? 'daily-mean'
+          : 'instantaneous',
     provenance: {
       label: 'Synthetic Demo',
       dataSource: task.configuration.dataSource,
@@ -279,15 +284,29 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
       crs: 'EPSG:4326',
     },
   }
+  function withPlan(reply: ResultReply): ResultReply {
+    if (reply.ok) return reply
+    const { ok: _ok, ...planned } = metadata
+    const { variable } = task.configuration
+    const physical = {
+      temperature: { quantity: 'T2M', unit: '°C' },
+      wind: { quantity: 'U10/V10', unit: 'm/s' },
+      pressure: { quantity: 'MSL', unit: 'hPa' },
+      precipitation: { quantity: 'TP', unit: 'mm' },
+    } as const
+    return { ...reply, planned: { ...planned, ...reply.planned, variable, ...physical[variable] } }
+  }
   if (query.layer === 'observation') {
-    return queryObservations(task, requested, query, metadata)
+    return withPlan(queryObservations(task, requested, query, metadata))
   }
   if (selection && query.layer === 'downscaled') {
-    return queryEnsemble(
-      task,
-      { ...query, temporalResolution: requested.temporalResolution },
-      selection,
-      metadata,
+    return withPlan(
+      queryEnsemble(
+        task,
+        { ...query, temporalResolution: requested.temporalResolution },
+        selection,
+        metadata,
+      ),
     )
   }
   if (daily && task.configuration.variable === 'temperature') {
@@ -296,7 +315,7 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
       const time = new Date(rawTime).toISOString()
       for (const point of query.points) {
         const result = temperatureDay(task, query.layer, point, time)
-        if ('ok' in result) return result
+        if ('ok' in result) return withPlan(result)
         values.push({ ...point, time, ...result })
       }
     }
@@ -315,7 +334,7 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
       const time = new Date(rawTime).toISOString()
       for (const point of query.points) {
         const result = windAt(task, query.layer, point, time)
-        if ('ok' in result) return result
+        if ('ok' in result) return withPlan(result)
         values.push({ ...point, time, ...result })
       }
     }
@@ -341,7 +360,7 @@ export function queryTaskResult(task: DownscalingTask, input: unknown): ResultRe
           time,
           daily ? 24 : requested.temporalResolution === 'hourly' ? 1 : undefined,
         )
-        if ('ok' in result) return result
+        if ('ok' in result) return withPlan(result)
         values.push({ ...point, time, ...result })
       }
     }

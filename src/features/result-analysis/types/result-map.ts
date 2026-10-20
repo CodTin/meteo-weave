@@ -1,5 +1,6 @@
 import type {
   Accumulation,
+  DailyTemperature,
   ResultMetadata,
   ResultValue,
   ResultWindow,
@@ -13,6 +14,7 @@ export type ResultMapSample = Omit<ResultValue, 'value'> &
   Partial<Pick<WindValue, 'u10' | 'v10' | 'speed' | 'fromDirection' | 'directionStatus'>> & {
     value: number | null
     accumulation?: Accumulation
+    daily?: DailyTemperature
     unavailable?: Unavailable
   }
 

@@ -1,5 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { resultMapEvidence } from './helpers/result-map-evidence'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from './browser-guard'
 import { resultMap, setupResultMapPage } from './helpers/result-map-page'
@@ -8,15 +7,6 @@ import {
   downloadExport,
   selectSmallExport,
 } from './helpers/export-test-helpers'
-
-const evidence =
-  process.env.RESULT_MAP_DISPLAY_EVIDENCE_DIR ??
-  '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec-15-20261020/ticket-05'
-
-async function capture(page: Page, name: string) {
-  await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: join(evidence, `${name}.png`), fullPage: true })
-}
 
 async function manualRange(page: Page, group: string, unit: string, min: string, max: string) {
   const controls = page.getByRole('group', { name: group, exact: true })
@@ -38,7 +28,8 @@ async function smallCsv(page: Page) {
 
 test('real map and legends change together; invalid ranges keep previous mapping and scientific labels/parsed CSV remain unchanged', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_DISPLAY_EVIDENCE_DIR)
   test.setTimeout(90_000)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await setupResultMapPage(page)
@@ -77,24 +68,16 @@ test('real map and legends change together; invalid ranges keep previous mapping
   await controls.getByRole('textbox', { name: 'Maximum (°C)', exact: true }).fill('50')
   await controls.getByRole('button', { name: 'Apply range', exact: true }).click()
   await expect(controls.getByRole('alert')).toHaveCount(0)
-  await capture(page, 'temperature-1440-manual-map-and-legends')
+  await evidence.capture(page, 'temperature-1440-manual-map-and-legends')
   const afterExport = await smallCsv(page)
   expect(afterExport).toEqual(beforeExport)
-  await mkdir(evidence, { recursive: true })
-  await writeFile(
-    join(evidence, 'parsed-csv-invariance.json'),
-    JSON.stringify(
-      {
-        recordCount: afterExport.length,
-        equalBeforeAfter: true,
-        originalScientificLabel: trueLabel,
-        before: beforeExport,
-        after: afterExport,
-      },
-      null,
-      2,
-    ),
-  )
+  await evidence.json('parsed-csv-invariance', {
+    recordCount: afterExport.length,
+    equalBeforeAfter: true,
+    originalScientificLabel: trueLabel,
+    before: beforeExport,
+    after: afterExport,
+  })
   await page.getByRole('tab', { name: /地图对比/ }).click()
   // The baseline panel unmounts on tab change; restoration is checked after a fresh manual edit.
   const restoredControls = await manualRange(page, 'Absolute maps range', '°C', '40', '50')
@@ -105,7 +88,8 @@ test('real map and legends change together; invalid ranges keep previous mapping
 
 test('real rainfall maps keep legal zero separate from missing and explain signed Difference saturation', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_DISPLAY_EVIDENCE_DIR)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await setupResultMapPage(page, 'precipitation')
   await page.getByRole('button', { name: 'Switch to Station View' }).click()
@@ -131,7 +115,7 @@ test('real rainfall maps keep legal zero separate from missing and explain signe
   await expect(page.getByRole('group', { name: 'Map color legend' }).last()).toContainText(
     'Downscaled − Original, not accuracy improvement',
   )
-  await capture(page, 'precipitation-manual-signed-range')
+  await evidence.capture(page, 'precipitation-manual-signed-range')
   await page.getByRole('combobox', { name: 'Ensemble view' }).click()
   await page.getByRole('option', { name: 'Member 05', exact: true }).click()
   const missing = resultMap(page, 'downscaled').getByRole('img', { name: /missing/ })
@@ -144,12 +128,13 @@ test('real rainfall maps keep legal zero separate from missing and explain signe
   await expect(page.getByRole('group', { name: 'Map color legend' }).nth(1)).toContainText(
     'missing or nonfinite, not zero',
   )
-  await capture(page, 'precipitation-missing-zero-saturation')
+  await evidence.capture(page, 'precipitation-missing-zero-saturation')
 })
 
 test('390px keyboard controls operate the real map and accessible range controls without horizontal overflow', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_DISPLAY_EVIDENCE_DIR)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await setupResultMapPage(page, 'pressure')
@@ -184,16 +169,18 @@ test('390px keyboard controls operate the real map and accessible range controls
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
   const axe = await new AxeBuilder({ page }).include('[aria-label="Map display ranges"]').analyze()
   expect(axe.violations).toEqual([])
-  await capture(page, 'pressure-390-keyboard-reduced-motion')
+  await evidence.capture(page, 'pressure-390-keyboard-reduced-motion')
   await controls.scrollIntoViewIfNeeded()
   await expect(page.getByRole('group', { name: 'Difference range', exact: true })).toContainText(
     '0.1196 hPa',
   )
-  await page.screenshot({ path: join(evidence, 'pressure-390-range-controls.png') })
+  await page.screenshot({ path: await evidence.path('pressure-390-range-controls.png') })
+  await evidence.attach('pressure-390-range-controls.png')
   const differenceLegend = page.getByRole('group', { name: 'Map color legend', exact: true }).last()
   await differenceLegend.scrollIntoViewIfNeeded()
   await expect(differenceLegend).toContainText('Zero: 0 hPa')
   await expect(differenceLegend).toContainText('Negative (blue)')
   await expect(differenceLegend).toContainText('missing or nonfinite, not zero')
-  await page.screenshot({ path: join(evidence, 'pressure-390-difference-legend.png') })
+  await page.screenshot({ path: await evidence.path('pressure-390-difference-legend.png') })
+  await evidence.attach('pressure-390-difference-legend.png')
 })

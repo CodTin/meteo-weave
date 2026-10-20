@@ -18,6 +18,16 @@ for (const file of files(join(root, 'tests')).filter((file) => /\.[cm]?[jt]sx?$/
   const source = readFileSync(file, 'utf8')
   const imports = scanner.scanImports(source)
   const parsed = parseSync(file, source)
+  const resultMapSpec =
+    /^tests\/e2e\/result-map-(?:rendering|synchronization|point-query|point-detail|display|palette)\.spec\.ts$/.test(
+      relative(root, file),
+    )
+  const resultMapEvidence =
+    resultMapSpec || relative(root, file) === 'tests/e2e/helpers/result-map-evidence.ts'
+  if (resultMapSpec && !imports.some(({ path }) => path === './helpers/result-map-evidence'))
+    failures.push(
+      `${relative(root, file)}: result-map-evidence: use the run-local result-map-evidence helper for attached artifacts.`,
+    )
   for (const error of parsed.errors) failures.push(`${relative(root, file)}: ${error.message}`)
   function checkPattern(pattern: string, start: number) {
     // Tag syntax only; ordinary text/URL regex and comment/string examples remain allowed.
@@ -38,6 +48,14 @@ for (const file of files(join(root, 'tests')).filter((file) => /\.[cm]?[jt]sx?$/
   }
   new Visitor({
     Literal(node) {
+      if (
+        resultMapEvidence &&
+        typeof node.value === 'string' &&
+        /^(?:\/(?:Users|home)\/|[a-z]:[\\/]Users[\\/])/i.test(node.value)
+      )
+        failures.push(
+          `${relative(root, file)}: result-map-evidence: developer-home paths are not portable artifact defaults; use testInfo.outputPath.`,
+        )
       if ('regex' in node) checkPattern(node.regex.pattern, node.start)
     },
     CallExpression: checkConstructor,
