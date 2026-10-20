@@ -51,3 +51,12 @@ export async function selectResultFrame(page: Page, day: '01' | '02' | '03') {
   )
   await expect(resultMap(page, 'original')).toBeVisible()
 }
+
+/** Shared user entry used by layout acceptance; only the visible coordinate form is touched. */
+export async function selectResultPoint(page: Page, longitude: string, latitude: string) {
+  const query = page.getByRole('region', { name: 'Joint point query', exact: true })
+  await query.getByRole('textbox', { name: 'Longitude', exact: true }).fill(longitude)
+  await query.getByRole('textbox', { name: 'Latitude', exact: true }).fill(latitude)
+  await query.getByRole('textbox', { name: 'Latitude', exact: true }).press('Enter')
+  return query
+}
