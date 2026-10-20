@@ -13,13 +13,15 @@ import {
 } from '@/components/ui/alert-dialog'
 import type { DownscalingTask } from '../service'
 import { useTaskActions } from '../hooks/use-task-actions'
+import type { TaskComparisonControl } from '../hooks/use-comparison-selection'
 import { dataSourceLabels, variableLabels, methodLabels, formatDate } from '../utils/formatters'
 
 interface TaskCardProps {
   task: DownscalingTask
+  comparison?: TaskComparisonControl
 }
 
-export function TaskCard({ task }: TaskCardProps) {
+export function TaskCard({ task, comparison }: TaskCardProps) {
   const { viewTask, deleteTask } = useTaskActions()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -60,16 +62,31 @@ export function TaskCard({ task }: TaskCardProps) {
 
   return (
     <>
-      <div className="rounded-lg border bg-card p-4 hover:border-primary/50 transition-colors">
+      <div className="min-w-0 rounded-lg border bg-card p-4 hover:border-primary/50 transition-colors">
         <div className="space-y-3">
           {/* Task Name and Status */}
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-semibold text-lg leading-tight">{task.name}</h3>
+            <h3 className="min-w-0 break-all font-semibold text-lg leading-tight">{task.name}</h3>
             <div className="flex items-center gap-1.5 shrink-0">
               {statusIcon}
               <span className="text-xs text-muted-foreground">{statusLabel}</span>
             </div>
           </div>
+
+          {comparison && (
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={comparison.selected}
+                disabled={comparison.disabled}
+                onChange={comparison.onToggle}
+                aria-label={`选择任务 ${task.name} 进行对比`}
+                aria-describedby="comparison-instructions"
+                className="size-5 accent-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {comparison.disabled ? '仅已完成任务可对比' : '选择进行对比'}
+            </label>
+          )}
 
           {/* Variable and Method */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
