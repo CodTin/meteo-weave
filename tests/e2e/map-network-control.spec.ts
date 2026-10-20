@@ -81,7 +81,9 @@ test.describe('Map network control and configuration recovery', () => {
           version: 8,
           name: 'Test Style',
           sources: {},
-          layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#f0f0f0' } }],
+          layers: [
+            { id: 'background', type: 'background', paint: { 'background-color': '#f0f0f0' } },
+          ],
         }),
       })
     })
