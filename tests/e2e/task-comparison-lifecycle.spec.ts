@@ -332,7 +332,11 @@ test('ordinary selected-pair navigation is SPA and keeps pending and loaded navi
       '正在加载任务对比',
     )
     await expect(page.getByRole('main')).toHaveAttribute('aria-busy', 'true')
-    await expectNoComparison(page)
+    // Router may retain the valid same-account task list during SPA pending.
+    // Its selection names are not comparison results or stale cross-account data.
+    await expect(page.getByRole('region', { name: '对比任务身份', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('img', { name: /实际样本空间场/ })).toHaveCount(0)
+    await expect(page.getByRole('region', { name: '共同样本精度指标' })).toHaveCount(0)
     const navigation = page.getByRole('navigation', { name: '工作区导航', exact: true })
     await expect(navigation.getByRole('link', { name: '设置', exact: true })).toBeVisible()
     release()
