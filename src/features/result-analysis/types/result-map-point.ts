@@ -35,3 +35,14 @@ export type ResultMapPointQueryState =
   | { status: 'idle' }
   | { status: 'pending' }
   | { status: 'ready'; result: ResultMapPointResult }
+
+export type ResultMapPointImprovement =
+  | {
+      status: 'available'
+      fraction: number
+      originalAbsoluteError: number
+      downscaledAbsoluteError: number
+      unit: string
+      referenceType: 'colocated-synthetic-station' | 'interpolated-synthetic-reference'
+    }
+  | { status: 'unavailable'; code: string; reason: string }
