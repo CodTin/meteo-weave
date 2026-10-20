@@ -33,6 +33,7 @@ test('real geographic hover gives the same four values and point as keyboard ent
   await page.setViewportSize({ width: 1440, height: 1050 })
   await setupResultMapPage(page)
   await page.getByRole('button', { name: 'Switch to Station View', exact: true }).click()
+  await page.getByRole('checkbox', { name: 'Synchronize map cameras', exact: true }).uncheck()
   const original = resultMap(page, 'original')
   const downscaled = resultMap(page, 'downscaled')
   const otherCamera = await downscaled

@@ -156,6 +156,7 @@ it('projects the selected geographic crosshair in each independent viewport and 
   const user = userEvent.setup()
   render(<MapComparisonPanel task={task} source={publicSource(task)} timeSlice={time} />)
   await screen.findByRole('region', { name: 'Original Data map' })
+  await user.click(screen.getByRole('checkbox', { name: 'Synchronize map cameras' }))
   const otherCamera = screen.getByLabelText('Downscaled Data viewport').textContent
   const query = await enterPoint(user, '11', '47')
   await query.findByText('16.7216 °C', { exact: true })
