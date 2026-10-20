@@ -16,8 +16,17 @@ export type ResultMapSample = Omit<ResultValue, 'value'> &
     unavailable?: Unavailable
   }
 
+/** Optional known context; legacy previews inherit their shared variable/unit. */
+export type ResultMapDisplayContext = {
+  variable?: Variable
+  unit?: string
+  quantity?: string
+  temporalStatistic?: ResultMetadata['temporalStatistic']
+}
+
 export type ResultMapLayer = {
   kind: ResultMapKind
+  displayContext?: ResultMapDisplayContext
   status: 'ready' | 'unavailable' | 'error'
   samples: ResultMapSample[]
   grid?: ResultMetadata['grid']
@@ -48,4 +57,17 @@ export type ResultMapDisplaySettings = {
   colors: string[]
   description: string
   unit: string
+  mode?: 'automatic' | 'manual'
+  domain?: 'range' | 'constant' | 'empty'
+  dataMin?: number
+  dataMax?: number
+  kind?: 'absolute' | 'difference'
+  symmetricZero?: boolean
+  nonnegative?: boolean
+  rangeGroup?: string
+  groupLabel?: string
+  basis?: string
+  finiteCount?: number
+  missingCount?: number
+  nonfiniteCount?: number
 }

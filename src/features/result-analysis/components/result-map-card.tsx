@@ -18,7 +18,9 @@ export function ResultMapCard({ data, context, display, onRetry, children }: Res
   const grid = data.grid
   const stationMode = data.kind === 'observation' && context.observationMode === 'stations'
   const spread = data.kind === 'downscaled' && data.ensemble?.kind === 'stddev'
-  const valid = data.samples.filter((sample) => sample.value !== null).length
+  const valid = data.samples.filter(
+    (sample) => sample.value !== null && Number.isFinite(sample.value),
+  ).length
   const interval = data.samples.find((sample) => sample.accumulation)?.accumulation
   const counts = data.samples.flatMap((sample) =>
     sample.ensembleMean ? [sample.ensembleMean.sampleCount] : [],
@@ -44,7 +46,8 @@ export function ResultMapCard({ data, context, display, onRetry, children }: Res
       <CardHeader>
         <CardTitle>{resultMapTitles[data.kind]}</CardTitle>
         <CardDescription>
-          {getVariableLabel(context.variable)} · {context.unit} · {description} · Synthetic Demo
+          {getVariableLabel(data.displayContext?.variable ?? context.variable)} · {display.unit} ·{' '}
+          {description} · Synthetic Demo
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
