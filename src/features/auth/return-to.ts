@@ -1,4 +1,10 @@
-const workspacePaths = new Set(['/dashboard', '/tasks', '/tasks/new', '/settings'])
+const workspacePaths = new Set([
+  '/dashboard',
+  '/tasks',
+  '/tasks/new',
+  '/tasks/compare',
+  '/settings',
+])
 const base = 'https://meteo-weave.invalid'
 
 // Accept only current workspace destinations. Extend deliberately when real task routes arrive.

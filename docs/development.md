@@ -88,7 +88,7 @@
 - 该 cookie **未签名**，不是生产认证、防篡改或真实多租户授权。仅能用于合成 Demo 数据，不能用来保护真实用户或远程数据。页面明确说明此边界，不提供注册或真实凭证管理。
 - `/_workspace` 的 `beforeLoad` 在 SSR、导航和 intent preload 中调用 `requireDemoSession({ data: location.href, signal })`，通过 route context 的 `account` 将同一必需身份传给页头与设置页。不跳过预加载检查，不另建身份 store；登录成功经过统一会话切换边界清理旧工作区，以新 SSR 文档重新验证身份；普通工作区导航仍为 SPA。
 - `src/server/functions/demo-session.ts` 的 `requireDemoSession` 是工作区实际使用的必需账号读取入口；实现复用 `src/server/services/demo-session.server.ts` 的 `requireDemoAccount(returnTo?)` 与 #22 的 `readDemoSession`。缺失／未知／无效 cookie 抛出带 `no-store` 的 307 登录重定向；正常返回目录中的 `DemoAccount`。公开登录和可选的会话读取保持原契约。后续配置准入／任务服务必须在服务器实际操作前调用 `requireDemoAccount`，不能只靠页面 guard。
-- `src/features/auth/return-to.ts` 的 `safeReturnTo` 仅接受当前四个工作区的字面路径：`/dashboard`、`/tasks`、`/tasks/new`、`/settings`。保留正常 query/hash，拒绝绝对／协议相对、反斜线、控制字符、编码路径、登录循环和未知路径；无效目标回退 Dashboard。后续新增真实任务路由时显式扩展，不再次解码已验证目标。
+- `src/features/auth/return-to.ts` 的 `safeReturnTo` 仅接受工作区的字面路径：`/dashboard`、`/tasks`、`/tasks/new`、`/tasks/compare`、`/settings`。保留正常 query/hash，拒绝绝对／协议相对、反斜线、控制字符、编码路径、登录循环和未知路径；无效目标回退 Dashboard。后续新增真实任务路由时显式扩展，不再次解码已验证目标。
 - 登录页用 Zod 解析可选 `returnTo`，并经统一目录验证可选 `account`；未知账号、数组或对象不会填入账号框。预选只初始化可编辑表单，密码为空；仅访问或修改 URL 不改变任何已验证身份。确认退出后，未验证或验证失败均保持未登录，只有真实登录成功才恢复工作区。`returnTo` 与预选独立；服务器重定向与登录后最终导航均校验目标。SSR 请求不携带 fragment，因此登录页也保留浏览器随重定向继承的合法目标 fragment。正常 Query 参数可由 Router 等价重序列化（例如空格 `%20` → `+`）。未知页面继续是真实公开 404。
 - `logoutDemo()` 是客户端可调用的 POST；服务器 `endDemoSession()` 仅以同一个 cookie 名、Path=/、Max-Age=0 结束 Demo 会话，保留 HttpOnly、SameSite=Lax 与 HTTPS Secure，并返回 no-store。无会话时也可安全重复调用。底层函数不提供另一套 UI 退出路径。
 - `src/features/auth/session-transition.tsx` 的 `DemoSessionBoundary` 位于根路由。工作区页头和移动菜单调用 `useDemoSessionTransition().endSession()`：同步卸载旧页面／菜单，取消查询并清空 Router 预加载；POST 成功后再次清理内存并替换到登录文档；无预选目标时为 `/login`。网络失败保持工作区隐藏，明确说明尚未确认退出，并将键盘焦点交给重试；不假装清 cookie 已成功。已确认的登录目标保留在根边界中，无参数重试不会丢失目标。
@@ -146,6 +146,22 @@ Spec03 #4 提供任务服务、账号归属与持久化；Spec05 #6 提供完整
 - 开始、等待、失败和恢复使用既有公开状态与诊断：存储故障抛出 `TaskStorageError`；单条损坏／schema 不兼容保留在 `issues` 中，不重置其他历史；无法重建的版本不会伪造 Completed 可用结果。工作区丢弃会关闭实例并阻止迟到初始化／查询返回，但不删除已保存历史。仍沿用已有会话切换边界，不引入新的生命周期设计。
 - ECMWF／GFS／Fusion 仅为演示配置标签；没有远程资料下载、模型训练或真实推理。公开服务与原生 IndexedDB 的 Vitest 测试覆盖初始化、账号／角色隔离、回滚重试、删除不复活和跨查询一致性；完整业务页面 RPC、地图和导出文件 UI 仍需后续页面验收，不能以服务测试代替。
 
+### 双任务对比路由契约（Spec14）
+
+- 地址为 `/tasks/compare?a=<stable-id>&b=<stable-id>`，A／B 按选择位置保留，不排序、不交换、不裁剪或强制转换 id。
+  Zod `validateSearch` 将缺失、空值、非字符串或超出 id 长度限制的单个参数视为可选缺失，交给页面恢复，不能因此进入路由错误页。
+  参数解析不证明任务有效：重复 id 不能成为正常对比，页面仍须重新核验两个不同任务的存在性、当前账号归属与 Completed 状态。
+- `src/routes/_workspace/tasks/compare.tsx` 是独立静态入口，优先于 `$taskId`；标题为「任务对比 · MeteoWeave」，
+  pending／error 与现有工作区路由使用同一组件、延迟和静态恢复边界。静态入口不加载任务，也不提供占位页面；后续真实 UI 在同目录 `compare.lazy.tsx` 接入。
+- `safeReturnTo` 只显式增加字面 `/tasks/compare`，保留 query／hash 的语义和 A／B 身份，不扩展成 `/tasks/*`，
+  不放宽原有路径与安全拒绝规则。缺失／无效选择可在登录后继续到页面纠正，安全回跳不等于任务授权或比较成功。
+- `getWorkspaceTitle` 只将比较的精确 pathname（沿用单个尾斜线处理）识别为「任务对比」；不增加侧栏项。
+  比较时「任务管理」保持当前项与可访问性标记，其他目的地仍精确匹配，不能让「创建任务」同时点亮任务管理。
+- 任务和结果只在已认证、已水合的浏览器页面中通过现有 `createTaskService({ queryClient })` 的 `initialize/get/result` 读取 IndexedDB 并重新验证；
+  SSR 只提供当前账号、标题与加载外壳，不读取或输出私有任务名称、参数、结果，也不在模块顶层或 loader 打开浏览器存储。
+  任务删除、跨账号／失效或工作区丢弃后不得显示残留成功结果；沿用会话切换与服务 `close` 清理边界。
+- 共享外壳仅保留最小内容高度，真实参数表、地图、指标与 responsive 布局由后续页面接入；静态入口及公共 URL／标题测试不代表完整比较验收。
+
 ### 目录式文件路由与生命周期验收
 
 `src/routes/` 使用 TanStack **directory-based file routing**，不是手写 route config，也不是
@@ -173,6 +189,16 @@ pending/error；`tests/e2e/workspace-cases.ts` 列出真实页面及可拦截资
 | 共享水合边界    | 健康的延迟直接访问                     | 原 SSR DOM 复用而不是全局改成客户端渲染              | workspace-lifecycle                                     |
 | Demo 登录／会话 | 表单、站内回跳、退出与角色切换         | 统一身份、重新验证、旧响应隔离与错误恢复             | login / workspace-access / session-ending / role-switch |
 | 共享页头        | 390／768／1440px，普通／reduced-motion | 可读面包屑、身份与操作、键盘焦点                     | workspace-header                                        |
+
+任务对比 `/tasks/compare` 适用本矩阵的**全部行**，没有工作区、水合、会话或共享页头豁免。
+后续比较页面／lazy 接入（V 包）须以真实页面操作补齐以下专属场景，并同时验证直接访问／刷新、站内跳转、延迟成功、两种入口的资源失败与真实重试、
+健康延迟时复用 SSR DOM、登录回跳／退出／角色切换，以及 390／768／1440px 普通与 reduced-motion 布局；不能只以静态模块测试代替。
+
+| 适用页面 | 入口                                        | 必须验证的结果                                                         | 证据入口                            |
+| -------- | ------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------- |
+| 任务对比 | 未登录深链接→登录→刷新                      | 安全回跳保留 A／B、query／hash；SSR 无私有任务，水合后以当前身份读取   | task-comparison（V 页面接入后补齐） |
+| 任务对比 | 有效选择→站内打开／刷新／历史返回           | 静态入口不落入 taskId，A／B 不颠倒，正确标题与任务管理当前项           | task-comparison（同上）             |
+| 任务对比 | 缺失／格式错误／同 id／未完成／删除／跨账号 | 可理解的恢复与返回管理入口，无残留成功结果；已打开页面与刷新均重新验证 | task-comparison（同上）             |
 
 新增路由先补矩阵的适用行，再补测试。豁免必须说明原因；测试总数不是验收覆盖率。
 科学数据尚未接入的页面仍应诚实说明状态，不能用虚构业务接口制造加载测试。

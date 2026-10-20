@@ -13,6 +13,7 @@ const contentFootprints: Record<string, string> = {
   '/dashboard': 'min-h-[50rem] xl:min-h-[34rem]',
   '/tasks/new': 'min-h-[57rem] md:min-h-[34rem]',
   '/tasks': 'min-h-[47rem] sm:min-h-[35rem] xl:min-h-[30rem]',
+  '/tasks/compare': 'min-h-[28rem]',
   '/settings': 'min-h-[44rem] sm:min-h-[33rem] md:min-h-[30rem]',
 }
 

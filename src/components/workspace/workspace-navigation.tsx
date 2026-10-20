@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { LayoutDashboard, ListTodo, Plus, Settings } from 'lucide-react'
 
 export const workspacePages = [
@@ -9,10 +9,16 @@ export const workspacePages = [
 ] as const
 
 export function getWorkspaceTitle(pathname: string) {
-  return workspacePages.find((page) => page.path === pathname.replace(/\/$/, ''))?.title
+  const path = pathname.replace(/\/$/, '')
+  if (path === '/tasks/compare') return '任务对比'
+  return workspacePages.find((page) => page.path === path)?.title
 }
 
 export function WorkspaceNavigation({ onNavigate }: { onNavigate?: () => void }) {
+  const onComparison = useLocation({
+    select: (location) => location.pathname.replace(/\/$/, '') === '/tasks/compare',
+  })
+
   return (
     <nav aria-label="工作区导航">
       <ul className="space-y-2">
@@ -20,7 +26,8 @@ export function WorkspaceNavigation({ onNavigate }: { onNavigate?: () => void })
           <li key={path}>
             <Link
               to={path}
-              activeOptions={{ exact: true }}
+              // Comparison belongs to task management; other destinations keep exact matching.
+              activeOptions={{ exact: path !== '/tasks' || !onComparison }}
               activeProps={{ className: 'border-sidebar-primary font-semibold text-foreground' }}
               inactiveProps={{ className: 'border-transparent text-muted-foreground' }}
               onClick={onNavigate}
