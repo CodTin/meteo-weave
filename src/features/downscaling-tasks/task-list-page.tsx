@@ -211,6 +211,7 @@ export function TaskListPage() {
   const { account } = useRouteContext({ from: '/_workspace' })
   const { selectedTasks, selectionError, controlFor, comparisonHref, removeTask, clearSelection } =
     useComparisonSelection(allTasks, account.id)
+  const [comparisonA, comparisonB] = selectedTasks
 
   const hasActiveFilters =
     filters.nameSearch.trim() !== '' ||
@@ -660,7 +661,7 @@ export function TaskListPage() {
           )}
         </CardContent>
       </Card>
-      {comparisonHref && (
+      {comparisonHref && comparisonA && comparisonB && (
         <section
           aria-label="任务对比操作"
           className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-3xl flex-col gap-3 rounded-xl border bg-background p-4 shadow-lg sm:flex-row sm:items-center"
@@ -679,9 +680,13 @@ export function TaskListPage() {
             {selectionError && (
               <p className="max-w-xs text-sm leading-6 text-destructive">{selectionError}</p>
             )}
-            <a href={comparisonHref} className={buttonVariants()}>
+            <Link
+              to="/tasks/compare"
+              search={{ a: comparisonA.id, b: comparisonB.id }}
+              className={buttonVariants()}
+            >
               对比所选任务 <ArrowRight aria-hidden="true" />
-            </a>
+            </Link>
             <Button
               variant="outline"
               size="sm"

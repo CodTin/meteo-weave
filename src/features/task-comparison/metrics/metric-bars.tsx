@@ -3,7 +3,7 @@ export type ComparisonMetricValues = {
   mae: number
   r2: number | null
   n: number
-  r2UnavailableReason?: string
+  r2UnavailableReason?: string | null
 }
 
 export function TaskComparisonMetricBars({

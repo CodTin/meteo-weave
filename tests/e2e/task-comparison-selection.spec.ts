@@ -55,6 +55,22 @@ test.describe('Task comparison selection', () => {
     await expect(selection.getByRole('status')).toHaveText('已选择 2 / 2 个任务')
     await expect(selection.getByRole('alert')).toContainText('请先取消一个已选任务')
     await expect(compare).toHaveAttribute('href', href!)
+
+    // The static route exists on this baseline; its lazy comparison UI is a separate owner.
+    // Observe the browser's document requests, not Router state or a fabricated page.
+    const documentRequests: string[] = []
+    page.on('request', (request) => {
+      if (
+        request.isNavigationRequest() &&
+        request.resourceType() === 'document' &&
+        request.frame() === page.mainFrame()
+      )
+        documentRequests.push(request.url())
+    })
+    await compare.click()
+    await expect(page).toHaveURL(target.href)
+    await expect(page).toHaveTitle('任务对比 · MeteoWeave')
+    expect(documentRequests).toEqual([])
   })
 
   test('retains selection across table/card/filter changes and can remove hidden tasks', async ({
