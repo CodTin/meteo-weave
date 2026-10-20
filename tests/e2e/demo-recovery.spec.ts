@@ -1,4 +1,5 @@
 import { test, expect } from './browser-guard'
+import { submitDemoLogin } from './demo-login'
 
 test.describe('Demo recovery', () => {
   test.beforeEach(async ({ page }) => {
@@ -12,9 +13,7 @@ test.describe('Demo recovery', () => {
   test('shows recovery dialog with missing cases on first use', async ({ page }) => {
     // Login as researcher
     await page.goto('/login')
-    await page.getByLabel('账号').selectOption('researcher')
-    await page.getByLabel('密码').fill('meteo-demo')
-    await page.getByRole('button', { name: '登录' }).click()
+    await submitDemoLogin(page, 'researcher')
 
     // Navigate to settings
     await expect(page).toHaveURL('/dashboard')
@@ -42,9 +41,7 @@ test.describe('Demo recovery', () => {
   test('recovers missing catalog tasks successfully', async ({ page }) => {
     // Login as researcher
     await page.goto('/login')
-    await page.getByLabel('账号').selectOption('researcher')
-    await page.getByLabel('密码').fill('meteo-demo')
-    await page.getByRole('button', { name: '登录' }).click()
+    await submitDemoLogin(page, 'researcher')
     await expect(page).toHaveURL('/dashboard')
 
     // Navigate to settings
@@ -76,9 +73,7 @@ test.describe('Demo recovery', () => {
   test('shows no missing cases when all exist', async ({ page }) => {
     // Login and initialize tasks
     await page.goto('/login')
-    await page.getByLabel('账号').selectOption('researcher')
-    await page.getByLabel('密码').fill('meteo-demo')
-    await page.getByRole('button', { name: '登录' }).click()
+    await submitDemoLogin(page, 'researcher')
     await expect(page).toHaveURL('/dashboard')
 
     // Navigate to tasks page to trigger initialization
@@ -112,9 +107,7 @@ test.describe('Demo recovery', () => {
   test('does not duplicate cases on repeated recovery', async ({ page }) => {
     // Login as researcher
     await page.goto('/login')
-    await page.getByLabel('账号').selectOption('researcher')
-    await page.getByLabel('密码').fill('meteo-demo')
-    await page.getByRole('button', { name: '登录' }).click()
+    await submitDemoLogin(page, 'researcher')
     await expect(page).toHaveURL('/dashboard')
 
     // Navigate to settings
@@ -140,9 +133,7 @@ test.describe('Demo recovery', () => {
   test('cancel button closes dialog without recovering', async ({ page }) => {
     // Login as researcher
     await page.goto('/login')
-    await page.getByLabel('账号').selectOption('researcher')
-    await page.getByLabel('密码').fill('meteo-demo')
-    await page.getByRole('button', { name: '登录' }).click()
+    await submitDemoLogin(page, 'researcher')
     await expect(page).toHaveURL('/dashboard')
 
     // Navigate to settings
@@ -166,9 +157,7 @@ test.describe('Demo recovery', () => {
   test('preserves other account tasks during recovery', async ({ page }) => {
     // Login as policy and initialize
     await page.goto('/login')
-    await page.getByLabel('账号').selectOption('policy')
-    await page.getByLabel('密码').fill('meteo-demo')
-    await page.getByRole('button', { name: '登录' }).click()
+    await submitDemoLogin(page, 'policy')
     await expect(page).toHaveURL('/dashboard')
 
     // Initialize policy account tasks
@@ -184,8 +173,7 @@ test.describe('Demo recovery', () => {
 
     // Login as researcher
     await expect(page).toHaveURL(/\/login/)
-    await page.getByLabel('密码').fill('meteo-demo')
-    await page.getByRole('button', { name: '登录' }).click()
+    await submitDemoLogin(page, 'researcher')
     await expect(page).toHaveURL('/dashboard')
 
     // Recover researcher catalog
@@ -203,8 +191,7 @@ test.describe('Demo recovery', () => {
 
     // Login as policy
     await expect(page).toHaveURL(/\/login/)
-    await page.getByLabel('密码').fill('meteo-demo')
-    await page.getByRole('button', { name: '登录' }).click()
+    await submitDemoLogin(page, 'policy')
     await expect(page).toHaveURL('/dashboard')
 
     // Verify policy tasks still exist
