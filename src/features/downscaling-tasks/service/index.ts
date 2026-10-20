@@ -315,6 +315,77 @@ export function createTaskService({
       check()
       return { ok: true, task: newTask }
     },
+    /** Get missing demo catalog tasks for the current account. */
+    async getMissingCatalogTasks() {
+      const db = ready()
+      const check = currentWorkspace()
+      const account = await transport.account()
+      check()
+      const catalog = await transport.catalog()
+      check()
+      if (catalog.ownerId !== account.id)
+        throw new Error('Demo account changed during recovery; retry in the current workspace.')
+      const existing = await db.list(account.id)
+      check()
+      const existingIds = new Set((existing as Array<{ id: string }>).map((task) => task.id))
+      const missing = catalog.tasks.filter((task) => !existingIds.has(task.id))
+      return { missing, total: catalog.tasks.length }
+    },
+    /** Recover missing demo catalog tasks for the current account. */
+    async recoverCatalogTasks() {
+      const db = ready()
+      const check = currentWorkspace()
+      const account = await transport.account()
+      check()
+      const catalog = await transport.catalog()
+      check()
+      if (catalog.ownerId !== account.id)
+        throw new Error('Demo account changed during recovery; retry in the current workspace.')
+
+      const existing = await db.list(account.id)
+      check()
+      const existingIds = new Set((existing as Array<{ id: string }>).map((task) => task.id))
+      const missing = catalog.tasks.filter((task) => !existingIds.has(task.id))
+
+      if (missing.length === 0) {
+        return { ok: true as const, recovered: 0, skipped: 0, failed: [] }
+      }
+
+      let recovered = 0
+      let skipped = 0
+      const failed: Array<{ id: string; reason: string }> = []
+
+      for (const task of missing) {
+        try {
+          await db.add(task)
+          check()
+          recovered++
+        } catch (error) {
+          check()
+          if (error instanceof DOMException && error.name === 'ConstraintError') {
+            // Task was added by another operation (e.g., user created same id)
+            skipped++
+          } else {
+            failed.push({
+              id: task.id,
+              reason: error instanceof Error ? error.message : 'Unknown error',
+            })
+          }
+        }
+      }
+
+      if (recovered > 0 || skipped > 0) {
+        await queryClient.invalidateQueries({ queryKey: reads })
+        check()
+      }
+
+      return {
+        ok: failed.length === 0,
+        recovered,
+        skipped,
+        failed,
+      }
+    },
     close,
   }
 }
