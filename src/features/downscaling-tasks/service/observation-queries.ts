@@ -64,6 +64,10 @@ export function queryObservations(
       interpolation: requested.observationMode === 'stations' ? 'nearest-station' : 'bilinear',
     },
   }
+  function withPlan(reply: Unavailable): ResultReply {
+    const { ok: _ok, ...planned } = observationMetadata
+    return { ...reply, planned }
+  }
   const { variable, timeRange } = task.configuration
   function supports(station: ObservationStation, time: string) {
     const duration =
@@ -114,7 +118,7 @@ export function queryObservations(
   }
   if (task.configuration.variable === 'wind') {
     const values = samples((support, time) => observationWind(reference, support, time))
-    if ('ok' in values) return values
+    if ('ok' in values) return withPlan(values)
     return {
       ...observationMetadata,
       variable: 'wind',
@@ -129,7 +133,7 @@ export function queryObservations(
     const values = samples((support, time) => ({
       value: weightedStations(support, (station) => stationPressure(reference, station, time)),
     }))
-    if ('ok' in values) return values
+    if ('ok' in values) return withPlan(values)
     return { ...observationMetadata, variable: 'pressure', quantity: 'MSL', unit: 'hPa', values }
   }
   if (task.configuration.variable === 'precipitation') {
@@ -162,7 +166,7 @@ export function queryObservations(
         accumulation: accumulationCoverage(start, duration, hours),
       }
     })
-    if ('ok' in values) return values
+    if ('ok' in values) return withPlan(values)
     return {
       ...observationMetadata,
       variable: 'precipitation',
@@ -191,7 +195,7 @@ export function queryObservations(
         )
       )
     })
-    if ('ok' in values) return values
+    if ('ok' in values) return withPlan(values)
     return {
       ...observationMetadata,
       variable: 'temperature',

@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { AnalysisTabs, TabPanel, type AnalysisTab } from './components/analysis-tabs'
 import { MapComparisonPanel } from './components/map-comparison-panel'
-import { WindMapComparisonPanel } from './components/wind-map-comparison-panel'
 import { TimeSliceSelector } from './components/time-slice-selector'
 import { AccuracyPanel } from './components/accuracy-panel'
 import { TimeSeriesPanel } from './components/time-series-panel'
@@ -84,8 +83,8 @@ function ReadyResultAnalysis({ task }: { task: DownscalingTask }) {
   const timeSliceState = useTimeSlice({
     taskId,
     timeRange: task.configuration.timeRange,
-    initialTime: task.configuration.timeRange.start,
-    granularity: 'hourly',
+    initialTime: new Date(task.configuration.timeRange.start).toISOString(),
+    granularity: task.configuration.timeRange.mode === 'historical' ? 'daily' : 'hourly',
   })
 
   // Load elevation grouping data for spatial analysis tab
@@ -207,31 +206,7 @@ function ReadyResultAnalysis({ task }: { task: DownscalingTask }) {
       {/* Analysis Tabs */}
       <AnalysisTabs activeTab={activeTab} onTabChange={handleTabChange}>
         <TabPanel value="map-comparison">
-          {variable === 'wind' ? (
-            <WindMapComparisonPanel
-              taskId={task.id}
-              region={task.configuration.region}
-              timeSlice={timeSliceState.currentTime}
-              requestId={timeSliceState.requestId}
-            />
-          ) : (
-            <MapComparisonPanel
-              taskId={task.id}
-              variable={variable}
-              region={task.configuration.region}
-              timeSlice={timeSliceState.currentTime}
-              requestId={timeSliceState.requestId}
-              isProbabilistic={task.configuration.resolvedMethod === 'probabilistic'}
-              allMemberIds={
-                task.configuration.resolvedMethod === 'probabilistic'
-                  ? Array.from(
-                      { length: task.configuration.advanced?.ensembleMembers || 10 },
-                      (_, index) => `member-${String(index + 1).padStart(2, '0')}`,
-                    )
-                  : []
-              }
-            />
-          )}
+          <MapComparisonPanel task={task} timeSlice={timeSliceState.currentTime} />
         </TabPanel>
 
         <TabPanel value="accuracy">

@@ -1,234 +1,127 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle } from 'lucide-react'
-import {
-  type Variable,
-  getAbsoluteColorScale,
-  getDifferenceColorScale,
-  getVariableUnit,
-  getVariableLabel,
-} from '../service/color-scales'
-import type { AccumulationInterval } from '../service/comparison-data'
-import { ComparisonInfoCard } from './comparison-info-card'
+import { useState } from 'react'
+import type { ResultMapData } from '../types/result-map'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import type { DownscalingTask } from '@/features/downscaling-tasks/service'
+import type { ResultMapSource } from '../service/result-map-data'
+import { useWorkspaceMapSource } from '../hooks/use-workspace-map-source'
+import { useResultMapData } from '../hooks/use-result-map-data'
 import { useObservationViewMode } from '../hooks/use-observation-view-mode'
+import { useEnsembleSelection } from '../hooks/use-ensemble-selection'
 import { ObservationViewToggle } from './observation-view-toggle'
 import { EnsembleSwitcher } from './ensemble-switcher'
-import { useEnsembleSelection } from '../hooks/use-ensemble-selection'
+import { ComparisonInfoCard } from './comparison-info-card'
+import { ResultMapDisplayGroup } from './result-map-display-group'
+import { ResultMapPointProvider } from './result-map-point-context'
+import { ResultMapPointQuery } from './result-map-point-query'
 
 interface MapComparisonPanelProps {
-  taskId: string
-  variable: Variable
-  region: {
-    west: number
-    east: number
-    south: number
-    north: number
-  }
+  task: DownscalingTask
   timeSlice: string
-  requestId?: string
-  accumulationInterval?: AccumulationInterval
-  intervalsMatch?: boolean
-  isProbabilistic?: boolean
-  allMemberIds?: string[]
+  /** Environmental public result transport, also used by component callers. */
+  source?: ResultMapSource
 }
 
-interface MapCardProps {
-  title: string
-  description: string
-  colorScaleDescription: string
-  loadingText: string
-}
-
-function MapCard({ title, description, colorScaleDescription, loadingText }: MapCardProps) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="aspect-video rounded-md border bg-muted">
-          <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {loadingText}
-          </p>
-        </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          Color scale: {colorScaleDescription}
-        </div>
-      </CardContent>
-    </Card>
+export function MapComparisonPanel(props: MapComparisonPanelProps) {
+  return props.source ? (
+    <MapComparisonContent
+      key={`${props.task.ownerId}:${props.task.id}`}
+      {...props}
+      source={props.source}
+    />
+  ) : (
+    <WorkspaceMapComparison {...props} />
   )
 }
 
-interface MapPlaceholderProps {
-  loadingText: string
-}
-
-function MapPlaceholder({ loadingText }: MapPlaceholderProps) {
+function WorkspaceMapComparison(props: MapComparisonPanelProps) {
+  const source = useWorkspaceMapSource()
   return (
-    <div className="aspect-video rounded-md border bg-muted">
-      <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        {loadingText}
-      </p>
-    </div>
+    <MapComparisonContent
+      key={`${props.task.ownerId}:${props.task.id}`}
+      {...props}
+      source={source}
+    />
   )
 }
 
-export function MapComparisonPanel({
-  taskId,
-  variable,
-  region,
+function MapComparisonContent({
+  task,
   timeSlice,
-  requestId: _requestId,
-  accumulationInterval,
-  intervalsMatch = true,
-  isProbabilistic = false,
-  allMemberIds = [],
-}: MapComparisonPanelProps) {
-  const unit = getVariableUnit(variable)
-  const variableLabel = getVariableLabel(variable)
-  const absoluteColorScale = getAbsoluteColorScale(variable)
-  const differenceColorScale = getDifferenceColorScale()
-  const { mode: observationMode, toggle: toggleObservationMode } = useObservationViewMode()
-  const { view: ensembleView, selectView: selectEnsembleView } = useEnsembleSelection()
-
-  const formatAccumulationInterval = (interval?: AccumulationInterval) => {
-    if (!interval) return null
-    const start = new Date(interval.start).toISOString().slice(0, 16)
-    const end = new Date(interval.end).toISOString().slice(0, 16)
-    return `${start} to ${end}`
+  source,
+}: MapComparisonPanelProps & { source: ResultMapSource }) {
+  const { mode, toggle } = useObservationViewMode()
+  const { view, selectView } = useEnsembleSelection()
+  const probabilistic = task.configuration.resolvedMethod === 'probabilistic'
+  const ensemble = probabilistic
+    ? view === 'mean' || view === 'stddev'
+      ? ({ kind: view } as const)
+      : { kind: 'members' as const, memberIds: [view] }
+    : undefined
+  const selection = {
+    time: timeSlice,
+    observationMode: mode === 'station' ? ('stations' as const) : ('interpolated' as const),
+    ensemble,
   }
-
-  const getDownscaledDescription = () => {
-    if (!isProbabilistic) {
-      return `${variableLabel} · ${unit} · High-resolution`
-    }
-    if (ensembleView === 'mean') {
-      return `${variableLabel} · ${unit} · Ensemble Mean · Synthetic Demo`
-    }
-    if (ensembleView === 'stddev') {
-      return `${variableLabel} · ${unit} · Standard Deviation (ensemble spread) · Synthetic Demo`
-    }
-    const memberLabel = ensembleView.replace('member-', 'Member ')
-    return `${variableLabel} · ${unit} · ${memberLabel} · Synthetic Demo`
-  }
-
+  const { data, error, retry } = useResultMapData(source, task, selection)
+  const [retainedData, setRetainedData] = useState<ResultMapData>()
+  if (data && data !== retainedData) setRetainedData(data)
+  const presentationData = data ?? retainedData
+  const memberIds = Array.from(
+    { length: task.configuration.advanced?.ensembleMembers ?? 10 },
+    (_, index) => `member-${String(index + 1).padStart(2, '0')}`,
+  )
   return (
-    <div className="space-y-4">
-      {/* Ensemble switcher for probabilistic tasks */}
-      {isProbabilistic && allMemberIds.length > 0 && (
+    <ResultMapPointProvider source={source} task={task} selection={selection}>
+      <div className="space-y-4">
         <Card>
-          <CardContent className="pt-6">
-            <EnsembleSwitcher
-              view={ensembleView}
-              onViewChange={selectEnsembleView}
-              allMemberIds={allMemberIds}
-              effectiveK={allMemberIds.length}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Accumulation interval warning for precipitation */}
-      {variable === 'precipitation' && !intervalsMatch && (
-        <Alert variant="destructive">
-          <AlertCircle className="size-4" />
-          <AlertDescription>
-            Accumulation intervals do not match. Raw and downscaled data have different time
-            coverage and cannot be compared directly. Difference map is not available.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Accumulation interval display for precipitation */}
-      {variable === 'precipitation' && accumulationInterval && intervalsMatch && (
-        <Alert>
-          <AlertDescription>
-            <strong>Accumulation Interval:</strong>{' '}
-            {formatAccumulationInterval(accumulationInterval)}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Four-map grid layout */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* Original Data */}
-        <MapCard
-          title="Original Data"
-          description={`${variableLabel} · ${unit} · 10km spacing`}
-          colorScaleDescription={absoluteColorScale.description}
-          loadingText="Original field map loading..."
-        />
-
-        {/* Downscaled Data */}
-        <MapCard
-          title="Downscaled Data"
-          description={getDownscaledDescription()}
-          colorScaleDescription={absoluteColorScale.description}
-          loadingText="Downscaled field map loading..."
-        />
-
-        {/* Observation Data */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <CardTitle>Observation Data</CardTitle>
-                <CardDescription>
-                  {variableLabel} · {unit}
-                  {observationMode === 'interpolated' &&
-                    ' · Interpolated from synthetic stations, for display only'}
-                  {observationMode === 'station' && ' · Synthetic station points'}
-                </CardDescription>
-              </div>
-              <ObservationViewToggle mode={observationMode} onToggle={toggleObservationMode} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <MapPlaceholder
-              loadingText={
-                observationMode === 'interpolated'
-                  ? 'Observation field map loading...'
-                  : 'Station points loading...'
-              }
-            />
-            <div className="mt-2 text-xs text-muted-foreground">
-              Color scale: {absoluteColorScale.description}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Difference */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Difference (Downscaled - Original)</CardTitle>
-            <CardDescription>
-              {unit} · Positive: downscaled predicts higher · Negative: lower
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!intervalsMatch && variable === 'precipitation' ? (
-              <MapPlaceholder loadingText="Not comparable - accumulation intervals differ" />
-            ) : (
-              <>
-                <MapPlaceholder loadingText="Difference map loading..." />
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Color scale: {differenceColorScale.description}
-                </div>
-              </>
+          <CardContent className="space-y-3 pt-6">
+            <p className="text-sm text-muted-foreground">
+              Synthetic Demo ·
+              使用当前任务公开结果；模型来源只是配置标签，不是真实资料、观测或推理。地图仅显示样本，不补齐预览间隙。
+            </p>
+            <ObservationViewToggle mode={mode} onToggle={toggle} />
+            {probabilistic && (
+              <EnsembleSwitcher view={view} onViewChange={selectView} allMemberIds={memberIds} />
             )}
+            <output aria-label="Map frame" className="block break-all font-mono text-xs">
+              {new Date(timeSlice).toISOString()} · UTC
+            </output>
           </CardContent>
         </Card>
+        {error ? (
+          <div role="alert" className="rounded-md border p-4">
+            <p>读取失败：{error}</p>
+            <Button onClick={retry}>重试地图读取</Button>
+          </div>
+        ) : (
+          !data && (
+            <output aria-label="Map data loading" className="block rounded-md border p-6">
+              正在读取当前帧地图数据… 上一帧科学内容已隐藏；保留同任务镜头与显示偏好。
+            </output>
+          )
+        )}
+        {presentationData && (
+          <div hidden={!data} inert={!data} aria-hidden={!data}>
+            <ResultMapDisplayGroup data={presentationData} onRetry={retry} />
+          </div>
+        )}
+        <ResultMapPointQuery />
+        {task.configuration.variable === 'wind' && (
+          <p className="text-sm text-muted-foreground">
+            Wind Speed · m/s · U10/V10 · Meteorological from-direction (0° N, 90° E). Arrows point
+            toward the flow direction. Calm wind is valid zero with no arrow; missing components are
+            not zero. Mean U10/V10 are averaged before speed; directions are never averaged.
+            Difference is speed only.
+          </p>
+        )}
+        <ComparisonInfoCard
+          taskId={task.id}
+          timeSlice={timeSlice}
+          region={task.configuration.region}
+          variable={task.configuration.variable}
+        />
       </div>
-
-      {/* Comparison metadata */}
-      <ComparisonInfoCard
-        taskId={taskId}
-        timeSlice={timeSlice}
-        region={region}
-        variable={variable}
-        accumulationInterval={accumulationInterval}
-      />
-    </div>
+    </ResultMapPointProvider>
   )
 }
