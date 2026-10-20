@@ -5,6 +5,13 @@ import { useResultMapPointQuery } from '../hooks/use-result-map-point-query'
 import type { ResultMapPointQueryState } from '../types/result-map-point'
 
 interface ResultMapPointContextValue {
+  task: DownscalingTask
+  selection: ResultMapSelection
+  pinnedPoint: ResultPoint | null
+  pinnedQuery: ResultMapPointQueryState
+  pinPoint: (point: ResultPoint) => void
+  clearPinnedPoint: () => void
+  retryPinned: () => void
   point: ResultPoint | null
   selectedPoint: ResultPoint | null
   selectPoint: (point: ResultPoint) => void
@@ -29,6 +36,13 @@ export function ResultMapPointProvider({
   children: ReactNode
 }) {
   const [selectedPoint, setSelectedPoint] = useState<ResultPoint | null>(null)
+  const taskKey = `${task.ownerId}:${task.id}`
+  const [pin, setPin] = useState<{
+    point: ResultPoint
+    taskKey: string
+    source: ResultMapSource
+  } | null>(null)
+  const pinnedPoint = pin?.taskKey === taskKey && pin.source === source ? pin.point : null
   const key = JSON.stringify([task, selection])
   const [hover, setHover] = useState<{
     point: ResultPoint
@@ -37,10 +51,31 @@ export function ResultMapPointProvider({
     source: ResultMapSource
   } | null>(null)
   const point = hover?.key === key && hover.source === source ? hover.point : selectedPoint
-  const { state: query, retry } = useResultMapPointQuery(source, task, selection, point)
+  const samePinnedPoint =
+    !!point &&
+    !!pinnedPoint &&
+    point.longitude === pinnedPoint.longitude &&
+    point.latitude === pinnedPoint.latitude
+  // The fixed lane never follows hover. Share it when both identities are the same;
+  // only differing transient coordinates use the second bounded #99 lane.
+  const pinned = useResultMapPointQuery(source, task, selection, pinnedPoint)
+  const transient = useResultMapPointQuery(source, task, selection, samePinnedPoint ? null : point)
+  const { state: query, retry } = samePinnedPoint ? pinned : transient
   return (
     <ResultMapPointContext
       value={{
+        task,
+        selection,
+        pinnedPoint,
+        pinnedQuery: pinned.state,
+        retryPinned: pinned.retry,
+        pinPoint: (next) => {
+          if (!Number.isFinite(next.longitude) || !Number.isFinite(next.latitude)) return
+          setHover(null)
+          setSelectedPoint(next)
+          setPin({ point: next, taskKey, source })
+        },
+        clearPinnedPoint: () => setPin(null),
         point,
         selectedPoint,
         selectPoint: (next) => {

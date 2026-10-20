@@ -5,7 +5,7 @@ import type { ResultQuery } from '@/features/downscaling-tasks/service'
 import { test, expect, type Page } from './browser-guard'
 import { resultMap, setupResultMapPage, selectResultFrame } from './helpers/result-map-page'
 
-const evidence = '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec-15-20261020/ticket-03'
+const evidence = '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec-15-20261020/ticket-04'
 const titles = [
   'Original Data',
   'Downscaled Data',

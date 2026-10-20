@@ -64,6 +64,15 @@ export function ControlledResultMap({
           pointContext?.clearHover(mapId)
           cameraEvents.onPointerDown(event)
         }}
+        onPointerUp={(event) => {
+          if (!cameraEvents.onPointerUp(event)) return
+          const next = resultPointAtClientPosition(
+            event.currentTarget,
+            { x: event.clientX, y: event.clientY },
+            viewport,
+          )
+          if (next) pointContext?.pinPoint(next)
+        }}
         onPointerMove={(event) => {
           cameraEvents.onPointerMove(event)
           if (event.buttons || event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -190,7 +199,7 @@ export function ControlledResultMap({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Drag to pan · Focus map: arrow keys / + / − or wheel to zoom
+        Click to pin · Drag to pan · Focus map: arrow keys / + / − or wheel to zoom
       </p>
       <p className="text-xs text-muted-foreground">
         EPSG:4326 · Longitude / latitude projection · N ↑ · No terrain basemap
