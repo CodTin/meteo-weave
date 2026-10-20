@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import type { ResultMapData, ResultMapDisplaySettings, ResultMapLayer } from '../types/result-map'
@@ -12,9 +12,21 @@ interface ResultMapCardProps {
   display: ResultMapDisplaySettings
   onRetry: () => void
   children?: ReactNode
+  onExpand?: () => void
+  expandButton?: Ref<HTMLButtonElement>
+  compact?: boolean
 }
 
-export function ResultMapCard({ data, context, display, onRetry, children }: ResultMapCardProps) {
+export function ResultMapCard({
+  data,
+  context,
+  display,
+  onRetry,
+  children,
+  onExpand,
+  expandButton,
+  compact,
+}: ResultMapCardProps) {
   const grid = data.grid
   const stationMode = data.kind === 'observation' && context.observationMode === 'stations'
   const spread = data.kind === 'downscaled' && data.ensemble?.kind === 'stddev'
@@ -43,14 +55,27 @@ export function ResultMapCard({ data, context, display, onRetry, children }: Res
                 : 'Native target grid'
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{resultMapTitles[data.kind]}</CardTitle>
+      <CardHeader className={compact ? 'px-3' : undefined}>
+        <CardTitle className="break-words">{resultMapTitles[data.kind]}</CardTitle>
+        {onExpand && (
+          <Button
+            ref={expandButton}
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-fit"
+            aria-label={`Expand ${resultMapTitles[data.kind]}`}
+            onClick={onExpand}
+          >
+            Expand map
+          </Button>
+        )}
         <CardDescription>
           {getVariableLabel(data.displayContext?.variable ?? context.variable)} · {display.unit} ·{' '}
           {description} · Synthetic Demo
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className={`space-y-3 ${compact ? 'px-3' : ''}`}>
         {data.status === 'ready' ? (
           children
         ) : (
