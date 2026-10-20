@@ -191,14 +191,27 @@ pending/error；`tests/e2e/workspace-cases.ts` 列出真实页面及可拦截资
 | 共享页头        | 390／768／1440px，普通／reduced-motion | 可读面包屑、身份与操作、键盘焦点                     | workspace-header                                        |
 
 任务对比 `/tasks/compare` 适用本矩阵的**全部行**，没有工作区、水合、会话或共享页头豁免。
-后续比较页面／lazy 接入（V 包）须以真实页面操作补齐以下专属场景，并同时验证直接访问／刷新、站内跳转、延迟成功、两种入口的资源失败与真实重试、
-健康延迟时复用 SSR DOM、登录回跳／退出／角色切换，以及 390／768／1440px 普通与 reduced-motion 布局；不能只以静态模块测试代替。
+真实页面证据分为 V 的功能／科学样本验收与 W 的 12 个有界生命周期场景；旧页面占位断言不作为对比页面证据。
+以下状态记录 W 的固定基线 `99934761752edad8c0daeb6b3ee9357a9edc9d66`，不是合并后全部通过的声明。
+W 不导入其他 worker 的应用修复；F1／F2 与 W 合并后必须重跑对应场景，才能关闭下列阻塞项。
 
-| 适用页面 | 入口                                        | 必须验证的结果                                                         | 证据入口                            |
-| -------- | ------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------- |
-| 任务对比 | 未登录深链接→登录→刷新                      | 安全回跳保留 A／B、query／hash；SSR 无私有任务，水合后以当前身份读取   | task-comparison（V 页面接入后补齐） |
-| 任务对比 | 有效选择→站内打开／刷新／历史返回           | 静态入口不落入 taskId，A／B 不颠倒，正确标题与任务管理当前项           | task-comparison（同上）             |
-| 任务对比 | 缺失／格式错误／同 id／未完成／删除／跨账号 | 可理解的恢复与返回管理入口，无残留成功结果；已打开页面与刷新均重新验证 | task-comparison（同上）             |
+| 边界                     | 真实操作与验收结果                                                                                                                                                   | 证据入口／当前状态                                                                                                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V 功能与科学口径         | 缺失／重复选择恢复；目录 wind／temperature 有序打开与刷新、完整参数和独立地图；真实表单创建同变量不同方法／分辨率任务，共同 n／台站／UTC 时刻／seed 与共享色阶、指标 | `task-comparison.spec.ts` 的既有 3 个场景，V 已通过；W 复用，不以目录不同变量对代替共同样本证明                                                                                        |
+| SSR／无 JavaScript       | 真实登录 cookie，直接返回 HTML 在 inert DOM 中检验当前身份／h1／诚实加载；无私有名称、参数、地图或指标；无 JS 可返回管理                                             | `task-comparison-lifecycle.spec.ts`：`direct SSR is honest loading…`，通过                                                                                                             |
+| 健康延迟与历史           | 持有真实 compare.lazy 模块，SSR h1／main／身份原节点水合后仍连接；加载后正确 A／B、当前项；设置页完成后 Back                                                         | 同文件：`a healthy delayed direct comparison…`，通过；SSR 不是完整 IndexedDB 任务结果                                                                                                  |
+| 直接资源失败→恢复        | compare.lazy 503、安全诊断和可用导航；键盘实际重新加载后重新认证、正确 A／B 与真实地图                                                                               | 同文件：`direct comparison resource failure…`，通过                                                                                                                                    |
+| 选择动作资源失败→恢复    | 真实目录选择后 Enter、资源 503、实际重新加载恢复同一对                                                                                                               | 同文件：`navigation comparison resource failure…`，通过；这一恢复证据不证明普通动作是 SPA                                                                                              |
+| 普通站内动作／pending    | 主文档请求数须仅为初始管理页 1 次；pending 导航可用、无旧结果；加载后 busy 清除及正确 A／B                                                                           | 同文件：`ordinary selected-pair navigation is SPA…`，W 基线红：2 次；已交 F1 修复，待合并重验                                                                                          |
+| 跨标签删除               | 第二标签公开删除后，focus／刷新／实际重读均不显示身份、参数、地图或指标；返回管理能重新选择                                                                          | 同文件：`deleting an open pair…`，通过；headless bringToFront 不发 focus，测试显式投递公开 window focus 事件，不改私有状态                                                             |
+| 三账号／真实角色切换     | researcher／policy／agriculture 各自目录 pair＋刷新；设置中的退出重新登录切换后拒绝 researcher 旧 id，无旧结果                                                       | 同文件：`all three real roles…`，通过                                                                                                                                                  |
+| 传输恢复／会话失效       | 先 fetch 真实成功 GET 再注入环境 503，无旧数据；解除失败后页面实际重试成功。随后持有旧 researcher GET、第二标签真实退出；登录恢复必须保留 compare 的 a／b            | 同文件：`real transport retry recovers…`；传输重试通过，失效登录基线红：回跳为 dashboard 丢 pair，交 F2，待合并重验；不声称已证明存储锁存故障恢复                                      |
+| 匿名深链接               | 登录前 query／browser 继承 fragment、公开表单登录后有序 pair、刷新保留 query／fragment                                                                               | 同文件：`anonymous comparison deep link…`；fragment 不能由 HTTP 服务端接收，须验证浏览器 URL 与最终回跳                                                                                |
+| 390／768／1440 与 motion | 每宽度普通／reduce 的 pending、loaded、invalid 实际截图；零 document overflow、可读 breadcrumb／账号、参数表本地横向滚动；菜单／恢复键盘与未放宽的 axe WCAG 检查     | 同文件三个屏宽场景；768／1440 两种 motion 通过，390 已截图并检查：参数滚动区 axe `scrollable-region-focusable` 为 serious，待同一 fixer 修复后重验，不能以 overflow 通过代替键盘可访问 |
+
+W 证据（构建指纹、red／green、截图／axe／焦点事件、准确复现与 acceptance map）保存在 Git common directory 的
+`agent-runs/spec-14-20261020/w/`，在 worktree 外保留。浏览器 guard 未放宽、未跳过场景；固定基线出现的真实应用 red 必须如实交接，
+不能以测试数量、source review 或静态路由通过代替最终合并树的验收。资源错误的真实重载、会话回跳与本地表格键盘访问是不同 gate。
 
 新增路由先补矩阵的适用行，再补测试。豁免必须说明原因；测试总数不是验收覆盖率。
 科学数据尚未接入的页面仍应诚实说明状态，不能用虚构业务接口制造加载测试。
