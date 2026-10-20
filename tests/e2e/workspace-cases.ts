@@ -7,6 +7,15 @@ export const taskCase = {
   content: '尚未查询任务，不代表任务数量为零',
   contentHeading: '降尺度任务',
 }
+// Comparison is reached from a selected pair, not a new sidebar destination.
+export const compareCase = {
+  title: '任务对比',
+  path: '/tasks/compare',
+  module: /\/assets\/compare\.lazy-[^/]+\.js$/,
+  contentHeading: '任务对比',
+  content: '正在读取当前账号的两个已完成任务',
+}
+
 export const workspaceCases = [
   taskCase,
   {
