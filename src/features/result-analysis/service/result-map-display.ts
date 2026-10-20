@@ -6,6 +6,7 @@ import type {
   ResultMapSample,
 } from '../types/result-map'
 import { getAbsoluteColorScale, getDifferenceColorScale, type Variable } from './color-scales'
+import { resultMapCompatibility } from './result-map-compatibility'
 import { validateResultMapRange, type ResultMapRangeInput } from './result-map-display-validation'
 
 export const resultMapTitles: Record<ResultMapKind, string> = {
@@ -39,37 +40,16 @@ function layerContext(data: ResultMapData, kind: ResultMapKind) {
   }
 }
 
-function accumulationContext(samples: ResultMapSample[]) {
-  const intervals = samples
-    .filter((sample) => sample.accumulation)
-    .map((sample) => {
-      const interval = sample.accumulation!
-      return JSON.stringify([
-        interval.start,
-        interval.end,
-        interval.requestedStart,
-        interval.requestedEnd,
-        interval.bounds,
-        interval.sampledHours,
-        interval.expectedHours,
-        interval.complete,
-      ])
-    })
-  return [...new Set(intervals)].sort().join('|')
-}
-
 function compatibleLevels(data: ResultMapData, left: ResultMapKind, right: ResultMapKind) {
-  const a = layerContext(data, left)
-  const b = layerContext(data, right)
   return (
-    a.variable === b.variable &&
-    a.unit === b.unit &&
-    a.quantity === b.quantity &&
-    a.temporalStatistic === b.temporalStatistic &&
-    accumulationContext(data.layers[left].samples) ===
-      accumulationContext(data.layers[right].samples) &&
-    data.layers[left].ensemble?.kind !== 'stddev' &&
-    data.layers[right].ensemble?.kind !== 'stddev'
+    left === right ||
+    !resultMapCompatibility(
+      [left, right].map((kind) => ({
+        context: layerContext(data, kind),
+        samples: data.layers[kind].samples,
+        ensemble: data.layers[kind].ensemble,
+      })),
+    )
   )
 }
 
@@ -134,7 +114,7 @@ export function resultMapDisplaySettings(
             ? 'Independent finite range: Standard Deviation (ensemble spread), not comparable to forecast levels.'
             : peers.length > 1
               ? `Current-frame finite union of ${peers.map((peer) => resultMapTitles[peer]).join(', ')}; compatible variable, unit, quantity and statistic; missing/nonfinite slots excluded and counted.`
-              : 'Independent finite range: incompatible variable, unit, quantity, statistic or accumulation coverage; camera synchronization does not imply a shared range.',
+              : 'Independent finite range: incompatible variable, unit, quantity, statistic or accumulation/daily interval coverage; camera synchronization does not imply a shared range.',
       ...sampleCounts(data.layers[kind].samples),
     }
   }

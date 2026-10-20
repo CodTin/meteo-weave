@@ -5,6 +5,7 @@ import {
 } from '@/features/downscaling-tasks/service'
 import type {
   ResultPoint,
+  PlannedResultMetadata,
   Unavailable,
   WindowSampling,
 } from '@/features/downscaling-tasks/service/contracts'
@@ -103,14 +104,13 @@ export async function recoverMapPreview(
   source: ResultMapSource,
   taskId: string,
   query: ResultQuery & { kind: 'preview' },
-  geometryTime: string,
+  planned: PlannedResultMetadata | undefined,
 ): Promise<{ metadata: AvailableMapReply; samples: ResultMapSample[] } | undefined> {
-  // Reuse geometry only, never display values from another frame as the requested frame.
-  const geometry = await source.result(taskId, { ...query, times: [geometryTime] })
-  if (!geometry.ok || geometry.grid.sampling === 'requested-points') return undefined
-  const points = previewCoordinates(geometry.grid)
-  const members = geometry.ensemble?.memberIds.length ?? 1
-  const factor = geometry.ensemble ? members + (geometry.ensemble.kind === 'members' ? 0 : 1) : 1
+  // The failed reply carries the same native plan; never query a different frame for geometry.
+  if (!planned || planned.grid.sampling === 'requested-points') return undefined
+  const points = previewCoordinates(planned.grid)
+  const members = planned.ensemble?.memberIds.length ?? 1
+  const factor = planned.ensemble ? members + (planned.ensemble.kind === 'members' ? 0 : 1) : 1
   const budget = Math.min(
     RESULT_QUERY_LIMITS.points,
     Math.floor(RESULT_QUERY_LIMITS.values / factor),
@@ -127,27 +127,33 @@ export async function recoverMapPreview(
       points: points.slice(offset, offset + budget),
       times: query.times,
     } as ResultQuery & { kind: 'points' })
-    const known = new Map(
-      geometry.values.map((point) => [`${point.longitude},${point.latitude}`, point.observation]),
-    )
-    samples.push(
-      ...result.samples.map((sample) => ({
-        ...sample,
-        observation: sample.observation ?? known.get(`${sample.longitude},${sample.latitude}`),
-      })),
-    )
+    samples.push(...result.samples)
     replies.push(...result.replies)
   }
-  const ensemble = geometry.ensemble
+  const ensemble = planned.ensemble
+  if (!replies.length) return undefined
   return {
     metadata: {
-      ...geometry,
+      ...replies[0]!,
+      grid: planned.grid,
+      reference: planned.reference,
+      provenance: planned.provenance,
       ...(ensemble
         ? {
             ensemble: {
               ...ensemble,
               samples: replies.flatMap((reply) => reply.ensemble?.samples ?? []),
-              unavailable: replies.flatMap((reply) => reply.ensemble?.unavailable ?? []),
+              unavailable: [
+                ...new Map(
+                  [
+                    ...ensemble.unavailable,
+                    ...replies.flatMap((reply) => reply.ensemble?.unavailable ?? []),
+                  ].map((sample) => [
+                    `${sample.longitude},${sample.latitude},${sample.time},${sample.memberId}`,
+                    sample,
+                  ]),
+                ).values(),
+              ],
             },
           }
         : {}),

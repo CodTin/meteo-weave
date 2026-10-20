@@ -1,24 +1,18 @@
-import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { resultMapEvidence } from './helpers/result-map-evidence'
 import { fromJSON } from 'seroval'
 import type { ResultQuery } from '@/features/downscaling-tasks/service'
 import { test, expect, type Page } from './browser-guard'
 import { resultMap, setupResultMapPage, selectResultFrame } from './helpers/result-map-page'
 
-const evidence = '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec-15-20261020/ticket-04'
 const detailRegion = (page: Page) =>
   page.getByRole('region', { name: 'Pinned point detail', exact: true })
 const queryRegion = (page: Page) =>
   page.getByRole('region', { name: 'Joint point query', exact: true })
 
-async function capture(page: Page, name: string) {
-  await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: join(evidence, `${name}.png`), fullPage: true })
-}
-
 test('actual click pins independently of hover and camera drag, then reads the same coordinate in a new frame', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 1440, height: 1050 })
   await setupResultMapPage(page)
   await page.getByRole('button', { name: 'Switch to Station View', exact: true }).click()
@@ -66,7 +60,7 @@ test('actual click pins independently of hover and camera drag, then reads the s
   await expect(
     detail.getByRole('region', { name: 'Downscaled Data point value', exact: true }),
   ).toContainText('17.4844 °C')
-  await capture(page, 'pin-1440-click-hover-drag-frame')
+  await evidence.capture(page, 'pin-1440-click-hover-drag-frame')
 })
 
 async function keyboardPoint(page: Page, longitude: string, latitude: string) {
@@ -78,7 +72,8 @@ async function keyboardPoint(page: Page, longitude: string, latitude: string) {
 
 test('keyboard Pin Replace Clear has understandable focus and positive/unavailable current reference at 390px', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await setupResultMapPage(page)
@@ -106,8 +101,9 @@ test('keyboard Pin Replace Clear has understandable focus and positive/unavailab
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     .toBe(true)
-  await capture(page, 'pin-390-keyboard-positive-reduced-motion')
-  await detail.screenshot({ path: join(evidence, 'pin-390-detail-positive.png') })
+  await evidence.capture(page, 'pin-390-keyboard-positive-reduced-motion')
+  await detail.screenshot({ path: await evidence.path('pin-390-detail-positive.png') })
+  await evidence.attach('pin-390-detail-positive.png')
   await keyboardPoint(page, '11.5', '47.5')
   await expect(detail.getByLabel('Pinned coordinate')).toContainText('longitude 10 · latitude 48')
   await expect(detail.getByLabel('Local error improvement')).toHaveText('9.3218%')
@@ -135,7 +131,7 @@ test('keyboard Pin Replace Clear has understandable focus and positive/unavailab
   await expect(
     detail.getByRole('region', { name: 'Observation Data point value', exact: true }),
   ).toContainText('weight 0.25')
-  await capture(page, 'pin-390-interpolated-support')
+  await evidence.capture(page, 'pin-390-interpolated-support')
   const clear = query.getByRole('button', { name: 'Clear pinned point', exact: true })
   await clear.focus()
   await page.keyboard.press('Enter')
@@ -147,7 +143,7 @@ test('keyboard Pin Replace Clear has understandable focus and positive/unavailab
   await query.getByRole('button', { name: 'Pin current point', exact: true }).focus()
   await page.keyboard.press('Enter')
   await expect(detail.getByLabel('Local error improvement')).toHaveText('9.3218%')
-  await capture(page, 'pin-768-keyboard-positive')
+  await evidence.capture(page, 'pin-768-keyboard-positive')
 })
 
 function pointRequest(body: string | null) {
@@ -167,7 +163,8 @@ function pointRequest(body: string | null) {
 test('current pinned HTTP failure can retry and delayed frame response cannot survive clearing or leaving', async ({
   page,
   expectedSessionTransportFailures,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 1440, height: 1050 })
   await setupResultMapPage(page)
   await page.getByRole('button', { name: 'Switch to Station View', exact: true }).click()
@@ -267,7 +264,7 @@ test('current pinned HTTP failure can retry and delayed frame response cannot su
       detailRegion(page).getByRole('region', { name: 'Original Data point value', exact: true }),
     ).toContainText('1021.55 hPa')
     await expect(detailRegion(page)).not.toContainText('°C')
-    await capture(page, 'pin-real-http-retry-disposal-pressure')
+    await evidence.capture(page, 'pin-real-http-retry-disposal-pressure')
   } finally {
     release()
   }

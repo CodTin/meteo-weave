@@ -1,5 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { resultMapEvidence } from './helpers/result-map-evidence'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Locator, type Page } from './browser-guard'
 import { resultMap, selectResultFrame, setupResultMapPage } from './helpers/result-map-page'
@@ -8,15 +7,6 @@ import {
   downloadExport,
   selectSmallExport,
 } from './helpers/export-test-helpers'
-
-const evidence =
-  process.env.RESULT_MAP_PALETTE_EVIDENCE_DIR ??
-  '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec-15-20261020/ticket-06'
-
-async function capture(page: Page, name: string) {
-  await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: join(evidence, `${name}.png`), fullPage: true })
-}
 
 async function manualRange(page: Page, group: string, unit: string, min: string, max: string) {
   const controls = page.getByRole('group', { name: group, exact: true })
@@ -55,7 +45,8 @@ async function smallCsv(page: Page) {
 
 test('nonuniform custom stops recolor actual public samples and legends; invalid drafts and palette restoration leave science and parsed CSV unchanged', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_PALETTE_EVIDENCE_DIR)
   test.setTimeout(90_000)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await setupResultMapPage(page)
@@ -87,11 +78,11 @@ test('nonuniform custom stops recolor actual public samples and legends; invalid
       '#ffffff',
     )
   }
-  await mkdir(evidence, { recursive: true })
   await legends
     .first()
     .locator('..')
-    .screenshot({ path: join(evidence, 'temperature-1440-interpolated-map-and-legend.png') })
+    .screenshot({ path: await evidence.path('temperature-1440-interpolated-map-and-legend.png') })
+  await evidence.attach('temperature-1440-interpolated-map-and-legend.png')
   await range.getByRole('textbox', { name: 'Minimum (°C)', exact: true }).fill('40')
   await range.getByRole('textbox', { name: 'Maximum (°C)', exact: true }).fill('50')
   await range.getByRole('button', { name: 'Apply range', exact: true }).click()
@@ -120,7 +111,7 @@ test('nonuniform custom stops recolor actual public samples and legends; invalid
   }
   await palette.getByRole('button', { name: 'Apply palette', exact: true }).click()
   await expect(palette.getByRole('alert')).toHaveCount(0)
-  await capture(page, 'temperature-1440-custom-maps-legends')
+  await evidence.capture(page, 'temperature-1440-custom-maps-legends')
   for (const color of ['#ff00ff', '#00ff00']) {
     await palette.getByRole('textbox', { name: 'Color 1 (#RRGGBB)', exact: true }).fill(color)
     await palette.getByRole('button', { name: 'Apply palette', exact: true }).click()
@@ -137,26 +128,19 @@ test('nonuniform custom stops recolor actual public samples and legends; invalid
   const afterExport = await smallCsv(page)
   expect(afterExport).toHaveLength(330)
   expect(afterExport).toEqual(beforeExport)
-  await mkdir(evidence, { recursive: true })
-  await writeFile(
-    join(evidence, 'parsed-csv-invariance.json'),
-    JSON.stringify(
-      {
-        recordCount: afterExport.length,
-        equalBeforeAfter: true,
-        scientificLabel: label,
-        before: beforeExport,
-        after: afterExport,
-      },
-      null,
-      2,
-    ),
-  )
+  await evidence.json('parsed-csv-invariance', {
+    recordCount: afterExport.length,
+    equalBeforeAfter: true,
+    scientificLabel: label,
+    before: beforeExport,
+    after: afterExport,
+  })
 })
 
 test('Difference hue reversal never removes negative values or their meaning and resets to all seven project colors without changing frame/range/camera', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_PALETTE_EVIDENCE_DIR)
   await page.setViewportSize({ width: 768, height: 1000 })
   await setupResultMapPage(page)
   await selectResultFrame(page, '02')
@@ -188,9 +172,10 @@ test('Difference hue reversal never removes negative values or their meaning and
     await expect(legend.locator('stop[offset="0.5"]')).toHaveAttribute('stop-color', '#000000')
     await expect(negative).toHaveAttribute('aria-label', label!)
     if (cycle === 0) {
-      await capture(page, 'difference-768-custom-signs-maps')
+      await evidence.capture(page, 'difference-768-custom-signs-maps')
       await legend.scrollIntoViewIfNeeded()
-      await page.screenshot({ path: join(evidence, 'difference-768-readable-legend.png') })
+      await page.screenshot({ path: await evidence.path('difference-768-readable-legend.png') })
+      await evidence.attach('difference-768-readable-legend.png')
     }
     await palette.getByRole('button', { name: 'Restore standard palette', exact: true }).click()
     await expect(palette).toContainText('Project standard · 7 colors')
@@ -216,7 +201,8 @@ test('Difference hue reversal never removes negative values or their meaning and
 
 test('rainfall custom colors preserve legal zero, missing hatching, accumulation and provenance with actual samples', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_PALETTE_EVIDENCE_DIR)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await setupResultMapPage(page, 'precipitation')
   await page.getByRole('button', { name: 'Switch to Station View', exact: true }).click()
@@ -245,7 +231,7 @@ test('rainfall custom colors preserve legal zero, missing hatching, accumulation
   await expect(legends.nth(2)).toContainText('1 mm')
   await expect(page.getByText(/Accumulation Interval \(UTC\):/).first()).toBeVisible()
   await expect(page.getByText(/Reference:.*synthetic-stations/).first()).toBeVisible()
-  await capture(page, 'rainfall-1440-custom-zero-missing-science')
+  await evidence.capture(page, 'rainfall-1440-custom-zero-missing-science')
   await palette.getByRole('button', { name: 'Restore standard palette', exact: true }).click()
   await expect(zero.locator('circle').first()).toHaveAttribute('fill', '#ffffff')
   await expect(missing.locator('rect').first()).toHaveAttribute('fill', /^url\(#.*-missing\)$/)
@@ -253,7 +239,8 @@ test('rainfall custom colors preserve legal zero, missing hatching, accumulation
 
 test('390px keyboard palette edits, 3–5 stop controls and restore work on real maps with readable legends', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_PALETTE_EVIDENCE_DIR)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await setupResultMapPage(page, 'pressure')
@@ -294,16 +281,19 @@ test('390px keyboard palette edits, 3–5 stop controls and restore work on real
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
   const axe = await new AxeBuilder({ page }).include('[aria-label="Map palettes"]').analyze()
   expect(axe.violations).toEqual([])
-  await capture(page, 'pressure-390-keyboard-custom-map-and-legend')
+  await evidence.capture(page, 'pressure-390-keyboard-custom-map-and-legend')
   await palette.scrollIntoViewIfNeeded()
-  await page.screenshot({ path: join(evidence, 'pressure-390-palette-controls.png') })
+  await page.screenshot({ path: await evidence.path('pressure-390-palette-controls.png') })
+  await evidence.attach('pressure-390-palette-controls.png')
   await legend.scrollIntoViewIfNeeded()
   await expect(legend).toContainText('2000 hPa')
   await expect(legend).toContainText('missing or nonfinite, not zero')
-  await page.screenshot({ path: join(evidence, 'pressure-390-readable-legend.png') })
+  await page.screenshot({ path: await evidence.path('pressure-390-readable-legend.png') })
+  await evidence.attach('pressure-390-readable-legend.png')
   await legend
     .locator('..')
-    .screenshot({ path: join(evidence, 'pressure-390-actual-map-and-readable-legend.png') })
+    .screenshot({ path: await evidence.path('pressure-390-actual-map-and-readable-legend.png') })
+  await evidence.attach('pressure-390-actual-map-and-readable-legend.png')
   const invalidColor = palette.getByRole('textbox', { name: 'Color 2 (#RRGGBB)', exact: true })
   await invalidColor.focus()
   await page.keyboard.press('ControlOrMeta+A')
@@ -313,7 +303,8 @@ test('390px keyboard palette edits, 3–5 stop controls and restore work on real
   await expect(palette.getByRole('alert')).toContainText('#RRGGBB')
   await expect(invalidColor).toHaveAttribute('aria-invalid', 'true')
   await expect(sample.locator('rect').first()).toHaveAttribute('fill', '#ff00ff')
-  await palette.screenshot({ path: join(evidence, 'pressure-390-invalid-draft-feedback.png') })
+  await palette.screenshot({ path: await evidence.path('pressure-390-invalid-draft-feedback.png') })
+  await evidence.attach('pressure-390-invalid-draft-feedback.png')
   await invalidColor.focus()
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type('#ffffff')

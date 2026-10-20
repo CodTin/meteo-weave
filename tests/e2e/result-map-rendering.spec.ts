@@ -1,21 +1,12 @@
-import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { resultMapEvidence } from './helpers/result-map-evidence'
 import { expect, test } from './browser-guard'
 import { setupResultMapPage, resultMap, selectResultFrame } from './helpers/result-map-page'
 import { submitDemoLogin } from './demo-login'
 
-const evidence =
-  process.env.RESULT_MAP_EVIDENCE_DIR ??
-  '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec-15-20261020/ticket-01'
-
-async function capture(page: import('./browser-guard').Page, name: string) {
-  await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: join(evidence, `${name}.png`), fullPage: true })
-}
-
 test('renders native temperature/Difference coordinates, changes frames, and pans/zooms a real map independently', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await setupResultMapPage(page)
   const original = resultMap(page, 'original')
@@ -42,7 +33,7 @@ test('renders native temperature/Difference coordinates, changes frames, and pan
   await expect(card).toContainText('10 km native spacing')
   await expect(card).toContainText('decimated preview')
   await expect(card.getByLabel('Map color legend')).toContainText('°C')
-  await capture(page, 'temperature-1440-four-maps')
+  await evidence.capture(page, 'temperature-1440-four-maps')
 
   await selectResultFrame(page, '02')
   await expect(original.getByRole('img').first()).toHaveAccessibleName(/2024-01-02T00:00:00.000Z/)
@@ -71,12 +62,13 @@ test('renders native temperature/Difference coordinates, changes frames, and pan
   const moved = await summary.innerText()
   await original.getByRole('button', { name: 'Zoom in Original Data' }).click()
   await expect(summary).not.toHaveText(moved)
-  await capture(page, 'temperature-frame2-stations-camera')
+  await evidence.capture(page, 'temperature-frame2-stations-camera')
 })
 
 test('renders MSL pressure with a public literal, refresh/direct entry and normal navigation', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   const { url } = await setupResultMapPage(page, 'pressure')
   await expect(
     resultMap(page, 'original').getByRole('img', {
@@ -94,12 +86,13 @@ test('renders MSL pressure with a public literal, refresh/direct entry and norma
   await page.getByRole('link', { name: '任务管理', exact: true }).first().click()
   await expect(page.getByRole('heading', { name: '任务管理', exact: true })).toBeVisible()
   await expect(resultMap(page, 'original')).toHaveCount(0)
-  await capture(page, 'pressure-navigation-released')
+  await evidence.capture(page, 'pressure-navigation-released')
 })
 
 test('renders wind speed/vectors and calm stations, switches members, and explains unavailable stddev', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await setupResultMapPage(page, 'wind')
   await page.getByRole('button', { name: 'Switch to Station View' }).click()
   await expect(
@@ -125,12 +118,13 @@ test('renders wind speed/vectors and calm stations, switches members, and explai
   await expect(page.getByText(/Wind Standard Deviation is unavailable/)).toBeVisible()
   await expect(resultMap(page, 'downscaled')).toHaveCount(0)
   await expect(resultMap(page, 'original')).toBeVisible()
-  await capture(page, 'wind-stddev-honest-unavailable')
+  await evidence.capture(page, 'wind-stddev-honest-unavailable')
 })
 
 test('renders precipitation units, complete native accumulation intervals and valid zero stations', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await setupResultMapPage(page, 'precipitation')
   await page.getByRole('button', { name: 'Switch to Station View' }).click()
   await expect(
@@ -146,12 +140,13 @@ test('renders precipitation units, complete native accumulation intervals and va
   await expect(page.getByText(/Accumulation Interval \(UTC\)/).first()).toContainText(
     '2024-01-03T00:00:00.000Z',
   )
-  await capture(page, 'precipitation-interval-frame2')
+  await evidence.capture(page, 'precipitation-interval-frame2')
 })
 
 test('keeps controls and maps readable at 390px and supports keyboard camera and observation controls', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await setupResultMapPage(page, 'wind')
@@ -169,7 +164,7 @@ test('keeps controls and maps readable at 390px and supports keyboard camera and
   const size = await map.boundingBox()
   expect(size!.width).toBeGreaterThan(250)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
-  await capture(page, 'wind-390-keyboard-reduced-motion')
+  await evidence.capture(page, 'wind-390-keyboard-reduced-motion')
 })
 
 test('does not retain outgoing task maps after logout and another account login', async ({

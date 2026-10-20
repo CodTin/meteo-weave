@@ -18,9 +18,12 @@ export function useTaskLoader({
   pollIfRunning = false,
 }: UseTaskLoaderOptions): UseTaskLoaderResult {
   const queryClient = useQueryClient()
-  const [task, setTask] = useState<DownscalingTask | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [state, setState] = useState<UseTaskLoaderResult & { taskId: string }>({
+    taskId,
+    task: null,
+    loading: true,
+    error: null,
+  })
 
   useEffect(() => {
     let mounted = true
@@ -34,12 +37,11 @@ export function useTaskLoader({
         if (!mounted) return
 
         if (!result.ok) {
-          setError(result.error)
-          setLoading(false)
+          setState({ taskId, task: null, loading: false, error: result.error })
           return
         }
 
-        setTask(result.task)
+        setState({ taskId, task: result.task, loading: false, error: null })
 
         // If polling enabled and task is still running, schedule next check
         if (pollIfRunning && result.task.status === 'Running') {
@@ -61,12 +63,14 @@ export function useTaskLoader({
             }, 100)
           }
         }
-
-        setLoading(false)
       } catch (err) {
         if (!mounted) return
-        setError(err instanceof Error ? err.message : '加载任务失败')
-        setLoading(false)
+        setState({
+          taskId,
+          task: null,
+          loading: false,
+          error: err instanceof Error ? err.message : '加载任务失败',
+        })
       }
     }
 
@@ -78,5 +82,6 @@ export function useTaskLoader({
     }
   }, [taskId, queryClient, pollIfRunning])
 
-  return { task, loading, error }
+  // Hide the outgoing task synchronously, before the new request effect runs.
+  return state.taskId === taskId ? state : { task: null, loading: true, error: null }
 }

@@ -1,11 +1,7 @@
-import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { resultMapEvidence } from './helpers/result-map-evidence'
 import { expect, test, type Locator, type Page } from './browser-guard'
 import { setupResultMapPage, resultMap } from './helpers/result-map-page'
 
-const evidence =
-  process.env.RESULT_MAP_EVIDENCE_DIR ??
-  '/Users/xiaoyu/Projects/meteo-weave/.git/agent-runs/spec-15-20261020/ticket-02'
 const kinds = ['original', 'downscaled', 'observation', 'difference'] as const
 const titles = {
   original: 'Original Data',
@@ -74,14 +70,10 @@ async function expectSettled(page: Page) {
   }
 }
 
-async function capture(page: Page, name: string) {
-  await mkdir(evidence, { recursive: true })
-  await page.screenshot({ path: join(evidence, `${name}.png`), fullPage: true })
-}
-
 test('synchronizes real pointer pan and wheel zoom from different maps, including sample geometry, then settles', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await setupResultMapPage(page)
   await expect(page.getByRole('checkbox', { name: 'Synchronize map cameras' })).toBeChecked()
@@ -117,12 +109,13 @@ test('synchronizes real pointer pan and wheel zoom from different maps, includin
   await expect(originalSample).toHaveAccessibleName(/16.2787 °C/)
   await expect(downscaledSample).toHaveAccessibleName(/14.8358 °C/)
   await expectSettled(page)
-  await capture(page, 'sync-1440-pointer-wheel-aligned')
+  await evidence.capture(page, 'sync-1440-pointer-wheel-aligned')
 })
 
 test('disables synchronization for independent real cameras and re-aligns from the keyboard-focused active map', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 1440, height: 1000 })
   await setupResultMapPage(page)
   const sync = page.getByRole('checkbox', { name: 'Synchronize map cameras' })
@@ -147,7 +140,7 @@ test('disables synchronization for independent real cameras and re-aligns from t
   expect(await footprint(page, 'original')).toEqual(originalShape)
   await expect(summary(page, 'downscaled')).not.toHaveText(initial[1]!)
   await expect(page.getByLabel('Active map camera')).toContainText('Downscaled Data')
-  await capture(page, 'sync-off-1440-independent-cameras')
+  await evidence.capture(page, 'sync-off-1440-independent-cameras')
 
   // Merely focusing the desired source must determine alignment, not the previous mover.
   await surface(page, 'original').focus()
@@ -161,12 +154,13 @@ test('disables synchronization for independent real cameras and re-aligns from t
     expect(await footprint(page, kind)).not.toEqual(before[kinds.indexOf(kind)])
   }
   await expectSettled(page)
-  await capture(page, 'sync-reenabled-current-active-source')
+  await evidence.capture(page, 'sync-reenabled-current-active-source')
 })
 
 test('keeps sync controls readable at 390px and converges after alternating button and keyboard sources', async ({
   page,
-}) => {
+}, testInfo) => {
+  const evidence = resultMapEvidence(testInfo, process.env.RESULT_MAP_EVIDENCE_DIR)
   await page.setViewportSize({ width: 390, height: 844 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await setupResultMapPage(page)
@@ -191,7 +185,7 @@ test('keeps sync controls readable at 390px and converges after alternating butt
     expect(box!.width).toBeGreaterThan(250)
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391)
-  await capture(page, 'sync-390-keyboard-alternating-reduced-motion')
+  await evidence.capture(page, 'sync-390-keyboard-alternating-reduced-motion')
 })
 
 test('releases outgoing cameras on navigation and reload and re-enters without multiplying camera responses', async ({

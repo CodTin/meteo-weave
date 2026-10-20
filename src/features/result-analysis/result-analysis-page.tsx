@@ -37,7 +37,7 @@ export function ResultAnalysisPage() {
   const navigate = useNavigate()
   const { task, loading, error } = useTaskLoader({ taskId })
 
-  if (loading || (task && task.id !== taskId)) {
+  if (loading) {
     return <TaskLoadingState message="加载结果分析中..." />
   }
 
