@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/card'
 import { AccountMark } from '@/features/auth/account-mark'
 import { RoleSwitchDialog } from './role-switch-dialog'
+import { DemoRecoveryDialog } from './demo-recovery-dialog'
 
 export function SettingsPage() {
   const { account } = useRouteContext({ from: '/_workspace' })
@@ -62,8 +63,13 @@ export function SettingsPage() {
             </div>
           </dl>
         </CardContent>
-        <CardFooter className="flex-wrap border-t pt-6">
-          {account && <RoleSwitchDialog account={account} />}
+        <CardFooter className="flex-wrap gap-2 border-t pt-6">
+          {account && (
+            <>
+              <RoleSwitchDialog account={account} />
+              <DemoRecoveryDialog account={account} />
+            </>
+          )}
           <Button disabled aria-describedby="settings-status">
             保存设置
           </Button>
