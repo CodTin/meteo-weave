@@ -14,7 +14,12 @@ export function TaskComparisonParameters({ a, b }: { a: DownscalingTask; b: Down
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
         A／B 按选择顺序固定；不同字段同时以文字和视觉标记。时间为保存的 UTC 值。
       </p>
-      <div className="mt-4 max-w-full overflow-x-auto rounded-md border">
+      {/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- Native horizontal scrolling requires a focusable, named viewport. */}
+      <section
+        aria-label="参数差异横向滚动区域"
+        tabIndex={0}
+        className="mt-4 max-w-full overflow-x-auto rounded-md border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      >
         <table className="w-full min-w-[36rem] table-fixed text-sm">
           <caption className="sr-only">完整配置参数差异，A／B 对应选择顺序</caption>
           <thead className="bg-muted/50">
@@ -52,7 +57,8 @@ export function TaskComparisonParameters({ a, b }: { a: DownscalingTask; b: Down
             ))}
           </tbody>
         </table>
-      </div>
+      </section>
+      {/* oxlint-enable jsx-a11y/no-noninteractive-tabindex */}
     </section>
   )
 }

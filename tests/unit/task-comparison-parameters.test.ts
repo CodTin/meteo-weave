@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { expect, test } from 'vitest'
 import { createElement } from 'react'
+import { within } from '@testing-library/dom'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { TaskComparisonParameters } from '@/features/task-comparison/parameters/parameter-table'
 import { exportTask } from '../factories/export-task'
@@ -111,4 +112,27 @@ test('renders a semantic complete parameter table with written differences and f
   expect(resolution?.textContent).toBe('目标分辨率3km1km不同')
   const unit = rows.find((row) => row.querySelector('th')?.textContent === '气象变量与单位')
   expect(unit?.textContent).toBe('气象变量与单位气温 · °C气温 · °C相同')
+})
+
+test('exposes the parameter-table scroller as a named keyboard-focusable region', () => {
+  const a = exportTask({ id: 'task-a', name: '配置 A' })
+  const b = exportTask({ id: 'task-b', name: '配置 B' })
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  try {
+    container.innerHTML = renderToStaticMarkup(createElement(TaskComparisonParameters, { a, b }))
+    const viewport = within(container).getByRole('region', {
+      name: '参数差异横向滚动区域',
+    })
+    expect(viewport.tabIndex).toBe(0)
+    viewport.focus()
+    expect(document.activeElement).toBe(viewport)
+    expect(
+      within(viewport).getByRole('table', {
+        name: '完整配置参数差异，A／B 对应选择顺序',
+      }),
+    ).toBeDefined()
+  } finally {
+    container.remove()
+  }
 })
