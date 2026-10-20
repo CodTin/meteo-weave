@@ -54,6 +54,8 @@ test('renders native temperature/Difference coordinates, changes frames, and pan
   await expect(station).toBeVisible()
   await expect(resultMap(page, 'observation').getByRole('img')).toHaveCount(9)
 
+  await page.getByRole('checkbox', { name: 'Synchronize map cameras' }).uncheck()
+
   const summary = original.getByLabel('Original Data viewport')
   const before = await summary.innerText()
   const other = await downscaled.getByLabel('Downscaled Data viewport').innerText()

@@ -1,13 +1,9 @@
-import { useState } from 'react'
-import type {
-  ResultMapData,
-  ResultMapDisplaySettings,
-  ResultMapKind,
-  ResultMapViewport,
-} from '../types/result-map'
+import type { ResultMapData, ResultMapDisplaySettings, ResultMapKind } from '../types/result-map'
 import { resultMapViewport } from '../service/result-map-geometry'
+import { resultMapTitles } from '../service/result-map-display'
 import { ControlledResultMap } from './controlled-result-map'
 import { ResultMapCard } from './result-map-card'
+import { ResultMapCameraGroup, ResultMapCameraInput } from './result-map-camera-group'
 
 interface ResultMapGridProps {
   data: ResultMapData
@@ -15,37 +11,45 @@ interface ResultMapGridProps {
   onRetry: () => void
 }
 
-/** Per-map camera ownership. Synchronization/layout policy belongs to subsequent tickets. */
+const kinds = ['original', 'downscaled', 'observation', 'difference'] as const
+
+/** Shared camera policy; each product keeps its own scientific data and display settings. */
 export function ResultMapGrid({ data, display, onRetry }: ResultMapGridProps) {
-  const [viewports, setViewports] = useState<Record<ResultMapKind, ResultMapViewport>>(() => {
-    const initial = resultMapViewport(data.region)
-    return { original: initial, downscaled: initial, observation: initial, difference: initial }
-  })
+  const initialViewport = resultMapViewport(data.region)
+  const maps = kinds.map((kind) => ({
+    kind,
+    mapId: `result-${encodeURIComponent(data.taskId)}-${kind}`,
+    label: resultMapTitles[kind],
+    initialViewport,
+  }))
   return (
-    <div
-      className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2"
-      aria-label="Result comparison maps"
-    >
-      {(['original', 'downscaled', 'observation', 'difference'] as const).map((kind) => (
-        <ResultMapCard
-          key={kind}
-          data={data.layers[kind]}
-          context={data}
-          display={display[kind]}
-          onRetry={onRetry}
+    <ResultMapCameraGroup maps={maps}>
+      {(camera) => (
+        <div
+          className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2"
+          aria-label="Result comparison maps"
         >
-          <ControlledResultMap
-            mapId={`result-${encodeURIComponent(data.taskId)}-${kind}`}
-            data={data.layers[kind]}
-            region={data.region}
-            display={display[kind]}
-            viewport={viewports[kind]}
-            onViewportChange={(viewport) =>
-              setViewports((current) => ({ ...current, [kind]: viewport }))
-            }
-          />
-        </ResultMapCard>
-      ))}
-    </div>
+          {maps.map(({ kind, mapId }) => (
+            <ResultMapCameraInput key={kind} camera={camera} mapId={mapId}>
+              <ResultMapCard
+                data={data.layers[kind]}
+                context={data}
+                display={display[kind]}
+                onRetry={onRetry}
+              >
+                <ControlledResultMap
+                  mapId={mapId}
+                  data={data.layers[kind]}
+                  region={data.region}
+                  display={display[kind]}
+                  viewport={camera.viewports[mapId]!}
+                  onViewportChange={camera.onViewportChange}
+                />
+              </ResultMapCard>
+            </ResultMapCameraInput>
+          ))}
+        </div>
+      )}
+    </ResultMapCameraGroup>
   )
 }
